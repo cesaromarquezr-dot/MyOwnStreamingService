@@ -12,6 +12,7 @@ import 'package:video_player/video_player.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'backend_api.dart';
 import 'app_core.dart';
+import 'catalog_poster_image.dart' show AlbumArtworkImage;
 import 'music_favorites.dart';
 import 'music_genre_system.dart';
 import 'details.dart';
@@ -287,6 +288,22 @@ class MusicLibraryStore extends ChangeNotifier {
   final Map<String, List<String>> playlists = <String, List<String>>{};
   final Map<String, int> listenCounts = <String, int>{};
 
+  /// Recent per-profile listening timestamps used for an actual rolling 7-day chart.
+  /// The legacy all-time listenCounts map remains available for existing screens.
+  final Map<String, List<int>> listenEventTimestamps = <String, List<int>>{};
+
+  bool get hasWeeklyListenData {
+    final cutoff = DateTime.now().subtract(const Duration(days: 7)).millisecondsSinceEpoch;
+    return listenEventTimestamps.values.any((events) => events.any((value) => value >= cutoff));
+  }
+
+  int weeklyListenCount(String trackId, {DateTime? now}) {
+    final cutoff = (now ?? DateTime.now()).subtract(const Duration(days: 7)).millisecondsSinceEpoch;
+    return (listenEventTimestamps[trackId] ?? const <int>[])
+        .where((value) => value >= cutoff)
+        .length;
+  }
+
   /// Rule-based playlists are derived from current profile state on every read.
   /// They are intentionally not copied into custom playlists, so likes and
   /// listening history can update them without overwriting user curation.
@@ -393,6 +410,11 @@ class MusicLibraryStore extends ChangeNotifier {
         _playlistPreferences!
             .getString('music_listen_counts_$_playlistProfileKey'),
       ));
+    listenEventTimestamps
+      ..clear()
+      ..addAll(_decodeListenEvents(
+        _playlistPreferences!.getString('music_listen_events_$_playlistProfileKey'),
+      ));
 
     // Preview-only tracks provide a realistic album page while keeping actual
     // playback disabled: the demo entries intentionally have no audio URLs.
@@ -444,6 +466,36 @@ class MusicLibraryStore extends ChangeNotifier {
     for (final example in catalogExampleTracks) {
       if (!tracks.any((track) => track.id == example.id)) tracks.add(example);
     }
+
+    // Smart playlists are derived automatically from the current music library.
+    // Save names per profile; notify only for genuinely new generated genre mixes,
+    // not for the baseline set on first launch.
+    final knownPlaylistKey = 'music_known_auto_playlists_$_playlistProfileKey';
+    final currentAutomaticNames = smartPlaylists.keys
+        .where((name) => name.endsWith(' Mix'))
+        .toSet();
+    final previouslyKnown = _playlistPreferences!
+        .getStringList(knownPlaylistKey);
+    if (previouslyKnown == null) {
+      await _playlistPreferences!.setStringList(
+        knownPlaylistKey,
+        currentAutomaticNames.toList()..sort(),
+      );
+    } else {
+      final previousSet = previouslyKnown.toSet();
+      final newNames = currentAutomaticNames.difference(previousSet).toList()..sort();
+      for (final name in newNames) {
+        AppController.instance.addNotification(
+          action: 'a new automatic playlist was created: $name',
+        );
+      }
+      if (newNames.isNotEmpty || previousSet.length != currentAutomaticNames.length) {
+        await _playlistPreferences!.setStringList(
+          knownPlaylistKey,
+          currentAutomaticNames.toList()..sort(),
+        );
+      }
+    }
     notifyListeners();
   }
 
@@ -475,6 +527,31 @@ class MusicLibraryStore extends ChangeNotifier {
     } catch (_) {
       return <String, int>{};
     }
+  }
+
+  Map<String, List<int>> _decodeListenEvents(String? encoded) {
+    if (encoded == null || encoded.isEmpty) return <String, List<int>>{};
+    try {
+      final decoded = jsonDecode(encoded);
+      if (decoded is! Map) return <String, List<int>>{};
+      final cutoff = DateTime.now().subtract(const Duration(days: 45)).millisecondsSinceEpoch;
+      return decoded.map((key, value) {
+        final events = value is List
+            ? value.whereType<num>().map((entry) => entry.toInt()).where((entry) => entry >= cutoff).toList(growable: true)
+            : <int>[];
+        return MapEntry(key.toString(), events);
+      })..removeWhere((_, events) => events.isEmpty);
+    } catch (_) {
+      return <String, List<int>>{};
+    }
+  }
+
+  Future<void> _persistListenEvents() async {
+    final preferences = _playlistPreferences ??= await SharedPreferences.getInstance();
+    await preferences.setString(
+      'music_listen_events_$_playlistProfileKey',
+      jsonEncode(listenEventTimestamps),
+    );
   }
 
   Future<void> _persistListenCounts() async {
@@ -620,7 +697,7 @@ class MusicLibraryStore extends ChangeNotifier {
     if (clean.isEmpty || playlists.containsKey(clean)) return;
     playlists[clean] = trackIds.toList();
     _persistPlaylists();
-    AppController.instance.addNotification(action: 'created playlist "$clean"');
+    AppController.instance.addNotification(action: 'created a new playlist: $clean');
     notifyListeners();
   }
 
@@ -689,8 +766,14 @@ class MusicLibraryStore extends ChangeNotifier {
   /// Records and persists one listening event for this profile. The resulting
   /// local chart is a personal listening chart, not a worldwide streaming rank.
   void recordListen(String trackId) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final cutoff = DateTime.now().subtract(const Duration(days: 45)).millisecondsSinceEpoch;
+    final events = listenEventTimestamps.putIfAbsent(trackId, () => <int>[]);
+    events.removeWhere((timestamp) => timestamp < cutoff);
+    events.add(now);
     listenCounts[trackId] = (listenCounts[trackId] ?? 0) + 1;
     unawaited(_persistListenCounts());
+    unawaited(_persistListenEvents());
     notifyListeners();
   }
 }
@@ -1810,25 +1893,22 @@ class _MusicScreenState extends State<MusicScreen> {
         title: albumTitle,
         subtitle: '${track.artist} · $tracksOnAlbum track${tracksOnAlbum == 1 ? '' : 's'}',
         fallbackIcon: Icons.album_rounded,
-        artworkBuilder: (context, fit) {
-          final url = track.artworkUrl?.trim() ?? '';
-          if (url.isEmpty) {
-            return Container(
-              color: Colors.white10,
-              alignment: Alignment.center,
-              child: const Icon(Icons.album_rounded, color: Colors.white38, size: 32),
-            );
-          }
-          return Image.network(
-            url,
-            fit: fit,
-            errorBuilder: (_, __, ___) => Container(
-              color: Colors.white10,
-              alignment: Alignment.center,
-              child: const Icon(Icons.album_rounded, color: Colors.white38),
-            ),
-          );
-        },
+        artworkBuilder: (context, fit) => AlbumArtworkImage(
+          title: albumTitle,
+          artist: track.artist,
+          imageUrl: track.artworkUrl,
+          fit: fit,
+          placeholder: Container(
+            color: Colors.white10,
+            alignment: Alignment.center,
+            child: const Icon(Icons.album_rounded, color: Colors.white38, size: 32),
+          ),
+          errorPlaceholder: Container(
+            color: Colors.white10,
+            alignment: Alignment.center,
+            child: const Icon(Icons.album_rounded, color: Colors.white38),
+          ),
+        ),
         onTap: () => _openLibraryAlbum(albumTitle, track),
       );
     }).toList(growable: false);
@@ -2261,29 +2341,28 @@ class _MusicScreenState extends State<MusicScreen> {
   }
 
   Widget _artwork(MusicTrack track, {double size = 52}) {
-    final url = track.artworkUrl?.trim();
-    if (url == null || url.isEmpty) {
-      return Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: Colors.white10,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: const Icon(Icons.album_rounded, color: Colors.white38),
-      );
-    }
+    final albumTitle = track.album.trim().isNotEmpty ? track.album : track.title;
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: Image.network(
-        url,
+      child: AlbumArtworkImage(
+        title: albumTitle,
+        artist: track.artist,
+        imageUrl: track.artworkUrl,
         width: size,
         height: size,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => Container(
+        placeholder: Container(
           width: size,
           height: size,
           color: Colors.white10,
+          alignment: Alignment.center,
+          child: const Icon(Icons.album_rounded, color: Colors.white38),
+        ),
+        errorPlaceholder: Container(
+          width: size,
+          height: size,
+          color: Colors.white10,
+          alignment: Alignment.center,
           child: const Icon(Icons.album_rounded, color: Colors.white38),
         ),
       ),
@@ -3015,7 +3094,7 @@ class MusicArtistProfileScreen extends StatelessWidget {
                     'Ranked from local listening history; not a worldwide chart.')),
           for (final track in tracks)
             ListTile(
-              leading: _art(track.artworkUrl),
+              leading: _art(track),
               title: LocalizedMediaText(track.title),
               subtitle: Text([
                 if (creditLabel != null) '$creditLabel ${track.artist}',
@@ -3090,14 +3169,26 @@ class MusicArtistProfileScreen extends StatelessWidget {
         ]);
   }
 
-  Widget _art(String? url) => SizedBox(
+  Widget _art(MusicTrack track) {
+    final albumTitle = track.album.trim().isNotEmpty ? track.album : track.title;
+    return SizedBox(
       width: 48,
       height: 48,
-      child: (url?.trim().isNotEmpty ?? false)
-          ? Image.network(url!,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const Icon(Icons.album_rounded))
-          : const Icon(Icons.album_rounded));
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(7),
+        child: AlbumArtworkImage(
+          title: albumTitle,
+          artist: track.artist,
+          imageUrl: track.artworkUrl,
+          width: 48,
+          height: 48,
+          fit: BoxFit.cover,
+          placeholder: const Icon(Icons.album_rounded),
+          errorPlaceholder: const Icon(Icons.album_rounded),
+        ),
+      ),
+    );
+  }
   Widget _empty(String message) => Center(
       child: Padding(
           padding: const EdgeInsets.all(24),
@@ -3298,7 +3389,21 @@ class _SpotifyArtistDiscographySectionState extends State<_SpotifyArtistDiscogra
     return Opacity(
       opacity: owned ? 1 : .48,
       child: ListTile(
-        leading: ClipRRect(borderRadius: BorderRadius.circular(7), child: SizedBox(width: 52, height: 52, child: image.startsWith('http') ? Image.network(image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.album_rounded)) : const Icon(Icons.album_rounded))),
+        leading: ClipRRect(
+          borderRadius: BorderRadius.circular(7),
+          child: AlbumArtworkImage(
+            title: title,
+            artist: artist,
+            imageUrl: image,
+            width: 52,
+            height: 52,
+            fit: BoxFit.cover,
+            placeholder: const SizedBox(
+              width: 52, height: 52,
+              child: ColoredBox(color: Color(0xFF242424), child: Icon(Icons.album_rounded)),
+            ),
+          ),
+        ),
         title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: CinematicTitleFonts.captionStyleForTitle(title, type: 'album', baseFontSize: 14, color: Colors.white)),
         subtitle: Text(<String>[artist, if ((album['releaseDate']?.toString() ?? '').length >= 4) album['releaseDate'].toString().substring(0, 4), owned ? 'In your library' : 'Not in library'].join(' · '), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 11)),
         trailing: Icon(owned ? Icons.library_add_check_rounded : Icons.lock_outline_rounded, color: owned ? Colors.lightGreenAccent : Colors.white38),
@@ -3849,11 +3954,22 @@ class _MusicDiscoverArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final url = track.artworkUrl?.trim();
-    if (url == null || url.isEmpty) {
-      return const CircleAvatar(child: Icon(Icons.album_rounded));
-    }
-    return CircleAvatar(backgroundImage: NetworkImage(url));
+    final albumTitle = track.album.trim().isNotEmpty ? track.album : track.title;
+    return ClipOval(
+      child: AlbumArtworkImage(
+        title: albumTitle,
+        artist: track.artist,
+        imageUrl: track.artworkUrl,
+        width: 40,
+        height: 40,
+        fit: BoxFit.cover,
+        placeholder: const SizedBox(
+          width: 40,
+          height: 40,
+          child: CircleAvatar(child: Icon(Icons.album_rounded)),
+        ),
+      ),
+    );
   }
 }
 

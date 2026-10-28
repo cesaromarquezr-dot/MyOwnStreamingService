@@ -221,6 +221,7 @@ class MediaMetadataService {
       throw const FormatException('Invalid TMDB resource path.');
     }
     final allowed = RegExp(r'^search/(movie|tv|person|keyword)$').hasMatch(path) ||
+        RegExp(r'^trending/(movie|tv|person)/week$').hasMatch(path) ||
         RegExp(r'^discover/(movie|tv)$').hasMatch(path) ||
         RegExp(
           r'^(movie|tv)/[1-9][0-9]*(/(recommendations|images|credits|videos|keywords|reviews))?$',

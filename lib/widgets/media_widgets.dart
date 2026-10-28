@@ -89,6 +89,16 @@ class MediaCard extends StatelessWidget {
                   fontSize: 12,
                 ),
               ),
+            if (media.isSeries || const <String>{'movie', 'film'}.contains(media.type.trim().toLowerCase()))
+              Text(
+                'Origin: ${mediaCountryOriginLabel(media)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontSize: 10.5,
+                ),
+              ),
           ],
         ),
       ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'localization.dart';
 import 'recommendation_ownership.dart';
+import 'home_arrow_rail.dart';
 
 /// Builds profile-local related titles from known recommendations and the
 /// account's existing library. The ranking favours shared franchise, genre,
@@ -115,15 +116,14 @@ class DetailsRecommendationsSection extends StatelessWidget {
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 12),
-        SizedBox(
+        HomeArrowRail(
           height: 220,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: items.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
-            itemBuilder: (context, index) {
-              final item = items[index];
-              final imageUrl = item.imageUrl;
+          itemCount: items.length,
+          separatorExtent: 12,
+          padding: const EdgeInsets.symmetric(horizontal: 48),
+          itemBuilder: (context, index) {
+            final item = items[index];
+            final imageUrl = item.imageUrl;
               return SizedBox(
                 width: 132,
                 child: InkWell(
@@ -169,9 +169,8 @@ class DetailsRecommendationsSection extends StatelessWidget {
                     ],
                   ),
                 ),
-              );
-            },
-          ),
+            );
+          },
         ),
       ],
     );

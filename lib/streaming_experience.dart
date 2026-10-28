@@ -539,9 +539,14 @@ class _StreamingExperienceSettingsScreenState
 class AdaptiveStreamingPlayer extends StatefulWidget {
   final MediaItem media;
   final String? activityLabel;
+  final int? initialPositionSeconds;
 
-  const AdaptiveStreamingPlayer(
-      {super.key, required this.media, this.activityLabel});
+  const AdaptiveStreamingPlayer({
+    super.key,
+    required this.media,
+    this.activityLabel,
+    this.initialPositionSeconds,
+  });
 
   @override
   State<AdaptiveStreamingPlayer> createState() =>
@@ -641,13 +646,21 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
           unawaited(_syncBackendSession());
         },
       );
-      final resume =
-          AppController.instance.getPlaybackProgress(widget.media.id);
-      if (resume > 0 && player.value.duration > Duration.zero) {
-        final offset = Duration(
-            milliseconds:
-                (player.value.duration.inMilliseconds * resume).round());
+      if (widget.initialPositionSeconds != null &&
+          player.value.duration > Duration.zero) {
+        final seconds = widget.initialPositionSeconds!
+            .clamp(0, player.value.duration.inSeconds)
+            .toInt();
+        final offset = Duration(seconds: seconds);
         if (offset < player.value.duration) await player.seekTo(offset);
+      } else {
+        final resume = AppController.instance.getPlaybackProgress(widget.media.id);
+        if (resume > 0 && player.value.duration > Duration.zero) {
+          final offset = Duration(
+              milliseconds:
+                  (player.value.duration.inMilliseconds * resume).round());
+          if (offset < player.value.duration) await player.seekTo(offset);
+        }
       }
       setState(() => _loading = false);
       unawaited(player.play());

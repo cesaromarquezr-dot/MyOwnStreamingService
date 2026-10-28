@@ -3,9 +3,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import 'app_core.dart';
 import 'core/services/cinematic_title_metadata_service.dart';
+import 'media_artwork_auto_resolver.dart';
 
 class CatalogPosterImage extends StatefulWidget {
   const CatalogPosterImage({
@@ -30,13 +32,6 @@ class CatalogPosterImage extends StatefulWidget {
 }
 
 class _CatalogPosterImageState extends State<CatalogPosterImage> {
-  // Multiple Home/Movie/TV rails can show the same media. Share the provider
-  // lookup so the app does not repeatedly ask TMDB for the same title.
-  static final Map<String, Future<CinematicTitleMetadata?>> _lookupCache =
-      <String, Future<CinematicTitleMetadata?>>{};
-  static final Map<String, Future<String?>> _albumCoverLookupCache =
-      <String, Future<String?>>{};
-
   late String _imageUrl;
   late String _mediaKey;
   bool _fallbackAttempted = false;
@@ -58,9 +53,7 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
   }
 
   void _startProviderLookupIfReady() {
-    if (!mounted ||
-        _providerLookupStarted ||
-        _imageUrl.isNotEmpty ||
+    if (!mounted || _providerLookupStarted || _imageUrl.isNotEmpty ||
         !CinematicTitleMetadataService.isConfigured) {
       return;
     }
@@ -84,8 +77,7 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
       _providerLookupStarted = false;
       _imageUrl = widget.media.imageUrl?.trim() ?? '';
       _startProviderLookupIfReady();
-    } else if (!_fallbackAttempted &&
-        _imageUrl.isEmpty &&
+    } else if (!_fallbackAttempted && _imageUrl.isEmpty &&
         (widget.media.imageUrl?.trim().isNotEmpty ?? false)) {
       _imageUrl = widget.media.imageUrl!.trim();
     }
@@ -96,53 +88,28 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
 
   Future<void> _loadPoster() async {
     final media = widget.media;
-    final type = media.type.trim().toLowerCase();
     final key = _keyFor(media);
     if (!CinematicTitleMetadataService.isConfigured) return;
 
-    if (type.contains('album') || type == 'soundtrack') {
-      try {
-        final cover = await _albumCoverLookupCache.putIfAbsent(
-          key,
-          () => _lookupAlbumCover(media),
-        );
-        if (cover == null || cover.isEmpty) return;
-        if (mounted && _mediaKey == key && _imageUrl.isEmpty) {
-          setState(() => _imageUrl = cover);
-        }
-        unawaited(AppController.instance.mergeProviderTitleCredits(
-          mediaId: media.id,
-          posterUrl: cover,
-          music: media.music,
-        ));
-      } catch (_) {
-        // Keep the safe placeholder when no exact album artwork is available.
-      }
-      return;
-    }
-
-    final isMovie = type == 'movie';
-    final isTv = media.isSeries;
-    if (!isMovie && !isTv) return;
-
-    final lookup = _lookupCache.putIfAbsent(
-      key,
-      () => CinematicTitleMetadataService.lookupTitle(
-        title: media.title,
-        isTv: isTv,
-        year: media.releaseYear ?? media.seriesStartYear,
-      ),
-    );
-
     try {
-      final metadata = await lookup;
-      final poster = metadata?.posterUrl?.trim() ?? '';
+      // Reuse previously verified metadata immediately after an app restart.
+      // This avoids a backend catalog round-trip for every missing local poster.
+      final savedPoster = await MediaArtworkAutoResolver.readAutoPosterUrl(media.id);
+      if (savedPoster != null && savedPoster.isNotEmpty) {
+        if (mounted && _mediaKey == key && _imageUrl.isEmpty) {
+          setState(() => _imageUrl = savedPoster);
+        }
+        return;
+      }
+      final resolved = await MediaArtworkAutoResolver.resolveMedia(media);
+      final poster = resolved?.posterUrl?.trim() ?? '';
       if (poster.isEmpty) return;
       if (mounted && _mediaKey == key && _imageUrl.isEmpty) {
         setState(() => _imageUrl = poster);
       }
-      // Persist the verified poster/credits for normal library entries. The
-      // merge method never replaces existing custom artwork or playback URLs.
+      final metadata = resolved?.titleMetadata;
+      // Persist a verified poster and any exact-match TMDB credits without
+      // replacing custom artwork or changing playback URLs.
       unawaited(AppController.instance.mergeProviderTitleCredits(
         mediaId: media.id,
         posterUrl: poster,
@@ -151,123 +118,29 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
         directors: metadata?.directors ?? const <String>[],
         writers: metadata?.writers ?? const <String>[],
         music: metadata?.music ?? const <String>[],
+        providerGenres: metadata?.genres ?? const <String>[],
+        providerKeywords: metadata?.keywords ?? const <String>[],
+        providerReleaseDate: metadata?.releaseDate,
+        providerLastAirDate: metadata?.lastAirDate,
+        providerStatus: metadata?.status,
       ));
     } catch (_) {
-      // Provider lookup is best effort; keep the placeholder and leave browsing
-      // and opening the normal details page fully functional.
+      // Provider lookup is best effort; never block browsing on missing art.
     }
-  }
-
-  static Future<String?> _lookupAlbumCover(MediaItem media) async {
-    final title = media.title.trim();
-    if (title.isEmpty) return null;
-    final artist = media.music.map((value) => value.trim()).firstWhere(
-          (value) => value.isNotEmpty,
-          orElse: () => '',
-        );
-    // Both provider adapters receive this search string. A plain, exact-title
-    // query works with Spotify's and MusicBrainz's different query syntaxes;
-    // artist/year are used below to rank exact-title matches safely.
-    final query = title;
-    final payload = await AppController.instance.backendApi.searchMusicCatalog(
-      query,
-      type: 'album',
-      limit: 10,
-    );
-    final spotify = payload['spotify'] is Map
-        ? Map<String, dynamic>.from(payload['spotify'] as Map)
-        : <String, dynamic>{};
-    final spotifyAlbums = spotify['albums'] is List
-        ? (spotify['albums'] as List)
-            .whereType<Map>()
-            .map((value) => Map<String, dynamic>.from(value))
-            .toList()
-        : <Map<String, dynamic>>[];
-    String normalize(String value) => value.toLowerCase().trim().replaceAll(
-          RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"),
-          '',
-        );
-    final wantedTitle = normalize(title);
-    final candidate = spotifyAlbums
-        .where(
-            (row) => normalize(row['title']?.toString() ?? '') == wantedTitle)
-        .toList();
-    if (candidate.isNotEmpty) {
-      final wantedArtist = normalize(artist);
-      candidate.sort((a, b) {
-        final aArtist = normalize(a['artist']?.toString() ?? '');
-        final bArtist = normalize(b['artist']?.toString() ?? '');
-        final aArtistScore =
-            wantedArtist.isNotEmpty && aArtist.contains(wantedArtist) ? 0 : 1;
-        final bArtistScore =
-            wantedArtist.isNotEmpty && bArtist.contains(wantedArtist) ? 0 : 1;
-        if (aArtistScore != bArtistScore) {
-          return aArtistScore.compareTo(bArtistScore);
-        }
-        final year = media.releaseYear;
-        if (year != null) {
-          final aYearScore =
-              (a['releaseDate']?.toString() ?? '').startsWith('$year') ? 0 : 1;
-          final bYearScore =
-              (b['releaseDate']?.toString() ?? '').startsWith('$year') ? 0 : 1;
-          if (aYearScore != bYearScore) return aYearScore.compareTo(bYearScore);
-        }
-        return 0;
-      });
-      for (final row in candidate) {
-        final image = row['imageUrl']?.toString().trim() ?? '';
-        if (image.startsWith('https://')) return image;
-        final images = row['images'];
-        if (images is List) {
-          for (final raw in images.whereType<Map>()) {
-            final value = raw['url']?.toString().trim() ?? '';
-            if (value.startsWith('https://')) return value;
-          }
-        }
-      }
-    }
-
-    // MusicBrainz results can still provide community art through Cover Art Archive.
-    final musicBrainz = payload['musicBrainz'] is Map
-        ? Map<String, dynamic>.from(payload['musicBrainz'] as Map)
-        : <String, dynamic>{};
-    final groups = musicBrainz['releaseGroups'] is List
-        ? (musicBrainz['releaseGroups'] as List)
-            .whereType<Map>()
-            .map((value) => Map<String, dynamic>.from(value))
-            .toList()
-        : <Map<String, dynamic>>[];
-    final exactGroups = groups
-        .where((group) =>
-            normalize(group['title']?.toString() ?? '') == wantedTitle)
-        .toList();
-    exactGroups.sort((a, b) {
-      final wantedArtist = normalize(artist);
-      final aArtist = normalize(a['artist']?.toString() ?? '');
-      final bArtist = normalize(b['artist']?.toString() ?? '');
-      final aScore =
-          wantedArtist.isNotEmpty && aArtist.contains(wantedArtist) ? 0 : 1;
-      final bScore =
-          wantedArtist.isNotEmpty && bArtist.contains(wantedArtist) ? 0 : 1;
-      return aScore.compareTo(bScore);
-    });
-    for (final group in exactGroups) {
-      final image = group['coverArtUrl']?.toString().trim() ?? '';
-      if (image.startsWith('https://')) return image;
-    }
-    return null;
   }
 
   @override
   Widget build(BuildContext context) {
     final url = _imageUrl.trim();
     if (url.isEmpty) return _placeholder();
-    return Image.network(
-      url,
+    return CachedNetworkImage(
+      imageUrl: url,
       width: widget.width,
       height: widget.height,
       fit: widget.fit,
-      errorBuilder: (_, __, ___) {
+      fadeInDuration: const Duration(milliseconds: 100),
+      placeholder: (_, __) => _placeholder(),
+      errorWidget: (_, __, ___) {
         _scheduleProviderFallback();
         return widget.errorPlaceholder ?? _placeholder();
       },
@@ -285,9 +158,7 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
     });
   }
 
-  Widget _placeholder() =>
-      widget.placeholder ??
-      SizedBox(
+  Widget _placeholder() => widget.placeholder ?? SizedBox(
         width: widget.width,
         height: widget.height,
         child: const ColoredBox(
@@ -297,4 +168,150 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
           ),
         ),
       );
+}
+
+
+/// Automatically resolves a missing or failed album cover from the authenticated
+/// Spotify/MusicBrainz catalog while retaining local artwork as the first choice.
+class AlbumArtworkImage extends StatefulWidget {
+  const AlbumArtworkImage({
+    super.key,
+    required this.title,
+    required this.artist,
+    this.imageUrl,
+    this.width,
+    this.height,
+    this.fit = BoxFit.cover,
+    this.placeholder,
+    this.errorPlaceholder,
+  });
+
+  final String title;
+  final String artist;
+  final String? imageUrl;
+  final double? width;
+  final double? height;
+  final BoxFit fit;
+  final Widget? placeholder;
+  final Widget? errorPlaceholder;
+
+  @override
+  State<AlbumArtworkImage> createState() => _AlbumArtworkImageState();
+}
+
+class _AlbumArtworkImageState extends State<AlbumArtworkImage> {
+  String _url = '';
+  String _lookupKey = '';
+  bool _lookupStarted = false;
+  static final Map<String, Future<String?>> _cache = <String, Future<String?>>{};
+
+  String get _currentKey => '${widget.title.trim().toLowerCase()}|'
+      '${widget.artist.trim().toLowerCase()}';
+
+  @override
+  void initState() {
+    super.initState();
+    _lookupKey = _currentKey;
+    _url = widget.imageUrl?.trim() ?? '';
+    AppController.instance.addListener(_onAppControllerChanged);
+    if (_url.isEmpty) _resolveIfNeeded();
+  }
+
+  void _onAppControllerChanged() {
+    _resolveIfNeeded();
+  }
+
+  @override
+  void dispose() {
+    AppController.instance.removeListener(_onAppControllerChanged);
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant AlbumArtworkImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nextKey = _currentKey;
+    if (nextKey != _lookupKey) {
+      _lookupKey = nextKey;
+      _lookupStarted = false;
+      _url = widget.imageUrl?.trim() ?? '';
+      if (_url.isEmpty) _resolveIfNeeded();
+    } else if (_url.isEmpty && (widget.imageUrl?.trim().isNotEmpty ?? false)) {
+      _url = widget.imageUrl!.trim();
+    }
+  }
+
+  void _resolveIfNeeded() {
+    if (_lookupStarted || !CinematicTitleMetadataService.isConfigured) return;
+    final title = widget.title.trim();
+    if (title.isEmpty) return;
+    _lookupStarted = true;
+    final key = _currentKey;
+    final future = _cache.putIfAbsent(key, () => MediaArtworkAutoResolver.resolveAlbumCover(
+          title: title,
+          artist: widget.artist,
+        ));
+    unawaited(_applyResolution(future, key));
+  }
+
+  Future<void> _applyResolution(Future<String?> future, String key) async {
+    try {
+      final url = await future;
+      if (!mounted || _lookupKey != key || url == null || url.isEmpty) return;
+      setState(() => _url = url);
+    } catch (_) {
+      // Preserve the placeholder if the catalog lookup fails.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final url = _url.trim();
+    if (url.isEmpty) {
+      _resolveIfNeeded();
+      return widget.placeholder ?? SizedBox(
+        width: widget.width,
+        height: widget.height,
+        child: const ColoredBox(
+          color: Color(0xFF242424),
+          child: Center(child: Icon(Icons.album_outlined, color: Colors.white54, size: 28)),
+        ),
+      );
+    }
+    return CachedNetworkImage(
+      imageUrl: url,
+      width: widget.width,
+      height: widget.height,
+      fit: widget.fit,
+      fadeInDuration: const Duration(milliseconds: 100),
+      placeholder: (_, __) => widget.placeholder ?? SizedBox(
+        width: widget.width,
+        height: widget.height,
+        child: const ColoredBox(
+          color: Color(0xFF242424),
+          child: Center(child: Icon(Icons.album_outlined, color: Colors.white54, size: 28)),
+        ),
+      ),
+      errorWidget: (_, __, ___) {
+        if (!_lookupStarted) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            setState(() {
+              _url = '';
+              _lookupStarted = false;
+            });
+            _resolveIfNeeded();
+          });
+        }
+        return widget.errorPlaceholder ?? widget.placeholder ?? SizedBox(
+          width: widget.width,
+          height: widget.height,
+          child: const ColoredBox(
+            color: Color(0xFF242424),
+            child: Center(child: Icon(Icons.album_outlined, color: Colors.white54, size: 28)),
+          ),
+        );
+      },
+    );
+  }
 }

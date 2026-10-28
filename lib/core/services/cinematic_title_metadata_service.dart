@@ -11,6 +11,10 @@ class CinematicTitleMetadataService {
 
   // Per-process cache keeps hero/detail rebuilds from repeatedly searching TMDB.
   static final Map<String, Future<String?>> _titleLogoCache = <String, Future<String?>>{};
+  static final Map<String, Future<Map<String, dynamic>?>> _homeMetadataCache =
+      <String, Future<Map<String, dynamic>?>>{};
+  static final Map<String, Future<List<CinematicTitleRecommendation>>> _personCreditsCache =
+      <String, Future<List<CinematicTitleRecommendation>>>{};
 
   /// TMDB requests are available when the app has an authenticated backend
   /// session; API credentials live only in Backend/.env.
@@ -137,6 +141,31 @@ class CinematicTitleMetadataService {
   /// detail endpoint already carries overview, season summaries, and series
   /// run dates, avoiding a heavier cast/images/reviews lookup on Home.
   static Future<Map<String, dynamic>?> lookupHomeMetadata({
+    required String title,
+    required bool isTv,
+    int? year,
+  }) {
+    final cleanTitle = title.trim();
+    if (cleanTitle.isEmpty || !isConfigured) {
+      return Future<Map<String, dynamic>?>.value(null);
+    }
+    final cacheKey = '${isTv ? 'tv' : 'movie'}|${_normalize(cleanTitle)}|${year ?? ''}';
+    return _homeMetadataCache.putIfAbsent(cacheKey, () async {
+      try {
+        return await _lookupHomeMetadataUncached(
+          title: cleanTitle,
+          isTv: isTv,
+          year: year,
+        );
+      } catch (_) {
+        // Do not pin transient failures in cache; a later navigation can retry.
+        _homeMetadataCache.remove(cacheKey);
+        rethrow;
+      }
+    });
+  }
+
+  static Future<Map<String, dynamic>?> _lookupHomeMetadataUncached({
     required String title,
     required bool isTv,
     int? year,
@@ -520,12 +549,26 @@ class CinematicTitleMetadataService {
     final tvSeasons = isTv
         ? normalizeTvSeasons(details['seasons'])
         : <Map<String, dynamic>>[];
+    final originCountryValues = isTv
+        ? (details['origin_country'] is List
+            ? (details['origin_country'] as List).map((value) => value.toString().trim()).where((value) => value.isNotEmpty).toList()
+            : <String>[])
+        : _listOfMaps(details['production_countries'])
+            .map((row) => _cleanNullable(row['name'] ?? row['iso_3166_1']))
+            .whereType<String>()
+            .where((value) => value.trim().isNotEmpty)
+            .toList();
+    final countryOfOrigin = originCountryValues
+        .map((value) => _countryName(value))
+        .toSet()
+        .join(', ');
 
     return CinematicTitleMetadata(
       providerId: id,
       imdbId: _cleanNullable(externalIds['imdb_id']),
       title: actualTitle?.isNotEmpty == true ? actualTitle! : cleanTitle,
       isTv: isTv,
+      countryOfOrigin: countryOfOrigin.isEmpty ? null : countryOfOrigin,
       overview: details['overview']?.toString() ?? '',
       posterPath: _cleanNullable(details['poster_path']),
       backdropPath: _cleanNullable(details['backdrop_path']),
@@ -628,6 +671,57 @@ class CinematicTitleMetadataService {
       if (output.length >= limit) break;
     }
     return List<CinematicTitleRecommendation>.unmodifiable(output);
+  }
+
+  /// Returns a person's combined movie and TV credits from TMDB.
+  /// Keeping the person-specific call here means the client never needs a TMDB API key.
+  static Future<List<CinematicTitleRecommendation>> lookupPersonCredits({
+    required int personId,
+    int limit = 24,
+  }) async {
+    if (!isConfigured || personId <= 0 || limit <= 0) {
+      return const <CinematicTitleRecommendation>[];
+    }
+    final cacheKey = '$personId:$limit';
+    return _personCreditsCache.putIfAbsent(cacheKey, () async {
+      try {
+        final payload = await _get(
+          '/person/$personId/combined_credits',
+          const <String, String>{'language': 'en-US'},
+        );
+        final rows = <Map<String, dynamic>>[
+          ..._listOfMaps(payload['cast']),
+          ..._listOfMaps(payload['crew']),
+        ];
+        final seen = <String>{};
+        final results = <CinematicTitleRecommendation>[];
+        for (final row in rows) {
+          if (row['adult'] == true) continue;
+          final mediaType = row['media_type']?.toString().trim().toLowerCase();
+          if (mediaType != 'movie' && mediaType != 'tv') continue;
+          final isTv = mediaType == 'tv';
+          final item = CinematicTitleRecommendation.fromJson(row, isTv: isTv);
+          final key = '$mediaType:${item.providerId}';
+          if (item.providerId <= 0 || item.title.trim().isEmpty || !seen.add(key)) {
+            continue;
+          }
+          results.add(item);
+        }
+        results.sort((a, b) {
+          final byVotes = (b.voteCount ?? 0).compareTo(a.voteCount ?? 0);
+          if (byVotes != 0) return byVotes;
+          final byRating = (b.voteAverage ?? 0).compareTo(a.voteAverage ?? 0);
+          if (byRating != 0) return byRating;
+          return (b.releaseYear ?? 0).compareTo(a.releaseYear ?? 0);
+        });
+        return List<CinematicTitleRecommendation>.unmodifiable(
+          results.take(limit),
+        );
+      } catch (_) {
+        // Person filmography is a discovery enhancement; the rest of Home stays usable.
+        return const <CinematicTitleRecommendation>[];
+      }
+    });
   }
 
   /// Mood-based discovery recommendations for the "Or maybe something a bit
@@ -757,6 +851,8 @@ class CinematicTitleMetadataService {
     }
     return output;
   }
+
+  static String _countryName(String value) => formatCountryName(value);
 
   static String? _cleanNullable(dynamic value) {
     final text = value?.toString().trim() ?? '';
@@ -913,6 +1009,7 @@ class CinematicTitleMetadata {
     this.imdbId,
     required this.title,
     required this.isTv,
+    this.countryOfOrigin,
     required this.overview,
     required this.posterPath,
     required this.backdropPath,
@@ -950,6 +1047,7 @@ class CinematicTitleMetadata {
   final String? imdbId;
   final String title;
   final bool isTv;
+  final String? countryOfOrigin;
   final String overview;
   final String? posterPath;
   final String? backdropPath;
@@ -1065,6 +1163,7 @@ class CinematicTitleRecommendation {
     required this.providerId,
     required this.title,
     required this.isTv,
+    this.countryOfOrigin,
     required this.overview,
     required this.posterPath,
     required this.backdropPath,
@@ -1076,6 +1175,7 @@ class CinematicTitleRecommendation {
   final int providerId;
   final String title;
   final bool isTv;
+  final String? countryOfOrigin;
   final String overview;
   final String? posterPath;
   final String? backdropPath;

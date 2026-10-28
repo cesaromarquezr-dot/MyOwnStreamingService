@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'home_arrow_rail.dart';
+
 /// Shared presentation modes for browsing movies, shows, albums, and collections.
 enum LibraryViewMode { list, grid, gallery, table, timeline }
 
@@ -108,6 +110,7 @@ class LibraryViewEntry {
   const LibraryViewEntry({
     required this.title,
     required this.subtitle,
+    this.subtitleBuilder,
     this.year,
     this.imageUrl,
     this.artworkBuilder,
@@ -118,6 +121,7 @@ class LibraryViewEntry {
 
   final String title;
   final String subtitle;
+  final Widget Function(BuildContext context)? subtitleBuilder;
   final int? year;
   final String? imageUrl;
   final Widget Function(BuildContext context, BoxFit fit)? artworkBuilder;
@@ -182,7 +186,7 @@ class LibraryCollectionView extends StatelessWidget {
                   leading: SizedBox(width: 52, height: 70, child: _artwork(context, entry, BoxFit.contain)),
                   title: Text(entry.title, maxLines: 2, overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w800)),
-                  subtitle: Text(entry.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis,
+                  subtitle: entry.subtitleBuilder?.call(context) ?? Text(entry.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis,
                       style: const TextStyle(color: Colors.white60, fontSize: 12)),
                   trailing: entry.trailing ?? const Icon(Icons.chevron_right_rounded),
                   onTap: entry.onTap,
@@ -225,7 +229,7 @@ class LibraryCollectionView extends StatelessWidget {
                       Text(entry.title, maxLines: 2, overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
                       const SizedBox(height: 3),
-                      Text(entry.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis,
+                      entry.subtitleBuilder?.call(context) ?? Text(entry.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis,
                           style: const TextStyle(color: Colors.white60, fontSize: 10)),
                     ]),
                   ),
@@ -239,40 +243,61 @@ class LibraryCollectionView extends StatelessWidget {
   }
 
   Widget _gallery(BuildContext context) => Padding(
-        padding: padding,
-        child: SizedBox(
-          height: 270,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: entries.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
-            itemBuilder: (context, index) {
-              final entry = entries[index];
-              return SizedBox(
-                width: 170,
-                child: Card(
-                  clipBehavior: Clip.antiAlias,
-                  color: Colors.white.withValues(alpha: .045),
-                  child: InkWell(
-                    onTap: entry.onTap,
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        padding: EdgeInsets.zero,
+        child: HomeArrowRail(
+          height: 286,
+          itemCount: entries.length,
+          separatorExtent: 12,
+          // Leave room for the overlay arrows so they never cover the
+          // first or last artwork card in Gallery mode.
+          padding: const EdgeInsets.fromLTRB(48, 4, 48, 30),
+          itemBuilder: (context, index) {
+            final entry = entries[index];
+            return SizedBox(
+              width: 170,
+              child: Card(
+                clipBehavior: Clip.antiAlias,
+                color: Colors.white.withValues(alpha: .045),
+                child: InkWell(
+                  onTap: entry.onTap,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
                       Expanded(child: _artwork(context, entry, BoxFit.cover)),
                       Padding(
                         padding: const EdgeInsets.all(9),
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(entry.title, maxLines: 2, overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
-                          const SizedBox(height: 3),
-                          Text(entry.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: Colors.white60, fontSize: 10)),
-                        ]),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              entry.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            entry.subtitleBuilder?.call(context) ??
+                                Text(
+                                  entry.subtitle,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Colors.white60,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                          ],
+                        ),
                       ),
-                    ]),
+                    ],
                   ),
                 ),
-              );
-            },
-          ),
+              ),
+            );
+          },
         ),
       );
 
@@ -298,7 +323,7 @@ class LibraryCollectionView extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                   child: Row(children: [
                     Expanded(flex: 5, child: Text(entries[i].title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))),
-                    Expanded(flex: 3, child: Text(entries[i].subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60, fontSize: 11))),
+                    Expanded(flex: 3, child: entries[i].subtitleBuilder?.call(context) ?? Text(entries[i].subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60, fontSize: 11))),
                     entries[i].trailing ?? const Icon(Icons.chevron_right_rounded, size: 18, color: Colors.white54),
                   ]),
                 ),
@@ -335,7 +360,7 @@ class LibraryCollectionView extends StatelessWidget {
                   child: ListTile(
                     leading: SizedBox(width: 42, height: 60, child: _artwork(context, ordered[index], BoxFit.contain)),
                     title: Text(ordered[index].title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
-                    subtitle: Text(ordered[index].subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60, fontSize: 11)),
+                    subtitle: ordered[index].subtitleBuilder?.call(context) ?? Text(ordered[index].subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60, fontSize: 11)),
                     onTap: ordered[index].onTap,
                   ),
                 ),

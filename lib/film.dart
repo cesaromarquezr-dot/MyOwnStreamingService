@@ -10,7 +10,6 @@ import 'localization.dart';
 import 'media_text_localizer.dart';
 import 'movies.dart';
 import 'series.dart';
-import 'international_catalog_shelf.dart';
 
 /// Unified movie/TV experience. Individual playback and metadata still open
 /// through the existing Details and player systems.
@@ -49,16 +48,6 @@ class _FilmExperienceScreenState extends State<FilmExperienceScreen> {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
         children: [
           _hero(context, library),
-          if (tab != 2 && movies.any((item) => item.tags.contains('international-catalog')))
-            InternationalCatalogShelf(
-              title: 'International Movies',
-              items: movies.where((item) => item.tags.contains('international-catalog')).toList(growable: false),
-            ),
-          if (tab != 1 && shows.any((item) => item.tags.contains('international-catalog')))
-            InternationalCatalogShelf(
-              title: 'International Shows',
-              items: shows.where((item) => item.tags.contains('international-catalog')).toList(growable: false),
-            ),
           if (library.any((m) => m.imageUrl != null && m.imageUrl!.trim().isNotEmpty)) ...[
             const SizedBox(height: 18),
             _FilmArtworkShowcase(items: library.where((m) => m.imageUrl != null && m.imageUrl!.trim().isNotEmpty).toList()),

@@ -2,18 +2,23 @@
 // Purpose: Implements the movies portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
 import 'release_order_grouping.dart';
 import 'details.dart';
+import 'player.dart';
 import 'localization.dart';
 import 'widgets/like_toggle_button.dart';
 import 'page_customization_button.dart';
-import 'international_catalog_shelf.dart';
 import 'media_metadata_catalog_screen.dart';
 import 'catalog_poster_image.dart';
 import 'library_view_modes.dart';
+import 'page_hero_banner.dart';
+import 'country_origin_style.dart';
+import 'home_streaming_discovery.dart' show HomeHeroCarousel;
 
 class MoviesScreen extends StatefulWidget {
   const MoviesScreen({super.key});
@@ -31,6 +36,7 @@ class _MoviesScreenState extends State<MoviesScreen>
     'movies',
     fallback: LibraryViewMode.grid,
   );
+  PageHeroSettings _heroSettings = const PageHeroSettings();
 
   @override
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
@@ -39,10 +45,12 @@ class _MoviesScreenState extends State<MoviesScreen>
 
     // Seed browseable catalog examples when Movies/TV is opened directly.
     AppController.instance.ensureDemoPreviewMedia(notify: false);
+    PageHeroSettingsStore.revision.addListener(_onHeroSettingsRevision);
+    unawaited(_reloadHeroSettings());
 
     _pageController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 180),
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -52,11 +60,28 @@ class _MoviesScreenState extends State<MoviesScreen>
     });
   }
 
+  Future<void> _reloadHeroSettings() async {
+    final settings = await PageHeroSettingsStore.load('movies');
+    if (mounted) setState(() => _heroSettings = settings);
+  }
+
+  void _onHeroSettingsRevision() => unawaited(_reloadHeroSettings());
+
   @override
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
+    PageHeroSettingsStore.revision.removeListener(_onHeroSettingsRevision);
     _pageController.dispose();
     super.dispose();
+  }
+
+  void _playHeroMedia(MediaItem media) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: '/app/player'),
+        builder: (_) => PlayerScreen(media: media),
+      ),
+    );
   }
 
   /// Performs `_openDetails` for this feature. Update this documentation when its contract changes.
@@ -65,8 +90,8 @@ class _MoviesScreenState extends State<MoviesScreen>
       context,
       PageRouteBuilder(
       settings: const RouteSettings(name: '/app/details'),
-      transitionDuration: const Duration(milliseconds: 450),
-        reverseTransitionDuration: const Duration(milliseconds: 300),
+      transitionDuration: const Duration(milliseconds: 180),
+        reverseTransitionDuration: const Duration(milliseconds: 140),
         pageBuilder: (
           context,
           animation,
@@ -110,9 +135,6 @@ class _MoviesScreenState extends State<MoviesScreen>
     final movies = internationalCatalogFirst(library.where(
       (media) => media.type.toLowerCase() == 'movie',
     ));
-    final internationalMovies = movies
-        .where((media) => media.tags.contains('international-catalog'))
-        .toList(growable: false);
 
     final filteredMovies = _searchQuery.trim().isEmpty
         ? List<MediaItem>.from(movies)
@@ -124,14 +146,24 @@ class _MoviesScreenState extends State<MoviesScreen>
 
     _sortMedia(filteredMovies);
 
-    final featuredMovie = filteredMovies.isNotEmpty ? filteredMovies.first : null;
     final viewEntries = filteredMovies.map((movie) => LibraryViewEntry(
       title: movie.title,
       subtitle: [
         if (movie.releaseYear != null) movie.releaseYear.toString(),
         if (movie.genres.isNotEmpty) movie.genres.take(2).join(' · '),
+        mediaCountryOriginLabel(movie),
         movie.type,
       ].where((part) => part.trim().isNotEmpty).join(' · '),
+      subtitleBuilder: (context) => Wrap(
+        spacing: 5,
+        runSpacing: 2,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          if (movie.releaseYear != null) Text('${movie.releaseYear}', style: const TextStyle(color: Colors.white60, fontSize: 11)),
+          if (movie.genres.isNotEmpty) Text(movie.genres.take(2).join(' · '), style: const TextStyle(color: Colors.white60, fontSize: 11)),
+          CountryOriginInline(media: movie, fontSize: 10.5),
+        ],
+      ),
       year: movie.releaseYear,
       artworkBuilder: (context, fit) => CatalogPosterImage(media: movie, fit: fit),
       fallbackIcon: Icons.movie_outlined,
@@ -153,14 +185,6 @@ class _MoviesScreenState extends State<MoviesScreen>
                   child: _buildTopBar(context, movies.length),
                 ),
 
-                if (_searchQuery.trim().isEmpty && _viewMode == LibraryViewMode.grid && internationalMovies.isNotEmpty)
-                  SliverToBoxAdapter(
-                    child: InternationalCatalogShelf(
-                      title: 'International Movies',
-                      items: internationalMovies,
-                    ),
-                  ),
-
                 if (_searchQuery.trim().isNotEmpty)
                   SliverToBoxAdapter(
                     child: _buildSearchSummary(
@@ -179,11 +203,14 @@ class _MoviesScreenState extends State<MoviesScreen>
                 else ...[
                   if (_searchQuery.trim().isEmpty &&
                       _viewMode == LibraryViewMode.grid &&
-                      featuredMovie != null)
+                      _heroSettings.enabled &&
+                      filteredMovies.isNotEmpty)
                     SliverToBoxAdapter(
-                      child: _buildFeaturedMovie(
-                        context,
-                        featuredMovie,
+                      child: HomeHeroCarousel(
+                        items: filteredMovies,
+                        settingsKey: 'movies',
+                        onOpen: (media) => _openDetails(context, media),
+                        onPlay: _playHeroMedia,
                       ),
                     ),
 
@@ -413,8 +440,6 @@ class _MoviesScreenState extends State<MoviesScreen>
                     fontSize: 12,
                   ),
                 ),
-                const SizedBox(height: 5),
-                Align(alignment: Alignment.centerLeft, child: _sortDropdown()),
               ],
             ),
           ),
@@ -628,233 +653,6 @@ class _MoviesScreenState extends State<MoviesScreen>
   }
 
   // ============================================================
-  // FEATURED MOVIE
-  // ============================================================
-
-  /// Performs `_buildFeaturedMovie` for this feature. Update this documentation when its contract changes.
-  Widget _buildFeaturedMovie(
-    BuildContext context,
-    MediaItem movie,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        20,
-        8,
-        20,
-        18,
-      ),
-      child: AnimatedBuilder(
-        animation: _pageController,
-        builder: (context, child) {
-          final value = Curves.easeOutCubic.transform(
-            _pageController.value,
-          );
-
-          return Opacity(
-            opacity: value,
-            child: Transform.translate(
-              offset: Offset(0, 18 * (1 - value)),
-              child: child,
-            ),
-          );
-        },
-        child: GestureDetector(
-          onTap: () {
-            _openDetails(context, movie);
-          },
-          child: Container(
-            height: 285,
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              color: const Color(0xFF111111),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: Colors.white.withValues(
-                  alpha: 0.08,
-                ),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(
-                    alpha: 0.38,
-                  ),
-                  blurRadius: 30,
-                  offset: const Offset(0, 16),
-                ),
-              ],
-            ),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                CatalogPosterImage(
-                  media: movie,
-                  fit: BoxFit.cover,
-                  placeholder: const _FeaturedFallback(),
-                  errorPlaceholder: const _FeaturedFallback(),
-                ),
-
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      stops: const [
-                        0.0,
-                        0.35,
-                        0.72,
-                        1.0,
-                      ],
-                      colors: [
-                        Colors.black.withValues(
-                          alpha: 0.18,
-                        ),
-                        Colors.transparent,
-                        Colors.black.withValues(
-                          alpha: 0.7,
-                        ),
-                        Colors.black.withValues(
-                          alpha: 0.96,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                Positioned(
-                  top: 12,
-                  right: 12,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.5),
-                      shape: BoxShape.circle,
-                    ),
-                    child: LikeToggleButton(
-                      liked: AppController.instance.isLiked(movie.id),
-                      compact: true,
-                      onPressed: () {
-                        setState(() {
-                          if (AppController.instance.isLiked(movie.id)) {
-                            AppController.instance.clearReaction(movie.id);
-                          } else {
-                            AppController.instance.likeMedia(movie);
-                          }
-                        });
-                      },
-                    ),
-                  ),
-                ),
-
-                Positioned(
-                  left: 20,
-                  right: 20,
-                  bottom: 19,
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding:
-                                const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white
-                                  .withValues(
-                                alpha: 0.11,
-                              ),
-                              borderRadius:
-                                  BorderRadius.circular(7),
-                              border: Border.all(
-                                color: Colors.white
-                                    .withValues(
-                                  alpha: 0.1,
-                                ),
-                              ),
-                            ),
-                            child: const UniversalText('FEATURED',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 8,
-                                fontWeight:
-                                    FontWeight.w800,
-                                letterSpacing: 1.2,
-                              ),
-                            ),
-                          ),
-                          if (movie.releaseYear != null) ...[
-                            const SizedBox(width: 8),
-                            UniversalText('${movie.releaseYear}',
-                              style: TextStyle(
-                                color: Colors.white
-                                    .withValues(
-                                  alpha: 0.65,
-                                ),
-                                fontSize: 11,
-                                fontWeight:
-                                    FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        movie.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 25,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.7,
-                          height: 1.05,
-                        ),
-                      ),
-                      const SizedBox(height: 11),
-                      Row(
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.play_arrow_rounded,
-                              color: Colors.black,
-                              size: 23,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          UniversalText('View details',
-                            style: TextStyle(
-                              color: Colors.white
-                                  .withValues(
-                                alpha: 0.72,
-                              ),
-                              fontSize: 12,
-                              fontWeight:
-                                  FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
   // SECTION HEADER
   // ============================================================
 
@@ -901,6 +699,10 @@ class _MoviesScreenState extends State<MoviesScreen>
               ],
             ),
           ),
+          if (_searchQuery.trim().isEmpty) ...[
+            _sortDropdown(),
+            const SizedBox(width: 4),
+          ],
           Icon(
             Icons.movie_filter_outlined,
             size: 18,
@@ -1358,21 +1160,14 @@ class _MovieCardState extends State<_MovieCard> {
                                       FontWeight.w700,
                                 ),
                               ),
-                              if (movie.releaseYear !=
-                                  null) ...[
-                                const SizedBox(
-                                  height: 5,
-                                ),
-                                UniversalText('${movie.releaseYear}',
-                                  style: TextStyle(
-                                    color: Colors.white
-                                        .withValues(
-                                      alpha: 0.38,
-                                    ),
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ],
+                              const SizedBox(height: 5),
+                              if (movie.releaseYear != null)
+                                Text('${movie.releaseYear}', style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.48),
+                                  fontSize: 10.5,
+                                )),
+                              const SizedBox(height: 2),
+                              CountryOriginInline(media: movie, fontSize: 10.5),
                             ],
                           ),
                         ),
@@ -1500,40 +1295,6 @@ class _ArtworkFallback extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ============================================================
-// FEATURED FALLBACK
-// ============================================================
-
-class _FeaturedFallback extends StatelessWidget {
-  const _FeaturedFallback();
-
-  @override
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF303030),
-            Color(0xFF0B0B0B),
-          ],
-        ),
-      ),
-      child: Center(
-        child: Icon(
-          Icons.movie_rounded,
-          size: 80,
-          color: Colors.white.withValues(
-            alpha: 0.12,
-          ),
-        ),
       ),
     );
   }

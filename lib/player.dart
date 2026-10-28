@@ -23,10 +23,14 @@ class PlayerScreen extends StatefulWidget {
   /// Optional, richer presence label supplied by episodes, collections or TV channels.
   final String? activityLabel;
 
+  /// Optional absolute start offset used when tuning into a scheduled My TV program.
+  final int? initialPositionSeconds;
+
   const PlayerScreen({
     super.key,
     required this.media,
     this.activityLabel,
+    this.initialPositionSeconds,
   });
 
   @override
@@ -63,6 +67,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       '${widget.media.id}_${DateTime.now().microsecondsSinceEpoch}';
   final DateTime _qoeStartedAt = DateTime.now();
   bool _qoeReadyLogged = false;
+  bool _initialScheduledSeekApplied = false;
 
   bool get _usesAdaptivePlayback {
     final value = widget.media.playbackUrl?.trim() ?? '';
@@ -83,10 +88,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
     musicWasPlayingBeforeVideo =
         MusicPlaybackController.instance.pauseForVideo();
 
-    position = AppController.instance
-        .getPlaybackProgress(widget.media.id)
-        .clamp(0.0, 1.0)
-        .toDouble();
+    position = widget.initialPositionSeconds != null
+        ? 0.0
+        : AppController.instance
+            .getPlaybackProgress(widget.media.id)
+            .clamp(0.0, 1.0)
+            .toDouble();
 
     videoFinished = position >= 1.0;
 
@@ -353,7 +360,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
             valueMs: DateTime.now().difference(_qoeStartedAt).inMilliseconds));
       }
 
-      if (position > 0.0 && position < 1.0) {
+      if (widget.initialPositionSeconds != null && !_initialScheduledSeekApplied) {
+        _initialScheduledSeekApplied = true;
+        unawaited(_seekYoutubeBySeconds(widget.initialPositionSeconds!.clamp(0, 24 * 60 * 60)));
+      } else if (position > 0.0 && position < 1.0) {
         _seekYoutubeByNormalizedPosition(position);
       }
     }
@@ -927,6 +937,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return AdaptiveStreamingPlayer(
         media: widget.media,
         activityLabel: widget.activityLabel,
+        initialPositionSeconds: widget.initialPositionSeconds,
       );
     }
     final controller = AppController.instance;

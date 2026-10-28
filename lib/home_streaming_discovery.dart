@@ -6,6 +6,7 @@ import 'dart:math';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
@@ -14,9 +15,11 @@ import 'app_core.dart';
 import 'cinematic_title.dart';
 import 'artwork_selection_store.dart';
 import 'artwork_gallery_screen.dart';
+import 'catalog_poster_image.dart' show CatalogPosterImage, AlbumArtworkImage;
 import 'cinematic_discovery_studio.dart';
 import 'collection_details.dart';
 import 'library_view_modes.dart';
+import 'media_metadata_catalog_screen.dart';
 import 'details.dart';
 import 'home_franchise_progress.dart';
 import 'home_arrow_rail.dart';
@@ -27,6 +30,8 @@ import 'localization.dart';
 import 'player.dart';
 import 'recommendation_ownership.dart';
 import 'core/services/cinematic_title_metadata_service.dart';
+import 'media_artwork_auto_resolver.dart';
+import 'page_hero_banner.dart';
 
 const Color _discoveryAccent = Color(0xFF8B7CFF);
 const Color _discoveryPanel = Color(0xFF171722);
@@ -196,8 +201,7 @@ class HomeBrowseNavigation extends StatelessWidget {
 class HomeHoverPreviewStore {
   HomeHoverPreviewStore._();
 
-  static final ValueNotifier<MediaItem?> current =
-      ValueNotifier<MediaItem?>(null);
+  static final ValueNotifier<MediaItem?> current = ValueNotifier<MediaItem?>(null);
 
   static void show(MediaItem item) => current.value = item;
 
@@ -209,18 +213,19 @@ class HomeHoverPreviewStore {
 /// Large landscape Home banner with automatic rotation, hover previews and controls.
 class HomeHeroCarousel extends StatefulWidget {
   final List<MediaItem> items;
-
   /// Always opens the selected media's details page.
   final ValueChanged<MediaItem> onOpen;
-
   /// Opens playback; defaults to [onOpen] only for callers that do not provide it.
   final ValueChanged<MediaItem>? onPlay;
+  /// Stable settings key: home, movies, or series.
+  final String settingsKey;
 
   const HomeHeroCarousel({
     super.key,
     required this.items,
     required this.onOpen,
     this.onPlay,
+    this.settingsKey = 'home',
   });
 
   @override
@@ -236,7 +241,16 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
   MediaItem? _hoveredMedia;
   VideoPlayerController? _previewController;
   YoutubePlayerController? _youtubePreviewController;
+  StreamSubscription<dynamic>? _youtubePreviewStateSubscription;
   bool _previewMuted = true;
+  bool _heroPointerInside = false;
+  PageHeroSettings _heroSettings = const PageHeroSettings();
+
+  List<MediaItem> get _items {
+    if (!_heroSettings.enabled || widget.items.isEmpty) return const <MediaItem>[];
+    final count = min(widget.items.length, _heroSettings.itemCount);
+    return widget.items.take(count).toList(growable: false);
+  }
   String? _previewUrl;
   String? _youtubePreviewUrl;
   String? _youtubePreviewId;
@@ -249,6 +263,9 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
   final Set<String> _overviewLookupStarted = <String>{};
   final Map<String, String> _selectedBackdropPaths = <String, String>{};
   final Map<String, String> _selectedPosterPaths = <String, String>{};
+  final Map<String, String> _automaticBackdropPaths = <String, String>{};
+  final Map<String, String> _automaticPosterUrls = <String, String>{};
+  final Set<String> _automaticArtworkLookupStarted = <String>{};
   bool _openingHeroArtworkGallery = false;
 
   @override
@@ -258,13 +275,44 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     HomeHoverPreviewStore.current.addListener(_onHomeHoverChanged);
     _hoveredMedia = HomeHoverPreviewStore.current.value;
     ArtworkSelectionStore.revision.addListener(_onArtworkSelectionsChanged);
+    PageHeroSettingsStore.revision.addListener(_onHeroSettingsChanged);
+    unawaited(_loadHeroSettings());
     unawaited(_refreshSelectedBackdrops());
-    if (widget.items.isNotEmpty) {
-      final initial = _hoveredMedia ?? widget.items.first;
+    if (_items.isNotEmpty) {
+      final initial = _hoveredMedia ?? _items.first;
       _loadPreview(initial);
       unawaited(_loadOverview(initial));
+      unawaited(_loadAutomaticArtwork(initial));
     }
     _scheduleNext();
+  }
+
+  Future<void> _loadHeroSettings() async {
+    final loaded = await PageHeroSettingsStore.load(widget.settingsKey);
+    if (!mounted) return;
+    setState(() {
+      _heroSettings = loaded;
+      if (!loaded.audioEnabled) _previewMuted = true;
+    });
+    _scheduleNext();
+    if (!loaded.enabled || !loaded.audioEnabled) {
+      await _applyCurrentAudioPolicy();
+    }
+  }
+
+  void _onHeroSettingsChanged() {
+    unawaited(_loadHeroSettings());
+  }
+
+  Future<void> _applyCurrentAudioPolicy() async {
+    final youtube = _youtubePreviewController;
+    if (youtube != null) await _applyYoutubePreviewAudio(youtube);
+    final direct = _previewController;
+    if (direct != null && direct.value.isInitialized) {
+      try {
+        await direct.setVolume(_heroSettings.audioEnabled && !_previewMuted ? 1 : 0);
+      } catch (_) {}
+    }
   }
 
   void _onHomeHoverChanged() {
@@ -275,11 +323,12 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     if (next != null) {
       _loadPreview(next);
       unawaited(_loadOverview(next));
-    } else if (widget.items.isNotEmpty) {
-      final current =
-          widget.items[_index.clamp(0, widget.items.length - 1).toInt()];
+      unawaited(_loadAutomaticArtwork(next));
+    } else if (_items.isNotEmpty) {
+      final current = _items[_index.clamp(0, _items.length - 1).toInt()];
       _loadPreview(current);
       unawaited(_loadOverview(current));
+      unawaited(_loadAutomaticArtwork(current));
     }
     // Hover previews must not cancel carousel rotation permanently. The timer
     // keeps advancing and is restarted by each page change or manual action.
@@ -290,23 +339,23 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
   void didUpdateWidget(covariant HomeHeroCarousel oldWidget) {
     super.didUpdateWidget(oldWidget);
     final itemCountChanged = oldWidget.items.length != widget.items.length;
-    if (widget.items.isEmpty || _index >= widget.items.length) {
+    if (_items.isEmpty || _index >= _items.length) {
       _index = 0;
       if (_pageController.hasClients) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted &&
-              _pageController.hasClients &&
-              widget.items.isNotEmpty) {
+          if (mounted && _pageController.hasClients && _items.isNotEmpty) {
             _pageController.jumpToPage(0);
           }
         });
       }
     }
     if (itemCountChanged) _scheduleNext();
+    if (oldWidget.settingsKey != widget.settingsKey) unawaited(_loadHeroSettings());
     unawaited(_refreshSelectedBackdrops());
-    if (widget.items.isNotEmpty) {
-      unawaited(_loadOverview(widget.items[_index]));
-      unawaited(_loadPreview(widget.items[_index]));
+    if (_items.isNotEmpty) {
+      unawaited(_loadOverview(_items[_index]));
+      unawaited(_loadPreview(_items[_index]));
+      unawaited(_loadAutomaticArtwork(_items[_index]));
     }
   }
 
@@ -318,7 +367,9 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     final profileId = AppController.instance.currentProfile?.id ?? 'guest';
     final nextBackdrops = <String, String>{};
     final nextPosters = <String, String>{};
-    for (final item in widget.items) {
+    final automaticBackdrops = <String, String>{};
+    final automaticPosters = <String, String>{};
+    for (final item in _items) {
       final paths = await Future.wait<String?>(<Future<String?>>[
         ArtworkSelectionStore.readBackdropPath(
           profileId: profileId,
@@ -328,23 +379,32 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
           profileId: profileId,
           mediaId: item.id,
         ),
+        MediaArtworkAutoResolver.readAutoBackdropPath(item.id),
+        MediaArtworkAutoResolver.readAutoPosterUrl(item.id),
       ]);
       final backdrop = paths[0];
       final poster = paths[1];
+      final automaticBackdrop = paths[2];
+      final automaticPoster = paths[3];
       if (backdrop != null && backdrop.isNotEmpty) {
         nextBackdrops[item.id] = backdrop;
       }
       if (poster != null && poster.isNotEmpty) nextPosters[item.id] = poster;
+      if ((backdrop == null || backdrop.isEmpty) &&
+          automaticBackdrop != null && automaticBackdrop.isNotEmpty) {
+        automaticBackdrops[item.id] = automaticBackdrop;
+      }
+      if ((poster == null || poster.isEmpty) &&
+          automaticPoster != null && automaticPoster.isNotEmpty) {
+        automaticPosters[item.id] = automaticPoster;
+      }
     }
     if (!mounted) return;
-    final backdropsChanged = nextBackdrops.length !=
-            _selectedBackdropPaths.length ||
-        nextBackdrops.entries
-            .any((entry) => _selectedBackdropPaths[entry.key] != entry.value);
-    final postersChanged = nextPosters.length != _selectedPosterPaths.length ||
-        nextPosters.entries
-            .any((entry) => _selectedPosterPaths[entry.key] != entry.value);
-    if (backdropsChanged || postersChanged) {
+    final changed = _mapsDiffer(nextBackdrops, _selectedBackdropPaths) ||
+        _mapsDiffer(nextPosters, _selectedPosterPaths) ||
+        _mapsDiffer(automaticBackdrops, _automaticBackdropPaths) ||
+        _mapsDiffer(automaticPosters, _automaticPosterUrls);
+    if (changed) {
       setState(() {
         _selectedBackdropPaths
           ..clear()
@@ -352,7 +412,69 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
         _selectedPosterPaths
           ..clear()
           ..addAll(nextPosters);
+        _automaticBackdropPaths
+          ..clear()
+          ..addAll(automaticBackdrops);
+        _automaticPosterUrls
+          ..clear()
+          ..addAll(automaticPosters);
       });
+    }
+  }
+
+  bool _mapsDiffer(Map<String, String> next, Map<String, String> current) =>
+      next.length != current.length ||
+      next.entries.any((entry) => current[entry.key] != entry.value);
+
+  Future<void> _loadAutomaticArtwork(MediaItem media) async {
+    if (!CinematicTitleMetadataService.isConfigured ||
+        !_automaticArtworkLookupStarted.add(media.id)) {
+      return;
+    }
+    try {
+      final result = await MediaArtworkAutoResolver.resolveMedia(media);
+      if (result == null) return;
+      await MediaArtworkAutoResolver.rememberResolvedArtwork(media, result);
+      final profileId = AppController.instance.currentProfile?.id ?? 'guest';
+      final selections = await Future.wait<String?>(<Future<String?>>[
+        ArtworkSelectionStore.readBackdropPath(
+          profileId: profileId,
+          mediaId: media.id,
+        ),
+        ArtworkSelectionStore.readPosterPath(
+          profileId: profileId,
+          mediaId: media.id,
+        ),
+        MediaArtworkAutoResolver.readAutoBackdropPath(media.id),
+        MediaArtworkAutoResolver.readAutoPosterUrl(media.id),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        final customBackdrop = selections[0];
+        final customPoster = selections[1];
+        final autoBackdrop = selections[2];
+        final autoPoster = selections[3];
+        if (customBackdrop?.isNotEmpty == true) {
+          _selectedBackdropPaths[media.id] = customBackdrop!;
+          _automaticBackdropPaths.remove(media.id);
+        } else if (autoBackdrop?.isNotEmpty == true) {
+          _automaticBackdropPaths[media.id] = autoBackdrop!;
+        } else if (result.backdropPath?.trim().isNotEmpty == true) {
+          _automaticBackdropPaths[media.id] = result.backdropPath!.trim();
+        }
+        if (customPoster?.isNotEmpty == true) {
+          _selectedPosterPaths[media.id] = customPoster!;
+          _automaticPosterUrls.remove(media.id);
+        } else if (autoPoster?.isNotEmpty == true) {
+          _automaticPosterUrls[media.id] = autoPoster!;
+        } else if (result.posterUrl?.trim().isNotEmpty == true) {
+          // Keep provider artwork as a fallback even when the catalog already
+          // has an image URL; the existing URL may be stale or inaccessible.
+          _automaticPosterUrls[media.id] = result.posterUrl!.trim();
+        }
+      });
+    } catch (_) {
+      // Automatic artwork is a best-effort enhancement; keep the catalog usable.
     }
   }
 
@@ -360,8 +482,7 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     if (!_isMovieOrShow(media) || _openingHeroArtworkGallery) return;
     if (!CinematicTitleMetadataService.isConfigured) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text(
-            'Connect and start the metadata backend to browse poster and backdrop choices.'),
+        content: Text('Connect and start the metadata backend to browse poster and backdrop choices.'),
       ));
       return;
     }
@@ -369,15 +490,14 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     try {
       final metadata = await CinematicTitleMetadataService.lookupTitle(
         title: media.title,
-        isTv: media.isSeries,
+        isTv: media.isSeries || _isTvMedia(media),
         year: media.releaseYear ?? media.seriesStartYear,
       );
       if (!mounted) return;
       if (metadata == null ||
           (metadata.posterPaths.isEmpty && metadata.backdropPaths.isEmpty)) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content:
-              Text('No poster or backdrop gallery found for "${media.title}".'),
+          content: Text('No poster or backdrop gallery found for "${media.title}".'),
         ));
         return;
       }
@@ -420,26 +540,23 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     }
   }
 
-  bool _isMovieOrShow(MediaItem media) {
-    if (media.isSeries) return true;
+  bool _isTvMedia(MediaItem media) {
     final type = media.type.trim().toLowerCase();
-    // Music and album types use their own catalog description instead of TMDB.
-    if (type.contains('album') ||
-        type.contains('music') ||
-        type == 'track' ||
-        type == 'artist' ||
-        type == 'audio') {
-      return false;
-    }
-    return type == 'movie' ||
-        type == 'film' ||
-        type == 'feature' ||
-        type == 'feature film' ||
-        type.contains('movie') ||
-        type.contains('film');
+    return media.isSeries ||
+        type == 'tvshow' ||
+        type == 'tv_show' ||
+        type == 'tv show' ||
+        type == 'series' ||
+        type.contains('series') ||
+        type == 'television' ||
+        type == 'episode';
   }
 
+  bool _isMovieOrShow(MediaItem media) =>
+      MediaArtworkAutoResolver.isMovieOrShow(media) || _isTvMedia(media);
+
   Future<void> _loadOverview(MediaItem media) async {
+    unawaited(_loadAutomaticArtwork(media));
     if (!_isMovieOrShow(media) ||
         !CinematicTitleMetadataService.isConfigured ||
         !_overviewLookupStarted.add(media.id)) {
@@ -448,7 +565,7 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     try {
       final metadata = await CinematicTitleMetadataService.lookupHomeMetadata(
         title: media.title,
-        isTv: media.isSeries,
+        isTv: media.isSeries || _isTvMedia(media),
         year: media.releaseYear ?? media.seriesStartYear,
       );
       if (!mounted || metadata == null) return;
@@ -467,7 +584,7 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
         if (overview.isNotEmpty) {
           _tmdbOverviewsByMediaId[media.id] = overview;
         }
-        if (media.isSeries && seasonCount != null && seasonCount > 0) {
+        if ((media.isSeries || _isTvMedia(media)) && seasonCount != null && seasonCount > 0) {
           _tmdbSeasonCountsByMediaId[media.id] = seasonCount;
         }
         if (media.isSeries && yearLabel.isNotEmpty) {
@@ -475,10 +592,8 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
         }
       });
       final isSelected = _hoveredMedia?.id == media.id ||
-          (widget.items.isNotEmpty &&
-              widget.items[_index.clamp(0, widget.items.length - 1).toInt()]
-                      .id ==
-                  media.id);
+          (_items.isNotEmpty &&
+              _items[_index.clamp(0, _items.length - 1).toInt()].id == media.id);
       if (previewUrl.isNotEmpty &&
           media.trailerUrl?.trim().isNotEmpty != true &&
           _extractYoutubeVideoId(previewUrl) != null &&
@@ -523,17 +638,11 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     String? candidate;
     if (uri.host == 'youtu.be' || uri.host == 'www.youtu.be') {
       candidate = uri.pathSegments.isEmpty ? null : uri.pathSegments.first;
-    } else if (const <String>{
-      'youtube.com',
-      'www.youtube.com',
-      'm.youtube.com',
-      'music.youtube.com'
-    }.contains(uri.host)) {
+    } else if (const <String>{'youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com'}.contains(uri.host)) {
       if (uri.path == '/watch') {
         candidate = uri.queryParameters['v'];
       } else if (uri.pathSegments.length >= 2 &&
-          const <String>{'shorts', 'embed', 'live', 'v'}
-              .contains(uri.pathSegments.first)) {
+          const <String>{'shorts', 'embed', 'live', 'v'}.contains(uri.pathSegments.first)) {
         candidate = uri.pathSegments[1];
       }
     }
@@ -553,6 +662,10 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
   }
 
   void _disposeYoutubePreview() {
+    final subscription = _youtubePreviewStateSubscription;
+    _youtubePreviewStateSubscription = null;
+    if (subscription != null) unawaited(subscription.cancel());
+
     final old = _youtubePreviewController;
     _youtubePreviewController = null;
     _youtubePreviewUrl = null;
@@ -560,11 +673,81 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     old?.close();
   }
 
+  Future<void> _toggleHeroPreviewAudio(MediaItem media) async {
+    if (!_heroSettings.audioEnabled) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Hero preview audio is disabled in Customize App.'),
+          duration: Duration(seconds: 2),
+        ));
+      }
+      return;
+    }
+    final nextMuted = !_previewMuted;
+    if (mounted) setState(() => _previewMuted = nextMuted);
+
+    final previewUrl = _effectivePreviewUrl(media);
+    final youtube = _youtubePreviewController;
+    if (youtube != null && _youtubePreviewUrl == previewUrl) {
+      // A tap is a direct user gesture. Apply the requested state now, and
+      // the controller's readiness listener below retries if its iframe has
+      // not finished initializing yet.
+      await _applyYoutubePreviewAudio(youtube);
+      if (!nextMuted) {
+        try {
+          await youtube.playVideo();
+        } catch (_) {
+          // Readiness listener will start playback after the iframe is ready.
+        }
+      }
+      return;
+    }
+
+    final direct = _previewController;
+    if (direct != null && _previewUrl == previewUrl) {
+      // If direct video initialization is still in progress, _loadPreview
+      // applies the latest _previewMuted state as soon as initialization ends.
+      try {
+        if (direct.value.isInitialized) {
+          await direct.setVolume(_heroSettings.audioEnabled && !nextMuted ? 1 : 0);
+          if (!nextMuted) await direct.play();
+        }
+      } catch (_) {
+        // Keep the selected state; controller initialization will retry it.
+      }
+      return;
+    }
+
+    if (previewUrl?.trim().isNotEmpty == true) {
+      await _loadPreview(media);
+      return;
+    }
+
+    // Music entries can resolve a preview asynchronously through the backend.
+    // Wait for that lookup before telling the user there is nothing to unmute.
+    if (_isMusicVideoSearchable(media)) {
+      await _findMusicVideoPreview(media);
+      if (_effectivePreviewUrl(media)?.trim().isNotEmpty == true) {
+        await _loadPreview(media);
+        return;
+      }
+    } else {
+      await _loadPreview(media);
+    }
+
+    if (_effectivePreviewUrl(media)?.trim().isNotEmpty != true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('There is no video/audio preview available for this title yet.'),
+        duration: Duration(seconds: 3),
+      ));
+    }
+  }
+
   Future<void> _applyYoutubePreviewAudio(
     YoutubePlayerController controller,
   ) async {
     try {
-      if (_previewMuted) {
+      if (!_heroSettings.audioEnabled || _previewMuted) {
         await controller.mute();
         await controller.setVolume(0);
       } else {
@@ -581,8 +764,7 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
   String? _effectivePreviewUrl(MediaItem media) {
     final explicit = media.trailerUrl?.trim();
     if (explicit != null && explicit.isNotEmpty) return explicit;
-    return _musicVideoUrlByMediaId[media.id] ??
-        _tmdbTrailerUrlByMediaId[media.id];
+    return _musicVideoUrlByMediaId[media.id] ?? _tmdbTrailerUrlByMediaId[media.id];
   }
 
   bool _isMusicVideoSearchable(MediaItem media) {
@@ -620,20 +802,17 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
       final item = Map<String, dynamic>.from(rawItems.first as Map);
       final videoId = item['videoId']?.toString().trim();
       final watchUrl = item['watchUrl']?.toString().trim();
-      final url =
-          videoId != null && RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(videoId)
-              ? 'https://www.youtube.com/watch?v=$videoId'
-              : watchUrl;
+      final url = videoId != null && RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(videoId)
+          ? 'https://www.youtube.com/watch?v=$videoId'
+          : watchUrl;
       if (url == null || !url.startsWith('http')) return;
       _musicVideoUrlByMediaId[media.id] = url;
 
       // A slow response for a card that is no longer hovered must not replace
       // the newer title's active preview. The result remains cached for next time.
       final stillSelected = _hoveredMedia?.id == media.id ||
-          (widget.items.isNotEmpty &&
-              widget.items[_index.clamp(0, widget.items.length - 1).toInt()]
-                      .id ==
-                  media.id);
+          (_items.isNotEmpty &&
+              _items[_index.clamp(0, _items.length - 1).toInt()].id == media.id);
       if (mounted && stillSelected) await _loadPreview(media);
     } catch (_) {
       // Keep Home usable when the backend or YouTube search is unavailable.
@@ -668,6 +847,10 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
         videoId: youtubeId,
         autoPlay: true,
         params: const YoutubePlayerParams(
+          // Hero playback is decorative; do not let the embedded YouTube
+          // surface swallow taps intended for the Flutter controls above it.
+          pointerEvents: PointerEvents.none,
+          mute: true,
           showControls: false,
           showFullscreenButton: false,
           enableCaption: false,
@@ -676,7 +859,22 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
         ),
       );
       _youtubePreviewController = controller;
-      unawaited(_applyYoutubePreviewAudio(controller));
+      var audioAppliedWhenReady = false;
+      _youtubePreviewStateSubscription = controller.stream.listen((value) {
+        // youtube_player_iframe 6.x exposes readiness through playerState; unknown means no player state has arrived yet.
+        if (value.playerState == PlayerState.unknown || audioAppliedWhenReady) return;
+        audioAppliedWhenReady = true;
+        if (!identical(_youtubePreviewController, controller)) return;
+        unawaited(_applyYoutubePreviewAudio(controller));
+        if (!_previewMuted) unawaited(controller.playVideo());
+      });
+      // Some platforms can report a player state before the first stream event
+      // reaches this listener, so also inspect the current controller value once.
+      if (controller.value.playerState != PlayerState.unknown) {
+        audioAppliedWhenReady = true;
+        unawaited(_applyYoutubePreviewAudio(controller));
+        if (!_previewMuted) unawaited(controller.playVideo());
+      }
       if (mounted) setState(() {});
       return;
     }
@@ -684,7 +882,7 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     _disposeYoutubePreview();
     if (_previewUrl == url && _previewController?.value.isInitialized == true) {
       await _previewController!.seekTo(Duration.zero);
-      await _previewController!.setVolume(_previewMuted ? 0 : 1);
+      await _previewController!.setVolume(_heroSettings.audioEnabled && !_previewMuted ? 1 : 0);
       await _previewController!.play();
       return;
     }
@@ -700,7 +898,7 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     try {
       await controller.initialize();
       await controller.setLooping(true);
-      await controller.setVolume(_previewMuted ? 0 : 1);
+      await controller.setVolume(_heroSettings.audioEnabled && !_previewMuted ? 1 : 0);
       if (!mounted || _previewController != controller) {
         await controller.dispose();
         return;
@@ -719,9 +917,9 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
 
   void _scheduleNext() {
     _advanceTimer?.cancel();
-    if (!_appIsActive || widget.items.length < 2) return;
-    _advanceTimer = Timer(const Duration(seconds: 12), () async {
-      if (!mounted || !_appIsActive || widget.items.length < 2) return;
+    if (!_appIsActive || _items.length < 2) return;
+    _advanceTimer = Timer(Duration(seconds: _heroSettings.intervalSeconds), () async {
+      if (!mounted || !_appIsActive || _items.length < 2) return;
       if (!_pageController.hasClients) {
         _scheduleNext();
         return;
@@ -734,7 +932,7 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
         setState(() => _hoveredMedia = null);
         HomeHoverPreviewStore.clear(hovered.id);
       }
-      final next = (_index + 1) % widget.items.length;
+      final next = (_index + 1) % _items.length;
       try {
         await _pageController.animateToPage(
           next,
@@ -750,27 +948,33 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
   }
 
   void _move(int delta) {
-    if (widget.items.isEmpty) return;
+    if (_items.length < 2) return;
     final hovered = _hoveredMedia;
     if (hovered != null) {
       setState(() => _hoveredMedia = null);
       HomeHoverPreviewStore.clear(hovered.id);
     }
-    final next = (_index + delta + widget.items.length) % widget.items.length;
+    final next = (_index + delta + _items.length) % _items.length;
     if (!_pageController.hasClients) {
       setState(() => _index = next);
-      _loadPreview(widget.items[next]);
-      unawaited(_loadOverview(widget.items[next]));
+      _loadPreview(_items[next]);
+      unawaited(_loadOverview(_items[next]));
+      unawaited(_loadAutomaticArtwork(_items[next]));
       _scheduleNext();
       return;
     }
-    _pageController
-        .animateToPage(
+    _pageController.animateToPage(
       next,
       duration: const Duration(milliseconds: 350),
       curve: Curves.easeOutCubic,
-    )
-        .whenComplete(() {
+    ).then((_) {
+      if (!mounted) return;
+      if (_index != next) setState(() => _index = next);
+      _loadPreview(_items[next]);
+      unawaited(_loadOverview(_items[next]));
+      unawaited(_loadAutomaticArtwork(_items[next]));
+      _scheduleNext();
+    }).catchError((Object _) {
       if (mounted) _scheduleNext();
     });
   }
@@ -780,6 +984,7 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     WidgetsBinding.instance.removeObserver(this);
     HomeHoverPreviewStore.current.removeListener(_onHomeHoverChanged);
     ArtworkSelectionStore.revision.removeListener(_onArtworkSelectionsChanged);
+    PageHeroSettingsStore.revision.removeListener(_onHeroSettingsChanged);
     _advanceTimer?.cancel();
     _previewController?.dispose();
     _disposeYoutubePreview();
@@ -789,7 +994,7 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
 
   @override
   Widget build(BuildContext context) {
-    if (widget.items.isEmpty) return const SizedBox.shrink();
+    if (_items.isEmpty) return const SizedBox.shrink();
     final width = MediaQuery.sizeOf(context).width;
     // On desktop the hero uses roughly the upper half of the window; mobile
     // keeps a shorter banner so the first discovery shelf remains visible.
@@ -797,7 +1002,10 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
         ? (width * .72).clamp(300.0, 430.0).toDouble()
         : (width * .43).clamp(420.0, 590.0).toDouble();
 
-    return Focus(
+    return MouseRegion(
+      onEnter: (_) { if (mounted) setState(() => _heroPointerInside = true); },
+      onExit: (_) { if (mounted) setState(() => _heroPointerInside = false); },
+      child: Focus(
       autofocus: true,
       onKeyEvent: (node, event) {
         if (event is KeyDownEvent) {
@@ -815,118 +1023,124 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
         child: SizedBox(
-          height: height,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(25),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                PageView.builder(
-                  controller: _pageController,
-                  itemCount: widget.items.length,
-                  onPageChanged: (value) {
-                    setState(() => _index = value);
-                    final previewItem = _hoveredMedia ?? widget.items[value];
-                    _loadPreview(previewItem);
-                    unawaited(_loadOverview(previewItem));
-                    _scheduleNext();
-                  },
-                  itemBuilder: (context, index) =>
-                      _buildHeroPage(widget.items[index]),
+        height: height,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(25),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              PageView.builder(
+                controller: _pageController,
+                itemCount: _items.length,
+                onPageChanged: (value) {
+                  setState(() => _index = value);
+                  final previewItem = _hoveredMedia ?? _items[value];
+                  _loadPreview(previewItem);
+                  unawaited(_loadOverview(previewItem));
+                  unawaited(_loadAutomaticArtwork(previewItem));
+                  _scheduleNext();
+                },
+                itemBuilder: (context, index) => IgnorePointer(
+                  child: _buildHeroPage(_items[index]),
                 ),
-                if (_hoveredMedia != null)
-                  Positioned.fill(
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 260),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      child: KeyedSubtree(
-                        key:
-                            ValueKey<String>('home-hover-${_hoveredMedia!.id}'),
-                        child: _buildHeroPage(_hoveredMedia!),
-                      ),
+              ),
+              if (_hoveredMedia != null)
+                Positioned.fill(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 260),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    child: KeyedSubtree(
+                      key: ValueKey<String>('home-hover-${_hoveredMedia!.id}'),
+                      child: IgnorePointer(child: _buildHeroPage(_hoveredMedia!)),
                     ),
                   ),
-                if (widget.items.length > 1) ...[
-                  Positioned(
-                    left: 10,
-                    top: 0,
-                    bottom: 0,
-                    child: Center(
-                      child: _heroArrow(Icons.chevron_left_rounded,
-                          () => _move(-1), 'Previous featured title'),
-                    ),
-                  ),
-                  Positioned(
-                    right: 10,
-                    top: 0,
-                    bottom: 0,
-                    child: Center(
-                      child: _heroArrow(Icons.chevron_right_rounded,
-                          () => _move(1), 'Next featured title'),
-                    ),
-                  ),
-                  Positioned(
-                    right: 24,
-                    top: 18,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: .56),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text('${_index + 1} / ${widget.items.length}',
-                          style: const TextStyle(
-                              fontSize: 11, fontWeight: FontWeight.w800)),
-                    ),
-                  ),
-                ],
-                Positioned(
-                  left: 24,
-                  right: 24,
-                  bottom: 18,
-                  child: Builder(builder: (context) {
-                    // Keep the indicator compact even if a large library produces
-                    // dozens or hundreds of hero items. Arrow keys can reach all.
-                    final visibleDots = min(9, widget.items.length);
-                    final firstDot = max(
-                      0,
-                      min(_index - visibleDots ~/ 2,
-                          widget.items.length - visibleDots),
-                    );
-                    return Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List<Widget>.generate(visibleDots, (slot) {
-                        final index = firstDot + slot;
-                        return GestureDetector(
-                          onTap: () {
-                            _pageController.animateToPage(index,
-                                duration: const Duration(milliseconds: 350),
-                                curve: Curves.easeOutCubic);
-                            _scheduleNext();
-                          },
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            margin: const EdgeInsets.symmetric(horizontal: 3),
-                            width: index == _index ? 21 : 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: index == _index
-                                  ? Colors.white
-                                  : Colors.white.withValues(alpha: .45),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
+                ),
+              Positioned(
+                left: 24,
+                right: 24,
+                bottom: 18,
+                child: Builder(builder: (context) {
+                  // Keep the indicator compact even if a large library produces
+                  // dozens or hundreds of hero items. Arrow keys can reach all.
+                  final visibleDots = min(9, _items.length);
+                  final firstDot = max(
+                    0,
+                    min(_index - visibleDots ~/ 2,
+                        _items.length - visibleDots),
+                  );
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List<Widget>.generate(visibleDots, (slot) {
+                      final index = firstDot + slot;
+                      return GestureDetector(
+                        onTap: () {
+                          _pageController.animateToPage(index,
+                              duration: const Duration(milliseconds: 350),
+                              curve: Curves.easeOutCubic);
+                          _scheduleNext();
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          margin: const EdgeInsets.symmetric(horizontal: 3),
+                          width: index == _index ? 21 : 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: index == _index
+                                ? Colors.white
+                                : Colors.white.withValues(alpha: .45),
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                        );
-                      }),
-                    );
-                  }),
+                        ),
+                      );
+                    }),
+                  );
+                }),
+              ),
+              ..._buildHeroControls(
+                _hoveredMedia ?? _items[_index.clamp(0, _items.length - 1).toInt()],
+                compact: width < 600,
+              ),
+              if (_items.length > 1) ...[
+                Positioned(
+                  left: 10,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: _heroArrow(Icons.chevron_left_rounded,
+                        () => _move(-1), 'Previous featured title'),
+                  ),
+                ),
+                Positioned(
+                  right: 10,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: _heroArrow(Icons.chevron_right_rounded,
+                        () => _move(1), 'Next featured title'),
+                  ),
+                ),
+                Positioned(
+                  right: 24,
+                  top: 18,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: .56),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text('${_index + 1} / ${_items.length}',
+                        style: const TextStyle(
+                            fontSize: 11, fontWeight: FontWeight.w800)),
+                  ),
                 ),
               ],
-            ),
+            ],
           ),
         ),
+      ),
+      ),
       ),
     );
   }
@@ -936,11 +1150,31 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
           _selectedPosterPaths[media.id],
           size: 'w500',
         ) ??
-        media.imageUrl;
+        ((media.imageUrl?.trim().isNotEmpty == true)
+            ? media.imageUrl
+            : _automaticPosterUrls[media.id]);
     final selectedBackdropUrl = CinematicTitleMetadataService.imageUrl(
-      _selectedBackdropPaths[media.id],
-      size: 'w1280',
-    );
+          _selectedBackdropPaths[media.id],
+          size: 'w1280',
+        ) ??
+        CinematicTitleMetadataService.imageUrl(
+          _automaticBackdropPaths[media.id],
+          size: 'w1280',
+        );
+    Widget posterErrorFallback(BoxFit fit, {Alignment alignment = Alignment.center}) {
+      final automaticPoster = _automaticPosterUrls[media.id]?.trim() ?? '';
+      if (automaticPoster.isNotEmpty && automaticPoster != selectedPosterUrl) {
+        return CachedNetworkImage(
+          imageUrl: automaticPoster,
+          fit: fit,
+          alignment: alignment,
+          fadeInDuration: const Duration(milliseconds: 100),
+          placeholder: (_, __) => _heroFallback(media),
+          errorWidget: (_, __, ___) => _heroFallback(media),
+        );
+      }
+      return _heroFallback(media);
+    }
     final tmdbOverview = _tmdbOverviewsByMediaId[media.id]?.trim();
     // Movie/show heroes prefer TMDB's actual overview. Albums and titles without
     // an exact TMDB match fall back to the overview/description in the catalog.
@@ -963,8 +1197,7 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     if (editionLabel != null && editionLabel.isNotEmpty) {
       heroMetadata.add(editionLabel);
     }
-    final seasonCount =
-        media.displaySeasonCount ?? _tmdbSeasonCountsByMediaId[media.id];
+    final seasonCount = media.displaySeasonCount ?? _tmdbSeasonCountsByMediaId[media.id];
     if (seasonCount != null) {
       heroMetadata
           .add('$seasonCount ${seasonCount == 1 ? 'Season' : 'Seasons'}');
@@ -978,45 +1211,58 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (selectedBackdropUrl != null &&
+        if (_heroSettings.artworkMode != 'Posters only' &&
+            selectedBackdropUrl != null &&
             !((_previewController != null &&
-                    _previewUrl == _effectivePreviewUrl(media) &&
-                    _previewController!.value.isInitialized) ||
-                (_youtubePreviewController != null &&
-                    _youtubePreviewUrl == _effectivePreviewUrl(media))))
+                  _previewUrl == _effectivePreviewUrl(media) &&
+                  _previewController!.value.isInitialized) ||
+              (_youtubePreviewController != null &&
+                  _youtubePreviewUrl == _effectivePreviewUrl(media))))
           Positioned.fill(
-            // Keep the entire user-selected backdrop visible. A cover-fit,
-            // softly blurred copy fills the extra space around wide/tall
-            // images, while the foreground image preserves its full aspect
-            // ratio instead of cropping or looking excessively zoomed in.
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                ImageFiltered(
-                  imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-                  child: Image.network(
-                    selectedBackdropUrl,
-                    fit: BoxFit.cover,
-                    color: Colors.black.withValues(alpha: .38),
-                    colorBlendMode: BlendMode.darken,
-                    errorBuilder: (_, __, ___) => _heroFallback(media),
-                  ),
+            // Keep the backdrop contained while letting the user choose how
+            // strongly it zooms on hover. ClipRRect confines the zoom to the hero.
+            child: ClipRect(
+              child: AnimatedScale(
+                scale: _heroPointerInside ? _heroSettings.hoverScale : 1.0,
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ImageFiltered(
+                      imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+                      child: CachedNetworkImage(
+                        imageUrl: selectedBackdropUrl,
+                        fit: BoxFit.cover,
+                        color: Colors.black.withValues(alpha: .38),
+                        colorBlendMode: BlendMode.darken,
+                        fadeInDuration: const Duration(milliseconds: 100),
+                        placeholder: (_, __) => _heroFallback(media),
+                        errorWidget: (_, __, ___) => _heroFallback(media),
+                      ),
+                    ),
+                    CachedNetworkImage(
+                      imageUrl: selectedBackdropUrl,
+                      fit: BoxFit.contain,
+                      alignment: Alignment.center,
+                      fadeInDuration: const Duration(milliseconds: 100),
+                      placeholder: (_, __) => _heroFallback(media),
+                      errorWidget: (_, __, ___) => _heroFallback(media),
+                    ),
+                  ],
                 ),
-                Image.network(
-                  selectedBackdropUrl,
-                  fit: BoxFit.contain,
-                  alignment: Alignment.center,
-                  errorBuilder: (_, __, ___) => _heroFallback(media),
-                ),
-              ],
+              ),
             ),
           )
         else if (_youtubePreviewController != null &&
             _youtubePreviewUrl == _effectivePreviewUrl(media))
           Positioned.fill(
-            child: YoutubePlayer(
-              controller: _youtubePreviewController!,
-              aspectRatio: 16 / 9,
+            child: IgnorePointer(
+              ignoring: true,
+              child: YoutubePlayer(
+                controller: _youtubePreviewController!,
+                aspectRatio: 16 / 9,
+              ),
             ),
           )
         else if (_previewController != null &&
@@ -1027,30 +1273,46 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
             child: SizedBox(
               width: _previewController!.value.size.width,
               height: _previewController!.value.size.height,
-              child: VideoPlayer(_previewController!),
+              child: IgnorePointer(
+                ignoring: true,
+                child: VideoPlayer(_previewController!),
+              ),
             ),
           )
-        else if (selectedPosterUrl?.trim().isNotEmpty == true) ...[
-          // A dark cover fills the banner behind the main artwork, avoiding
-          // blank margins without sacrificing the full original poster/image.
+        else if (_heroSettings.artworkMode != 'Backdrops only' &&
+            selectedPosterUrl?.trim().isNotEmpty == true)
           Positioned.fill(
-            child: Image.network(
-              selectedPosterUrl!,
-              fit: BoxFit.cover,
-              color: Colors.black.withValues(alpha: .48),
-              colorBlendMode: BlendMode.darken,
-              errorBuilder: (_, __, ___) => _heroFallback(media),
+            child: ClipRect(
+              child: AnimatedScale(
+                scale: _heroPointerInside ? _heroSettings.hoverScale : 1.0,
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    CachedNetworkImage(
+                      imageUrl: selectedPosterUrl!,
+                      fit: BoxFit.cover,
+                      color: Colors.black.withValues(alpha: .48),
+                      colorBlendMode: BlendMode.darken,
+                      fadeInDuration: const Duration(milliseconds: 100),
+                      placeholder: (_, __) => _heroFallback(media),
+                      errorWidget: (_, __, ___) => posterErrorFallback(BoxFit.cover),
+                    ),
+                    CachedNetworkImage(
+                      imageUrl: selectedPosterUrl,
+                      fit: BoxFit.contain,
+                      alignment: Alignment.centerRight,
+                      fadeInDuration: const Duration(milliseconds: 100),
+                      placeholder: (_, __) => _heroFallback(media),
+                      errorWidget: (_, __, ___) => posterErrorFallback(BoxFit.contain, alignment: Alignment.centerRight),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
-          Positioned.fill(
-            child: Image.network(
-              selectedPosterUrl,
-              fit: BoxFit.contain,
-              alignment: Alignment.centerRight,
-              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-            ),
-          ),
-        ] else
+          )
+        else
           _heroFallback(media),
         DecoratedBox(
           decoration: BoxDecoration(
@@ -1076,47 +1338,10 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
             ),
           ),
         ),
-        if (_isMovieOrShow(media))
-          Positioned(
-            right: 70,
-            bottom: 58,
-            child: IconButton.filledTonal(
-              tooltip: 'Choose poster and backdrop',
-              onPressed: _openingHeroArtworkGallery
-                  ? null
-                  : () => _openHeroArtworkGallery(media),
-              icon: const Icon(Icons.photo_library_outlined),
-            ),
-          ),
-        Positioned(
-          right: 20,
-          bottom: 58,
-          child: IconButton.filledTonal(
-            tooltip:
-                _previewMuted ? 'Unmute hero preview' : 'Mute hero preview',
-            onPressed: () async {
-              final nextMuted = !_previewMuted;
-              setState(() => _previewMuted = nextMuted);
-              final youtube = _youtubePreviewController;
-              if (youtube != null &&
-                  _youtubePreviewUrl == _effectivePreviewUrl(media)) {
-                await _applyYoutubePreviewAudio(youtube);
-                if (!nextMuted) youtube.playVideo();
-              } else {
-                try {
-                  await _previewController?.setVolume(nextMuted ? 0 : 1);
-                  if (!nextMuted) await _previewController?.play();
-                } catch (_) {}
-              }
-            },
-            icon:
-                Icon(_previewMuted ? Icons.mic_off_rounded : Icons.mic_rounded),
-          ),
-        ),
         Positioned(
           left: 26,
           right: 26,
-          bottom: 45,
+          bottom: MediaQuery.sizeOf(context).width < 600 ? 82 : 96,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 720),
             child: Column(
@@ -1177,57 +1402,9 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12.5,
-                            height: 1.4)),
+                            color: Colors.white70, fontSize: 12.5, height: 1.4)),
                   ),
                 ],
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 8,
-                  children: [
-                    FilledButton.icon(
-                      onPressed: media.playbackUrl?.trim().isNotEmpty == true
-                          ? () => (widget.onPlay ?? widget.onOpen)(media)
-                          : null,
-                      icon: const Icon(Icons.play_arrow_rounded, size: 23),
-                      label: const UniversalText(
-                        'Play',
-                        style: TextStyle(fontWeight: FontWeight.w900),
-                      ),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        disabledBackgroundColor:
-                            Colors.white.withValues(alpha: .62),
-                        foregroundColor: Colors.black,
-                        disabledForegroundColor: Colors.black54,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 22, vertical: 12),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: () => widget.onOpen(media),
-                      icon: const Icon(Icons.info_outline_rounded, size: 21),
-                      label: const UniversalText(
-                        'More info',
-                        style: TextStyle(fontWeight: FontWeight.w900),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        backgroundColor: Colors.black.withValues(alpha: .42),
-                        side: BorderSide(
-                            color: Colors.white.withValues(alpha: .58)),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 18, vertical: 12),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ],
-                ),
               ],
             ),
           ),
@@ -1236,27 +1413,126 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     );
   }
 
+  List<Widget> _buildHeroControls(MediaItem media, {required bool compact}) {
+    final controls = <Widget>[
+      Positioned(
+        left: compact ? 18 : 26,
+        right: compact ? 108 : 126,
+        bottom: compact ? 14 : 28,
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            FilledButton.icon(
+              onPressed: () {
+                final playbackUrl = media.playbackUrl?.trim() ?? '';
+                final trailerUrl = _effectivePreviewUrl(media)?.trim() ?? '';
+                final playable = playbackUrl.isEmpty &&
+                        media.trailerUrl?.trim().isNotEmpty != true &&
+                        trailerUrl.isNotEmpty
+                    ? MediaItem.fromJson(<String, dynamic>{
+                        ...media.toJson(),
+                        'trailerUrl': trailerUrl,
+                      })
+                    : media;
+
+                // Movies/Shows/Home provide a player callback that can resolve
+                // local files and server-side playback by media ID even if a
+                // direct playbackUrl hasn't been filled in yet.
+                if (widget.onPlay != null) {
+                  widget.onPlay!(playable);
+                  return;
+                }
+                if (playbackUrl.isEmpty && trailerUrl.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('No playable file or trailer is available for this title yet.'),
+                    duration: Duration(seconds: 3),
+                  ));
+                  return;
+                }
+                widget.onOpen(playable);
+              },
+              icon: const Icon(Icons.play_arrow_rounded, size: 22),
+              label: const UniversalText('Play', style: TextStyle(fontWeight: FontWeight.w900)),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.black,
+                padding: EdgeInsets.symmetric(
+                  horizontal: compact ? 12 : 22,
+                  vertical: compact ? 9 : 12,
+                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => widget.onOpen(media),
+              icon: const Icon(Icons.info_outline_rounded, size: 20),
+              label: const UniversalText('More info', style: TextStyle(fontWeight: FontWeight.w900)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                backgroundColor: Colors.black.withValues(alpha: .42),
+                side: BorderSide(color: Colors.white.withValues(alpha: .58)),
+                padding: EdgeInsets.symmetric(
+                  horizontal: compact ? 10 : 18,
+                  vertical: compact ? 9 : 12,
+                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ];
+    if (_isMovieOrShow(media)) {
+      controls.add(Positioned(
+        right: compact ? 62 : 70,
+        bottom: compact ? 14 : 28,
+        child: Material(
+          color: Colors.black.withValues(alpha: .46),
+          shape: const CircleBorder(),
+          child: IconButton(
+            tooltip: 'Open artwork gallery',
+            onPressed: _openingHeroArtworkGallery
+                ? null
+                : () => unawaited(_openHeroArtworkGallery(media)),
+            icon: const Icon(Icons.photo_library_outlined, color: Colors.white),
+            constraints: const BoxConstraints.tightFor(width: 42, height: 42),
+          ),
+        ),
+      ));
+    }
+    controls.add(Positioned(
+      right: compact ? 12 : 20,
+      bottom: compact ? 14 : 28,
+      child: Material(
+        color: Colors.black.withValues(alpha: .46),
+        shape: const CircleBorder(),
+        child: IconButton(
+          tooltip: !_heroSettings.audioEnabled
+              ? 'Hero preview audio disabled in Customize App'
+              : _previewMuted ? 'Turn hero preview sound on' : 'Turn hero preview sound off',
+          onPressed: _heroSettings.audioEnabled
+              ? () => unawaited(_toggleHeroPreviewAudio(media))
+              : null,
+          icon: Icon(!_heroSettings.audioEnabled || _previewMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded, color: Colors.white),
+          constraints: const BoxConstraints.tightFor(width: 42, height: 42),
+        ),
+      ),
+    ));
+    return controls;
+  }
+
   String _heroTypeLabel(MediaItem media) {
     final raw = media.type.toLowerCase().trim();
-    if (media.isSeries ||
-        raw.contains('tv') ||
-        raw.contains('series') ||
-        raw.contains('show')) {
+    if (media.isSeries || raw.contains('tv') || raw.contains('series') || raw.contains('show')) {
       return 'TV SERIES';
     }
     if (raw.contains('album') || raw == 'soundtrack' || raw == 'musicrelease') {
       return 'ALBUM';
     }
-    if (raw == 'track' ||
-        raw == 'song' ||
-        raw == 'audio' ||
-        raw.contains('track')) {
-      return 'SONG';
-    }
+    if (raw == 'track' || raw == 'song' || raw == 'audio' || raw.contains('track')) return 'SONG';
     if (raw == 'artist' || raw == 'musician') return 'MUSIC ARTIST';
-    if (raw.contains('movie') || raw.contains('film') || raw == 'feature') {
-      return 'MOVIE';
-    }
+    if (raw.contains('movie') || raw.contains('film') || raw == 'feature') return 'MOVIE';
     return raw.isEmpty ? 'FEATURED' : raw.toUpperCase();
   }
 
@@ -1280,14 +1556,18 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: Colors.black.withValues(alpha: .48),
+        color: Colors.black.withValues(alpha: .58),
         shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(7),
-            child: Icon(icon, size: 31, color: Colors.white),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: IconButton(
+            tooltip: tooltip,
+            onPressed: onTap,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 48, height: 48),
+            icon: Icon(icon, size: 31, color: Colors.white),
           ),
         ),
       ),
@@ -1463,6 +1743,7 @@ class HomeThemedEpisodesSection extends StatelessWidget {
                   title: entry.title,
                   subtitle: entry.detail,
                   imageUrl: entry.imageUrl,
+                  media: entry.parent,
                   onTap: () => _openEntry(context, entry),
                   width: 148,
                 );
@@ -1588,7 +1869,9 @@ class HomeYouMayAlsoLikeSection extends StatelessWidget {
                     '${media.displayYearLabel ?? ''} ${media.type}${media.displayEditionLabel == null ? '' : ' • ${media.displayEditionLabel}'}'
                         .trim(),
                 imageUrl: media.imageUrl,
+                media: media,
                 isOwned: AppController.instance.isOwned(media.id),
+                isWatched: AppController.instance.watched.any((item) => item.id == media.id),
                 onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
                   settings: const RouteSettings(name: '/app/details'),
                   builder: (_) => MediaDetailsScreen(media: media),
@@ -1607,8 +1890,7 @@ class HomeBecauseYouWatchedPeopleShelves extends StatelessWidget {
   final List<MediaItem> library;
   final List<MediaItem> watched;
 
-  const HomeBecauseYouWatchedPeopleShelves(
-      {super.key, required this.library, required this.watched});
+  const HomeBecauseYouWatchedPeopleShelves({super.key, required this.library, required this.watched});
 
   String _norm(String value) => value.trim().toLowerCase();
 
@@ -1617,15 +1899,8 @@ class HomeBecauseYouWatchedPeopleShelves extends StatelessWidget {
     if (watched.isEmpty) return const SizedBox.shrink();
     final controller = AppController.instance;
     final catalog = <String, MediaItem>{};
-    for (final item in <MediaItem>[
-      ...library,
-      ...controller.recommendations,
-      ...controller.watched,
-      ...controller.liked
-    ]) {
-      if (item.id.isNotEmpty &&
-          item.isAccessibleTo(controller.currentProfile) &&
-          !isExcludedEntertainmentType(item.type)) {
+    for (final item in <MediaItem>[...library, ...controller.recommendations, ...controller.watched, ...controller.liked]) {
+      if (item.id.isNotEmpty && item.isAccessibleTo(controller.currentProfile) && !isExcludedEntertainmentType(item.type)) {
         catalog.putIfAbsent(item.id, () => item);
       }
     }
@@ -1634,36 +1909,17 @@ class HomeBecauseYouWatchedPeopleShelves extends StatelessWidget {
     for (final item in watched.reversed) {
       if (seen.add(item.id)) viewed.add(item);
     }
-    final shelves =
-        <({MediaItem seed, String person, List<MediaItem> items})>[];
+    final shelves = <({MediaItem seed, String person, List<MediaItem> items})>[];
     final shelfKeys = <String>{};
     for (final seed in viewed) {
-      final people = <String>{
-        ...seed.actors,
-        ...seed.directors,
-        ...seed.writers
-      };
+      final people = <String>{...seed.actors, ...seed.directors, ...seed.writers};
       for (final person in people) {
         final normalizedPerson = _norm(person);
-        if (normalizedPerson.isEmpty ||
-            !shelfKeys.add('${seed.id}:$normalizedPerson')) {
-          continue;
-        }
-        final matches = catalog.values
-            .where((candidate) =>
-                candidate.id != seed.id &&
-                !watched.any((w) => w.id == candidate.id) &&
-                <String>{
-                  ...candidate.actors,
-                  ...candidate.directors,
-                  ...candidate.writers
-                }.any((credit) => _norm(credit) == normalizedPerson))
-            .toList();
+        if (normalizedPerson.isEmpty || !shelfKeys.add('${seed.id}:$normalizedPerson')) continue;
+        final matches = catalog.values.where((candidate) => candidate.id != seed.id && <String>{...candidate.actors, ...candidate.directors, ...candidate.writers}.any((credit) => _norm(credit) == normalizedPerson)).toList();
         if (matches.isEmpty) continue;
-        matches.sort(
-            (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
-        shelves.add(
-            (seed: seed, person: person, items: matches.take(12).toList()));
+        matches.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+        shelves.add((seed: seed, person: person, items: matches.take(12).toList()));
         if (shelves.length >= 6) break;
       }
       if (shelves.length >= 6) break;
@@ -1671,32 +1927,22 @@ class HomeBecauseYouWatchedPeopleShelves extends StatelessWidget {
     if (shelves.isEmpty) return const SizedBox.shrink();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       for (final shelf in shelves) ...[
-        _DiscoverySectionHeader(
-            title:
-                'Because you watched ${shelf.seed.title} featuring ${shelf.person}',
-            subtitle:
-                'More movies and shows with this actor, director, or screenwriter'),
-        HomeArrowRail(
-            height: 210,
-            itemCount: shelf.items.length,
-            separatorExtent: 12,
-            padding: const EdgeInsets.symmetric(horizontal: 48),
-            itemBuilder: (context, index) {
-              final media = shelf.items[index];
-              return _DiscoveryMediaCard(
-                  title: media.title,
-                  subtitle:
-                      '${media.displayYearLabel ?? ''} ${media.type}'.trim(),
-                  imageUrl: media.imageUrl,
-                  isOwned: controller.isOwned(media.id),
-                  onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                          settings: const RouteSettings(name: '/app/details'),
-                          builder: (_) => MediaDetailsScreen(media: media))));
-            }),
+        _DiscoverySectionHeader(title: 'Because you saw ${shelf.person} in ${shelf.seed.title}', subtitle: 'More titles with this actor, actress, director, or screenwriter; status shows ownership and watch history'),
+        HomeArrowRail(height: 210, itemCount: shelf.items.length, separatorExtent: 12, padding: const EdgeInsets.symmetric(horizontal: 48), itemBuilder: (context, index) {
+          final media = shelf.items[index];
+          return _DiscoveryMediaCard(title: media.title, subtitle: '${media.displayYearLabel ?? ''} ${media.type}'.trim(), imageUrl: media.imageUrl, media: media, isOwned: controller.isOwned(media.id), isWatched: controller.watched.any((item) => item.id == media.id), onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(settings: const RouteSettings(name: '/app/details'), builder: (_) => MediaDetailsScreen(media: media))));
+        }),
       ],
     ]);
   }
+}
+
+bool _isMovieOrShowForRecommendation(MediaItem? item) {
+  if (item == null || isExcludedEntertainmentType(item.type)) return false;
+  final type = item.type.trim().toLowerCase();
+  return item.isSeries || type == 'movie' || type == 'film' || type == 'feature' ||
+      type.contains('movie') || type.contains('film') || type.contains('tv') ||
+      type.contains('show') || type.contains('series');
 }
 
 /// Explainable Home rails seeded from the newest title, recent viewing, and
@@ -1751,7 +1997,7 @@ class HomeReasonedRecommendationShelves extends StatelessWidget {
       {Set<String> excludeIds = const <String>{}}) {
     final controller = AppController.instance;
     final byId = <String, MediaItem>{};
-    for (final item in <MediaItem>[...library, ...controller.recommendations]) {
+    for (final item in <MediaItem>[...library, ...controller.recommendations, ...controller.watched, ...controller.liked]) {
       if (item.id.trim().isEmpty ||
           item.id == seed.id ||
           excludeIds.contains(item.id) ||
@@ -1849,7 +2095,9 @@ class HomeReasonedRecommendationShelves extends StatelessWidget {
                 subtitle:
                     '${media.displayYearLabel ?? ''} ${media.type}'.trim(),
                 imageUrl: media.imageUrl,
+                media: media,
                 isOwned: AppController.instance.isOwned(media.id),
+                isWatched: AppController.instance.watched.any((item) => item.id == media.id),
                 onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
                   settings: const RouteSettings(name: '/app/details'),
                   builder: (_) => MediaDetailsScreen(media: media),
@@ -1865,7 +2113,10 @@ class HomeReasonedRecommendationShelves extends StatelessWidget {
       List<MediaItem> visibleWatched) {
     final added = List<MediaItem>.from(visibleLibrary)
       ..sort((a, b) => b.addedAt.compareTo(a.addedAt));
-    final watchedSeed = visibleWatched.isEmpty ? null : visibleWatched.last;
+    final watchedTitles = visibleWatched
+        .where(_isMovieOrShowForRecommendation)
+        .toList(growable: false);
+    final watchedSeed = watchedTitles.isEmpty ? null : watchedTitles.last;
     final musicStore = MusicLibraryStore.instance;
     final profile = AppController.instance.currentProfile;
     bool trackAllowedForProfile(MusicTrack track) =>
@@ -1888,7 +2139,6 @@ class HomeReasonedRecommendationShelves extends StatelessWidget {
       if (recentlyListened.isNotEmpty) listened = recentlyListened.first;
     }
 
-    final watchedIds = visibleWatched.map((item) => item.id).toSet();
     final children = <Widget>[];
     if (added.isNotEmpty) {
       final seed = added.first;
@@ -1904,7 +2154,24 @@ class HomeReasonedRecommendationShelves extends StatelessWidget {
         context,
         'Because you watched “${watchedSeed.title}”',
         'Recommended from your viewing history and related catalog metadata',
-        _related(watchedSeed, excludeIds: watchedIds),
+        _related(watchedSeed),
+      ));
+    }
+    final controller = AppController.instance;
+    final likedTitles = controller.liked.where(_isMovieOrShowForRecommendation).toList(growable: false);
+    final likedSeed = likedTitles.isEmpty ? null : likedTitles.last;
+    if (likedSeed != null) {
+      children.add(_mediaShelf(
+        context,
+        'Because you liked “${likedSeed.title}”',
+        'Related titles across your library, watched history, and catalog picks',
+        _related(likedSeed),
+      ));
+    }
+    if (watchedSeed != null || likedSeed != null) {
+      children.add(_HomeExternalTitleRecommendationShelves(
+        watchedSeed: _isMovieOrShowForRecommendation(watchedSeed) ? watchedSeed : null,
+        likedSeed: likedSeed,
       ));
     }
     if (listened != null) {
@@ -2000,6 +2267,379 @@ class HomeReasonedRecommendationShelves extends StatelessWidget {
   }
 }
 
+class _HomeExternalTitleRecommendationShelves extends StatefulWidget {
+  const _HomeExternalTitleRecommendationShelves({
+    required this.watchedSeed,
+    required this.likedSeed,
+  });
+
+  final MediaItem? watchedSeed;
+  final MediaItem? likedSeed;
+
+  @override
+  State<_HomeExternalTitleRecommendationShelves> createState() =>
+      _HomeExternalTitleRecommendationShelvesState();
+}
+
+class _HomeExternalTitleRecommendationShelvesState
+    extends State<_HomeExternalTitleRecommendationShelves> {
+  final Map<String, List<CinematicTitleRecommendation>> _recommendations =
+      <String, List<CinematicTitleRecommendation>>{};
+  final Set<String> _loading = <String>{};
+  final Set<String> _started = <String>{};
+
+  String _key(String reason, MediaItem media) => '$reason:${media.id}';
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadCurrentSeeds());
+  }
+
+  @override
+  void didUpdateWidget(covariant _HomeExternalTitleRecommendationShelves oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.watchedSeed?.id != widget.watchedSeed?.id ||
+        oldWidget.likedSeed?.id != widget.likedSeed?.id) {
+      unawaited(_loadCurrentSeeds());
+    }
+  }
+
+  Future<void> _loadCurrentSeeds() async {
+    if (!CinematicTitleMetadataService.isConfigured) return;
+    final seeds = <({String reason, MediaItem media})>[
+      if (widget.watchedSeed != null)
+        (reason: 'watched', media: widget.watchedSeed!),
+      if (widget.likedSeed != null)
+        (reason: 'liked', media: widget.likedSeed!),
+    ];
+    for (final seed in seeds) {
+      final key = _key(seed.reason, seed.media);
+      if (!_started.add(key)) continue;
+      if (mounted) setState(() => _loading.add(key));
+      try {
+        final metadata = await CinematicTitleMetadataService.lookupTitle(
+          title: seed.media.title,
+          isTv: seed.media.isSeries,
+          year: seed.media.releaseYear ?? seed.media.seriesStartYear,
+        );
+        if (metadata == null) {
+          if (mounted) setState(() => _recommendations[key] = const <CinematicTitleRecommendation>[]);
+          continue;
+        }
+        final fetched = await CinematicTitleMetadataService.lookupRecommendations(
+          providerId: metadata.providerId,
+          isTv: metadata.isTv,
+          limit: 18,
+        );
+        final sourceKey = RecommendationOwnershipMatcher.normalizeTitle(seed.media.title);
+        final seen = <String>{};
+        final cleaned = <CinematicTitleRecommendation>[];
+        for (final item in fetched) {
+          final titleKey = '${item.isTv}:${RecommendationOwnershipMatcher.normalizeTitle(item.title)}';
+          if (item.providerId <= 0 || item.title.trim().isEmpty ||
+              (item.isTv == seed.media.isSeries &&
+               RecommendationOwnershipMatcher.normalizeTitle(item.title) == sourceKey) ||
+              !seen.add(titleKey)) {
+            continue;
+          }
+          cleaned.add(item);
+        }
+        if (mounted) setState(() => _recommendations[key] = List.unmodifiable(cleaned));
+      } catch (_) {
+        if (mounted) setState(() => _recommendations[key] = const <CinematicTitleRecommendation>[]);
+      } finally {
+        if (mounted) setState(() => _loading.remove(key));
+      }
+    }
+  }
+
+  Widget _shelf(String reason, MediaItem? seed) {
+    if (seed == null) return const SizedBox.shrink();
+    final key = _key(reason, seed);
+    final items = _recommendations[key] ?? const <CinematicTitleRecommendation>[];
+    if (items.isEmpty && !_loading.contains(key)) return const SizedBox.shrink();
+    final title = reason == 'liked' ? 'Because you liked “${seed.title}”' : 'Because you watched “${seed.title}”';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _DiscoverySectionHeader(
+          title: title,
+          subtitle: 'Catalog recommendations including titles you own, have watched, or have not added yet',
+        ),
+        if (items.isEmpty && _loading.contains(key))
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 0, 20, 14),
+            child: Row(children: [
+              SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+              SizedBox(width: 10),
+              Text('Finding related movies and shows…', style: TextStyle(color: Colors.white60, fontSize: 12)),
+            ]),
+          )
+        else
+          HomeArrowRail(
+            height: 260,
+            itemCount: items.length,
+            separatorExtent: 12,
+            padding: const EdgeInsets.symmetric(horizontal: 48),
+            itemBuilder: (context, index) => _HomeTmdbRecommendationCard(
+              recommendation: items[index],
+            ),
+          ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+        children: [
+          _shelf('watched', widget.watchedSeed),
+          _shelf('liked', widget.likedSeed),
+        ],
+      );
+}
+
+class HomeExternalPeopleRecommendationShelves extends StatefulWidget {
+  const HomeExternalPeopleRecommendationShelves({super.key, required this.watched});
+  final List<MediaItem> watched;
+
+  @override
+  State<HomeExternalPeopleRecommendationShelves> createState() =>
+      _HomeExternalPeopleRecommendationShelvesState();
+}
+
+class _HomeExternalPeopleRecommendationShelvesState
+    extends State<HomeExternalPeopleRecommendationShelves> {
+  MediaItem? _source;
+  List<({String person, List<CinematicTitleRecommendation> items})> _shelves =
+      const <({String person, List<CinematicTitleRecommendation> items})>[];
+  bool _loading = false;
+  int _sequence = 0;
+
+  MediaItem? _chooseSource(List<MediaItem> items) {
+    for (final item in items.reversed) {
+      if (_isMovieOrShowForRecommendation(item)) return item;
+    }
+    return null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  @override
+  void didUpdateWidget(covariant HomeExternalPeopleRecommendationShelves oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_chooseSource(oldWidget.watched)?.id != _chooseSource(widget.watched)?.id) {
+      unawaited(_load());
+    }
+  }
+
+  Future<void> _load() async {
+    final source = _chooseSource(widget.watched);
+    final request = ++_sequence;
+    if (source == null || !CinematicTitleMetadataService.isConfigured) {
+      if (mounted) setState(() { _source = source; _shelves = const []; _loading = false; });
+      return;
+    }
+    if (mounted) setState(() { _source = source; _shelves = const []; _loading = true; });
+    try {
+      final metadata = await CinematicTitleMetadataService.lookupTitle(
+        title: source.title,
+        isTv: source.isSeries,
+        year: source.releaseYear ?? source.seriesStartYear,
+      );
+      if (!mounted || request != _sequence) return;
+      if (metadata == null) return;
+      final credits = metadata.castCredits
+          .where((credit) => credit.personId != null && credit.name.trim().isNotEmpty)
+          .take(4)
+          .toList(growable: false);
+      final output = <({String person, List<CinematicTitleRecommendation> items})>[];
+      final sourceKey = RecommendationOwnershipMatcher.normalizeTitle(source.title);
+      for (final credit in credits) {
+        final items = await CinematicTitleMetadataService.lookupPersonCredits(
+          personId: credit.personId!,
+          limit: 30,
+        );
+        if (!mounted || request != _sequence) return;
+        final seen = <String>{};
+        final cleaned = items.where((item) {
+          final key = '${item.isTv}:${RecommendationOwnershipMatcher.normalizeTitle(item.title)}';
+          return RecommendationOwnershipMatcher.normalizeTitle(item.title) != sourceKey && seen.add(key);
+        }).take(18).toList(growable: false);
+        if (cleaned.isNotEmpty) output.add((person: credit.name, items: cleaned));
+        if (output.length >= 4) break;
+      }
+      if (mounted && request == _sequence) setState(() => _shelves = List.unmodifiable(output));
+    } catch (_) {
+      // Local cast-based recommendations remain available if TMDB is unreachable.
+    } finally {
+      if (mounted && request == _sequence) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final source = _source;
+    if (source == null || (_shelves.isEmpty && !_loading)) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_loading && _shelves.isEmpty)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
+            child: LinearProgressIndicator(minHeight: 2),
+          ),
+        for (final shelf in _shelves) ...[
+          _DiscoverySectionHeader(
+            title: 'Because you saw ${shelf.person} in “${source.title}”',
+            subtitle: 'More movies and shows featuring ${shelf.person}; badges show ownership and watch history',
+          ),
+          HomeArrowRail(
+            height: 260,
+            itemCount: shelf.items.length,
+            separatorExtent: 12,
+            padding: const EdgeInsets.symmetric(horizontal: 48),
+            itemBuilder: (context, index) => _HomeTmdbRecommendationCard(
+              recommendation: shelf.items[index],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _HomeTmdbRecommendationCard extends StatelessWidget {
+  const _HomeTmdbRecommendationCard({
+    required this.recommendation,
+  });
+
+  final CinematicTitleRecommendation recommendation;
+
+  bool _wasWatched(AppController controller) {
+    final target = RecommendationOwnershipMatcher.normalizeTitle(recommendation.title);
+    return controller.watched.any((item) =>
+        item.isAccessibleTo(controller.currentProfile) &&
+        item.isSeries == recommendation.isTv &&
+        <String>{
+          RecommendationOwnershipMatcher.normalizeTitle(item.title),
+          RecommendationOwnershipMatcher.normalizeTitle(item.originalTitle ?? ''),
+          RecommendationOwnershipMatcher.normalizeTitle(item.canonicalTitle ?? ''),
+        }.contains(target));
+  }
+
+  Future<void> _open(BuildContext context) async {
+    final controller = AppController.instance;
+    final localMatch = RecommendationOwnershipMatcher.findMediaForTitle(
+      title: recommendation.title,
+      isTv: recommendation.isTv,
+      year: recommendation.releaseYear,
+      controller: controller,
+    );
+    if (!context.mounted) return;
+    if (localMatch != null) {
+      await Navigator.of(context).push<void>(MaterialPageRoute<void>(
+        settings: const RouteSettings(name: '/app/details'),
+        builder: (_) => MediaDetailsScreen(media: localMatch),
+      ));
+      return;
+    }
+    await Navigator.of(context).push<void>(MaterialPageRoute<void>(
+      settings: const RouteSettings(name: '/app/metadata-details'),
+      builder: (_) => TmdbMetadataDetailsScreen(
+        id: recommendation.providerId,
+        type: recommendation.isTv ? 'tv' : 'movie',
+        initialTitle: recommendation.title,
+      ),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = AppController.instance;
+    final owned = RecommendationOwnershipMatcher.isRecommendationOwned(
+      recommendation: recommendation,
+      controller: controller,
+    );
+    final watched = _wasWatched(controller);
+    final poster = recommendation.posterUrl;
+    return SizedBox(
+      width: 150,
+      child: Material(
+        color: _discoveryPanel,
+        borderRadius: BorderRadius.circular(14),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => unawaited(_open(context)),
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(9),
+                    child: Stack(fit: StackFit.expand, children: [
+                      if (poster != null)
+                        CachedNetworkImage(
+                          imageUrl: poster,
+                          fit: BoxFit.cover,
+                          fadeInDuration: const Duration(milliseconds: 100),
+                          placeholder: (_, __) => _mediaFallback(),
+                          errorWidget: (_, __, ___) => _mediaFallback(),
+                        )
+                      else
+                        _mediaFallback(),
+                      Positioned(
+                        left: 5,
+                        top: 5,
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          RecommendationOwnershipBadge(isOwned: owned, compact: true),
+                          if (watched || owned) ...[
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                              decoration: BoxDecoration(color: const Color(0xE817171D), borderRadius: BorderRadius.circular(999)),
+                              child: Text(
+                                watched ? 'WATCHED' : 'NOT WATCHED',
+                                style: TextStyle(
+                                  color: watched ? const Color(0xFF92D9FF) : const Color(0xFFFFD27A),
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ]),
+                      ),
+                    ]),
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Text(recommendation.title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, height: 1.1)),
+                const SizedBox(height: 4),
+                Text('${recommendation.mediaTypeLabel}${recommendation.releaseYear == null ? '' : ' · ${recommendation.releaseYear}'}',
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white60, fontSize: 10)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _mediaFallback() => const ColoredBox(
+        color: Color(0xFF252433),
+        child: Center(child: Icon(Icons.movie_outlined, size: 34, color: Colors.white24)),
+      );
+}
+
 class _HomeReasonedTrackCard extends StatelessWidget {
   final MusicTrack track;
   const _HomeReasonedTrackCard({required this.track});
@@ -2033,9 +2673,14 @@ class _HomeReasonedTrackCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(9),
                         child: Stack(fit: StackFit.expand, children: [
                           if (track.artworkUrl?.trim().isNotEmpty == true)
-                            Image.network(track.artworkUrl!,
+                            CachedNetworkImage(
+                                imageUrl: track.artworkUrl!,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const ColoredBox(
+                                fadeInDuration: const Duration(milliseconds: 100),
+                                placeholder: (_, __) => const ColoredBox(
+                                    color: Color(0xFF252532),
+                                    child: Center(child: Icon(Icons.music_note_rounded))),
+                                errorWidget: (_, __, ___) => const ColoredBox(
                                     color: Color(0xFF252532),
                                     child: Icon(Icons.music_note_rounded)))
                           else
@@ -2455,10 +3100,9 @@ class _HomeFranchiseProgressDetailsScreenState
               '${_homeMediaTypeLabel(media.type)} • ${media.displayYearLabel ?? 'Year unknown'}',
           year: media.releaseYear,
           imageUrl: media.imageUrl,
-          fallbackIcon:
-              _homeMediaTypeLabel(media.type).toLowerCase().contains('show')
-                  ? Icons.tv_rounded
-                  : Icons.movie_outlined,
+          fallbackIcon: _homeMediaTypeLabel(media.type).toLowerCase().contains('show')
+              ? Icons.tv_rounded
+              : Icons.movie_outlined,
           onTap: () => _openMedia(media),
         ),
       )
@@ -2571,8 +3215,7 @@ class _HomeFranchiseProgressDetailsScreenState
               padding: EdgeInsets.only(bottom: 12),
               child: Text(
                 'No titles from this group are currently indexed in your profile library. Reference examples below do not count as owned.',
-                style: TextStyle(
-                    color: Colors.white54, fontSize: 12, height: 1.35),
+                style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.35),
               ),
             )
           else
@@ -2910,6 +3553,7 @@ class _CollectionMemberRail extends StatelessWidget {
           title: item.title,
           subtitle: item.type,
           imageUrl: item.imageUrl,
+          media: item,
           onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
             settings: const RouteSettings(name: '/app/details'),
             builder: (_) => MediaDetailsScreen(media: item),
@@ -3151,23 +3795,18 @@ class _DiscoveryAllCollectionsScreenState
                       ? ListView.separated(
                           padding: const EdgeInsets.all(16),
                           itemCount: collections.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 10),
+                          separatorBuilder: (_, __) => const SizedBox(height: 10),
                           itemBuilder: (context, index) {
                             final collection = collections[index];
                             final items = _itemsFor(collection);
                             return _CollectionListTile(
                               collection: collection,
                               itemCount: items.length,
-                              onTap: () => Navigator.of(context)
-                                  .push(MaterialPageRoute<void>(
-                                settings: const RouteSettings(
-                                    name: '/app/page/collection-details'),
-                                builder: (_) => CollectionDetailsScreen(
-                                    collection: collection),
+                              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                                settings: const RouteSettings(name: '/app/page/collection-details'),
+                                builder: (_) => CollectionDetailsScreen(collection: collection),
                               )),
-                              onShuffle: () => _startRandomFromCollection(
-                                  context, collection),
+                              onShuffle: () => _startRandomFromCollection(context, collection),
                             );
                           },
                         )
@@ -3176,34 +3815,24 @@ class _DiscoveryAllCollectionsScreenState
                             entries: collections.map((collection) {
                               final members = _itemsFor(collection);
                               final posterCandidates = members
-                                  .where((item) =>
-                                      item.imageUrl?.trim().isNotEmpty == true)
+                                  .where((item) => item.imageUrl?.trim().isNotEmpty == true)
                                   .toList(growable: false);
-                              final customPoster =
-                                  collection.customPosterUrl?.trim() ?? '';
+                              final customPoster = collection.customPosterUrl?.trim() ?? '';
                               final imageUrl = customPoster.isNotEmpty
                                   ? customPoster
-                                  : (posterCandidates.isEmpty
-                                      ? null
-                                      : posterCandidates.first.imageUrl);
+                                  : (posterCandidates.isEmpty ? null : posterCandidates.first.imageUrl);
                               return LibraryViewEntry(
                                 title: collection.name,
-                                subtitle:
-                                    '${members.length} title${members.length == 1 ? '' : 's'}${collection.description.trim().isEmpty ? '' : ' · ${collection.description.trim()}'}',
+                                subtitle: '${members.length} title${members.length == 1 ? '' : 's'}${collection.description.trim().isEmpty ? '' : ' · ${collection.description.trim() }'}',
                                 imageUrl: imageUrl,
-                                fallbackIcon:
-                                    Icons.collections_bookmark_outlined,
-                                onTap: () => Navigator.of(context)
-                                    .push(MaterialPageRoute<void>(
-                                  settings: const RouteSettings(
-                                      name: '/app/page/collection-details'),
-                                  builder: (_) => CollectionDetailsScreen(
-                                      collection: collection),
+                                fallbackIcon: Icons.collections_bookmark_outlined,
+                                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                                  settings: const RouteSettings(name: '/app/page/collection-details'),
+                                  builder: (_) => CollectionDetailsScreen(collection: collection),
                                 )),
                                 trailing: IconButton(
                                   tooltip: 'Play a random item',
-                                  onPressed: () => _startRandomFromCollection(
-                                      context, collection),
+                                  onPressed: () => _startRandomFromCollection(context, collection),
                                   icon: const Icon(Icons.shuffle_rounded),
                                 ),
                               );
@@ -3560,19 +4189,23 @@ class _DiscoveryMediaCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final String? imageUrl;
+  final MediaItem? media;
   final VoidCallback onTap;
   final double width;
   final bool posterOnly;
   final bool? isOwned;
+  final bool isWatched;
 
   const _DiscoveryMediaCard(
       {required this.title,
       required this.subtitle,
       required this.imageUrl,
+      this.media,
       required this.onTap,
       this.width = 148,
       this.posterOnly = false,
-      this.isOwned});
+      this.isOwned,
+      this.isWatched = false});
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -3588,11 +4221,15 @@ class _DiscoveryMediaCard extends StatelessWidget {
               Expanded(
                 child: Stack(fit: StackFit.expand, children: [
                   if (imageUrl?.trim().isNotEmpty == true)
-                    Image.network(imageUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _mediaFallback())
+                    CachedNetworkImage(
+                      imageUrl: imageUrl!,
+                      fit: BoxFit.cover,
+                      fadeInDuration: const Duration(milliseconds: 100),
+                      placeholder: (_, __) => _resolvedArtwork(),
+                      errorWidget: (_, __, ___) => _resolvedArtwork(),
+                    )
                   else
-                    _mediaFallback(),
+                    _resolvedArtwork(),
                   if (!posterOnly)
                     const Positioned(
                         right: 8,
@@ -3606,6 +4243,28 @@ class _DiscoveryMediaCard extends StatelessWidget {
                       child: RecommendationOwnershipBadge(
                         isOwned: isOwned!,
                         compact: true,
+                      ),
+                    ),
+                  if (isWatched || isOwned == true)
+                    Positioned(
+                      left: 7,
+                      bottom: 7,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xE817171D),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: (isWatched ? const Color(0xFF92D9FF) : const Color(0xFFFFD27A)).withValues(alpha: .8)),
+                        ),
+                        child: Text(
+                          isWatched ? 'WATCHED' : 'NOT WATCHED',
+                          style: TextStyle(
+                            color: isWatched ? const Color(0xFF92D9FF) : const Color(0xFFFFD27A),
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: .3,
+                          ),
+                        ),
                       ),
                     ),
                 ]),
@@ -3633,6 +4292,34 @@ class _DiscoveryMediaCard extends StatelessWidget {
           ),
         ),
       );
+
+  Widget _resolvedArtwork() {
+    final media = this.media;
+    if (media == null) return _mediaFallback();
+    if (MediaArtworkAutoResolver.isAlbum(media)) {
+      final artist = media.music.map((value) => value.trim()).firstWhere(
+            (value) => value.isNotEmpty,
+            orElse: () => '',
+          );
+      return AlbumArtworkImage(
+        title: media.title,
+        artist: artist,
+        imageUrl: media.imageUrl,
+        fit: BoxFit.cover,
+        placeholder: _mediaFallback(),
+        errorPlaceholder: _mediaFallback(),
+      );
+    }
+    if (MediaArtworkAutoResolver.isMovieOrShow(media)) {
+      return CatalogPosterImage(
+        media: media,
+        fit: BoxFit.cover,
+        placeholder: _mediaFallback(),
+        errorPlaceholder: _mediaFallback(),
+      );
+    }
+    return _mediaFallback();
+  }
 
   Widget _mediaFallback() => const ColoredBox(
       color: Color(0xFF252433),
@@ -3730,9 +4417,12 @@ class _CollectionSearchCard extends StatelessWidget {
             onTap: onTap,
             child: Stack(fit: StackFit.expand, children: [
               if (imageUrl?.trim().isNotEmpty == true)
-                Image.network(imageUrl!,
+                CachedNetworkImage(
+                    imageUrl: imageUrl!,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _fallback())
+                    fadeInDuration: const Duration(milliseconds: 100),
+                    placeholder: (_, __) => _fallback(),
+                    errorWidget: (_, __, ___) => _fallback())
               else
                 _fallback(),
               DecoratedBox(

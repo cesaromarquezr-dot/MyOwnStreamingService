@@ -73,6 +73,17 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
 
   MediaItem get media => widget.media;
 
+  bool _isLegacyTvType(String rawType) {
+    final type = rawType.trim().toLowerCase();
+    return type == 'tvshow' ||
+        type == 'tv_show' ||
+        type == 'tv show' ||
+        type == 'show' ||
+        type == 'series' ||
+        type == 'television' ||
+        type.contains('series');
+  }
+
   bool get _supportsCinematicProviderMetadata {
     final type = media.type.toLowerCase();
     return !type.contains('album') &&
@@ -119,7 +130,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     try {
       final metadata = await CinematicTitleMetadataService.lookupTitle(
         title: media.title,
-        isTv: media.isSeries,
+        isTv: media.isSeries || _isLegacyTvType(media.type),
         year: media.releaseYear ?? media.seriesStartYear,
       );
       final savedTrailerUrl = await _loadSavedDetailsTrailerUrl(metadata);
@@ -217,9 +228,37 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     }
     return Scaffold(
       backgroundColor: const Color(0xFF090909),
-      body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (_detailsBackdropUrl != null)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Image.network(
+                  _detailsBackdropUrl!,
+                  fit: BoxFit.cover,
+                  color: Colors.black.withValues(alpha: .76),
+                  colorBlendMode: BlendMode.darken,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                ),
+              ),
+            ),
+          const Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0x66000000), Color(0xE6090909)],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: CustomScrollView(
+              slivers: [
             SliverAppBar(
               pinned: true,
               automaticallyImplyLeading: false,
@@ -261,11 +300,17 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
             SliverToBoxAdapter(
               child: _buildDetailsPage(),
             ),
-          ],
-        ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
+
+  String? get _detailsBackdropUrl =>
+      CinematicTitleMetadataService.imageUrl(_selectedBackdropPath, size: 'w1280') ??
+      _providerTitleMetadata?.backdropUrl;
 
   /// Performs `_buildDetailsPage` for this feature. Update this documentation when its contract changes.
   Widget _buildDetailsPage() {
@@ -2664,6 +2709,14 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
             : (media.editionReleaseYear != null ? 'Edition Release Year' : 'Release Year'),
         media.displayYearLabel!,
       ));
+    }
+    if (media.isSeries || const <String>{'movie', 'film'}.contains(media.type.trim().toLowerCase())) {
+      final localCountry = media.countryOfOrigin?.trim() ?? '';
+      final providerCountry = _providerTitleMetadata?.countryOfOrigin?.trim() ?? '';
+      final country = localCountry.isNotEmpty
+          ? mediaCountryOriginLabel(media)
+          : (providerCountry.isNotEmpty ? providerCountry : 'Country of origin unavailable');
+      rows.add(_infoRow('Country of Origin', country));
     }
     if (!media.isSeries && media.editionReleaseYear != null &&
         media.releaseYear != null && media.editionReleaseYear != media.releaseYear) {

@@ -8,6 +8,7 @@ class CinematicSeedExample {
     required this.universe,
     this.year,
     this.notes,
+    this.countryOfOrigin,
   });
 
   final String title;
@@ -15,6 +16,7 @@ class CinematicSeedExample {
   final String universe;
   final int? year;
   final String? notes;
+  final String? countryOfOrigin;
 }
 
 class CinematicSeedExamples {
@@ -144,10 +146,121 @@ class CinematicSeedExamples {
     CinematicSeedExample(title: 'American Dragon: Jake Long', isTv: true, universe: 'Disney Channel', year: 2005),
   ];
 
+
+  /// Additional titles requested for the local browse catalog. These are
+  /// metadata-only preview records: they are not playable until the user imports
+  /// their own media. Provider IDs/artwork are resolved at runtime when configured.
+  static const List<CinematicSeedExample> requestedMovies = <CinematicSeedExample>[
+    CinematicSeedExample(title: 'Caramelo', isTv: false, universe: 'Brazil', year: 2025),
+    CinematicSeedExample(title: 'Scary Movie', isTv: false, universe: 'Scary Movie', year: 2000, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Scary Movie', isTv: false, universe: 'Scary Movie', year: 2026, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Scary Movie 2', isTv: false, universe: 'Scary Movie', year: 2001, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Scary Movie 3', isTv: false, universe: 'Scary Movie', year: 2003, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Scary Movie 4', isTv: false, universe: 'Scary Movie', year: 2006, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Scary Movie 5', isTv: false, universe: 'Scary Movie', year: 2013, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'WALL-E', isTv: false, universe: 'Pixar', year: 2008, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Goosebumps', isTv: false, universe: 'Goosebumps', year: 2015, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Goosebumps 2: Haunted Halloween', isTv: false, universe: 'Goosebumps', year: 2018, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Ted', isTv: false, universe: 'Ted', year: 2012, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Ted 2', isTv: false, universe: 'Ted', year: 2015, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Back to the Future', isTv: false, universe: 'Back to the Future Trilogy', year: 1985, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Back to the Future Part II', isTv: false, universe: 'Back to the Future Trilogy', year: 1989, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Back to the Future Part III', isTv: false, universe: 'Back to the Future Trilogy', year: 1990, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Buddy', isTv: false, universe: 'Requested Movies', year: 2026, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Tusk', isTv: false, universe: 'Requested Movies', year: 2014, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Donnie Darko', isTv: false, universe: 'Requested Movies', year: 2001, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Bridge to Terabithia', isTv: false, universe: 'Requested Movies', year: 2007, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'The Nightmare Before Christmas', isTv: false, universe: 'Requested Movies', year: 1993, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Happy Death Day', isTv: false, universe: 'Happy Death Day', year: 2017, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Happy Death Day 2U', isTv: false, universe: 'Happy Death Day', year: 2019, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Ready or Not', isTv: false, universe: 'Ready or Not', year: 2019, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Ready or Not 2: Here I Come', isTv: false, universe: 'Ready or Not', year: 2026, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: "Willy's Wonderland", isTv: false, universe: 'Requested Movies', year: 2021, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Beetlejuice', isTv: false, universe: 'Beetlejuice', year: 1988, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Beetlejuice Beetlejuice', isTv: false, universe: 'Beetlejuice', year: 2024, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Corpse Bride', isTv: false, universe: 'Requested Movies', year: 2005, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'The Wizard of Oz', isTv: false, universe: 'Requested Movies', year: 1939, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: "Bill & Ted's Excellent Adventure", isTv: false, universe: 'Bill & Ted Trilogy', year: 1989, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: "Bill & Ted's Bogus Journey", isTv: false, universe: 'Bill & Ted Trilogy', year: 1991, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Bill & Ted Face the Music', isTv: false, universe: 'Bill & Ted Trilogy', year: 2020, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Just Go with It', isTv: false, universe: 'Requested Movies', year: 2011, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Shark Tale', isTv: false, universe: 'Requested Movies', year: 2004, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Happy Gilmore', isTv: false, universe: 'Happy Gilmore', year: 1996, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Spider-Man', isTv: false, universe: 'Spider-Man Films', year: 2002, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Spider-Man 2', isTv: false, universe: 'Spider-Man Films', year: 2004, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Spider-Man 3', isTv: false, universe: 'Spider-Man Films', year: 2007, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'The Amazing Spider-Man', isTv: false, universe: 'The Amazing Spider-Man', year: 2012, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'The Amazing Spider-Man 2', isTv: false, universe: 'The Amazing Spider-Man', year: 2014, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Daredevil', isTv: false, universe: 'Daredevil', year: 2003, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Jaws', isTv: false, universe: 'Jaws', year: 1975, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'The Addams Family', isTv: false, universe: 'The Addams Family', year: 1991, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Addams Family Values', isTv: false, universe: 'The Addams Family', year: 1993, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'The Banana Splits Movie', isTv: false, universe: 'Requested Movies', year: 2019, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Carrie', isTv: false, universe: 'Carrie', year: 1976, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Matilda', isTv: false, universe: 'Requested Movies', year: 1996, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'The Karate Kid', isTv: false, universe: 'The Karate Kid', year: 1984, countryOfOrigin: 'United States'),
+  ];
+
+  static const List<CinematicSeedExample> requestedShows = <CinematicSeedExample>[
+    CinematicSeedExample(title: 'Friends', isTv: true, universe: 'Requested Shows', year: 1994, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'How I Met Your Mother', isTv: true, universe: 'Requested Shows', year: 2005, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Modern Family', isTv: true, universe: 'Requested Shows', year: 2009, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Brooklyn Nine-Nine', isTv: true, universe: 'Requested Shows', year: 2013, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Home Economics', isTv: true, universe: 'Requested Shows', year: 2021, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'The Muppets', isTv: true, universe: 'The Muppets', year: 2015, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'The Muppet Show', isTv: true, universe: 'The Muppets', year: 1976, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Shake It Up', isTv: true, universe: 'Disney Channel', year: 2010, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Euphoria', isTv: true, universe: 'Requested Shows', year: 2019, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'WandaVision', isTv: true, universe: 'Marvel Television', year: 2021, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Chopped', isTv: true, universe: 'Requested Shows', year: 2009, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Cutthroat Kitchen', isTv: true, universe: 'Requested Shows', year: 2013, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Loki', isTv: true, universe: 'Marvel Television', year: 2021, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Hawkeye', isTv: true, universe: 'Marvel Television', year: 2021, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'The Boys', isTv: true, universe: 'The Boys Universe', year: 2019, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Gen V', isTv: true, universe: 'The Boys Universe', year: 2023, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Goosebumps', isTv: true, universe: 'Goosebumps', year: 1995, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Goosebumps', isTv: true, universe: 'Goosebumps', year: 2023, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Ted', isTv: true, universe: 'Ted', year: 2024, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Spider-Man', isTv: true, universe: 'Spider-Man Animated Series', year: 1967, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Spider-Man', isTv: true, universe: 'Spider-Man Animated Series', year: 1981, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Spider-Man and His Amazing Friends', isTv: true, universe: 'Spider-Man Animated Series', year: 1981, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Spider-Man: The Animated Series', isTv: true, universe: 'Spider-Man Animated Series', year: 1994, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Spider-Man Unlimited', isTv: true, universe: 'Spider-Man Animated Series', year: 1999, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Spider-Man: The New Animated Series', isTv: true, universe: 'Spider-Man Animated Series', year: 2003, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'The Spectacular Spider-Man', isTv: true, universe: 'Spider-Man Animated Series', year: 2008, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Ultimate Spider-Man', isTv: true, universe: 'Spider-Man Animated Series', year: 2012, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Spider-Man', isTv: true, universe: 'Spider-Man Animated Series', year: 2017, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Your Friendly Neighborhood Spider-Man', isTv: true, universe: 'Marvel Animation', year: 2025, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Spidey and His Amazing Friends', isTv: true, universe: 'Marvel Animation', year: 2021, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Daredevil', isTv: true, universe: 'Marvel Television', year: 2015, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Jessica Jones', isTv: true, universe: 'Marvel Television', year: 2015, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Luke Cage', isTv: true, universe: 'Marvel Television', year: 2016, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Iron Fist', isTv: true, universe: 'Marvel Television', year: 2017, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'The Punisher', isTv: true, universe: 'Marvel Television', year: 2017, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'The Defenders', isTv: true, universe: 'Marvel Television', year: 2017, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Cloak & Dagger', isTv: true, universe: 'Marvel Television', year: 2018, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Runaways', isTv: true, universe: 'Marvel Television', year: 2017, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Wednesday', isTv: true, universe: 'The Addams Family', year: 2022, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Iron Man: Armored Adventures', isTv: true, universe: 'Marvel Animation', year: 2009, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'The Super Hero Squad Show', isTv: true, universe: 'Marvel Animation', year: 2009, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Ben 10', isTv: true, universe: 'Ben 10', year: 2005, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Ben 10: Alien Force', isTv: true, universe: 'Ben 10', year: 2008, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Ben 10: Ultimate Alien', isTv: true, universe: 'Ben 10', year: 2010, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Ben 10: Omniverse', isTv: true, universe: 'Ben 10', year: 2012, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Danny Phantom', isTv: true, universe: 'Requested Shows', year: 2004, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'La CQ', isTv: true, universe: 'Requested Shows', year: 2012, countryOfOrigin: 'Mexico'),
+    CinematicSeedExample(title: 'The Amazing World of Gumball', isTv: true, universe: 'Requested Shows', year: 2011, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Courage the Cowardly Dog', isTv: true, universe: 'Requested Shows', year: 1999, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Codename: Kids Next Door', isTv: true, universe: 'Requested Shows', year: 2002, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'El Chavo Animado', isTv: true, universe: 'Mexico', year: 2006),
+  ];
+
   static List<CinematicSeedExample> get all => <CinematicSeedExample>[
         ...movies,
         ...shows,
         ...additionalMovies,
         ...additionalShows,
+        ...requestedMovies,
+        ...requestedShows,
       ];
 }

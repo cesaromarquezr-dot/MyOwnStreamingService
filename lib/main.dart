@@ -32,10 +32,13 @@ import 'music.dart';
 import 'home_server.dart';
 import 'home_widgets.dart';
 import 'home_streaming_discovery.dart';
+import 'weekly_top10.dart';
 import 'home_cinematic_recommendations.dart';
 import 'cinematic_discovery_studio.dart';
 import 'channel_center.dart';
 import 'home_arrow_rail.dart';
+import 'page_hero_banner.dart';
+import 'country_origin_style.dart';
 import 'recommendation_ownership.dart';
 import 'catalog_poster_image.dart';
 import 'music_catalog_screen.dart';
@@ -85,22 +88,35 @@ Future<void> main() async {
     // Configuration is optional. Do not log environment values or credentials.
     debugPrint('Optional .env configuration could not be loaded: $error');
   }
-  await SelfDrivingNetworkMonitor.instance.initialize();
-  await SupabaseService.instance.initialize();
-  await HomeCustomizationStore.initialize();
-  await PageContentCustomizationStore.initialize();
-  await AppSectionCustomizationStore.initialize();
-  await DetailsCustomizationStore.initialize();
-  await MusicPageCustomizationStore.initialize();
-  await AppController.instance.initializeBadges();
-  await PlatformPreferenceStore.initialize();
-  await ShopCatalog.instance.initialize();
-  await StoryPlacementStore.load(AppController.instance.currentProfile);
-  // Keep local app settings/customizations recoverable if the connected media
-  // server goes offline. The backup service handles its own failures so it
-  // never blocks the app from starting.
-  await AutomaticBackupService.instance.initialize();
+  // These boot steps are independent after .env is loaded. Run them together
+  // instead of paying the sum of every SharedPreferences/SDK initialization.
+  // The first frame is still gated on settings required to render the app, but
+  // non-critical backup work is intentionally moved off the startup path.
+  await Future.wait<void>(<Future<void>>[
+    SelfDrivingNetworkMonitor.instance.initialize(),
+    SupabaseService.instance.initialize(),
+    HomeCustomizationStore.initialize(),
+    PageContentCustomizationStore.initialize(),
+    AppSectionCustomizationStore.initialize(),
+    DetailsCustomizationStore.initialize(),
+    MusicPageCustomizationStore.initialize(),
+    AppController.instance.initializeBadges(),
+    PlatformPreferenceStore.initialize(),
+    ShopCatalog.instance.initialize(),
+    StoryPlacementStore.load(AppController.instance.currentProfile),
+  ]);
+
   runApp(const MyStreamingService());
+
+  // Startup snapshots serialize and checksum many preferences and read the
+  // result back from disk. Do that after the UI has painted, not before runApp.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    // Let the first interaction settle before checksum/JSON backup work uses
+    // the UI isolate and local disk.
+    Timer(const Duration(seconds: 3), () {
+      unawaited(AutomaticBackupService.instance.initialize());
+    });
+  });
 }
 
 final _AppPageState _appPageState = _AppPageState();
@@ -761,6 +777,7 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
   late _PageAppearance draft;
   late PageContentCustomization contentDraft;
   late AppSectionCustomization sectionDraft;
+  PageHeroSettings? _heroSettings;
 
   static const _colors = <String, int>{
     'Red': 0xFFE53935,
@@ -779,6 +796,11 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
     sectionDraft = AppSectionCustomizationStore.settingsFor(
         AppController.instance.currentProfile);
     StoryPlacementStore.load(AppController.instance.currentProfile);
+    if (widget.pageId == 'movies' || widget.pageId == 'series') {
+      unawaited(PageHeroSettingsStore.load(widget.pageId).then((value) {
+        if (mounted) setState(() => _heroSettings = value);
+      }));
+    }
   }
 
   Widget _socialThemeDropdown(
@@ -812,6 +834,15 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
             'These settings apply only to this page.',
             style: TextStyle(color: Colors.white70),
           ),
+          if (_heroSettings != null) ...[
+            const SizedBox(height: 16),
+            PageHeroSettingsPanel(
+              pageTitle: widget.pageId == 'series' ? 'TV Shows' : 'Movies',
+              settings: _heroSettings!,
+              onChanged: (value) => setState(() => _heroSettings = value),
+            ),
+            const SizedBox(height: 12),
+          ],
           if (widget.pageId == 'shop' ||
               widget.pageId == 'library' ||
               widget.pageId == 'friends') ...[
@@ -1373,6 +1404,10 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
             onPressed: () async {
               final navigator = Navigator.of(context);
               await _PageAppearanceStore.save(widget.pageId, draft);
+              final heroSettings = _heroSettings;
+              if (heroSettings != null) {
+                await PageHeroSettingsStore.save(widget.pageId, heroSettings);
+              }
               await PageContentCustomizationStore.apply(
                 widget.pageId,
                 contentDraft,
@@ -1977,9 +2012,18 @@ Color colorFromName(String name) => namedColors[name] ?? Colors.black;
 
 const List<String> _defaultHomeSectionOrder = <String>[
   'Hero Banner',
-  'International Movies',
-  'International Shows',
+  'Movies by Country',
+  'Shows by Country',
   'New Albums',
+  "This Week's Top 10 Movies",
+  "This Week's Top 10 Shows",
+  "This Week's Top 10 Albums",
+  "This Week's Top 10 Songs",
+  "This Week's Top 10 Actors",
+  "This Week's Top 10 Actresses",
+  "This Week's Top 10 Singers",
+  "This Week's Top 10 Bands",
+  'Ranking of All Top 10s',
   'Recommendations & Mood',
   'Franchise Progress',
   'Channels',
@@ -2004,6 +2048,8 @@ const List<String> _defaultHomeSectionOrder = <String>[
 ];
 
 const Map<String, String> _legacyHomeSectionAliases = <String, String>{
+  'International Movies': 'Movies by Country',
+  'International Shows': 'Shows by Country',
   'Recommended': 'Library Recommendations',
   'Recommendations': 'Library Recommendations',
   'Recently Added': 'New Additions',
@@ -2329,6 +2375,14 @@ class HomeCustomizationStore {
     final supported = _defaultHomeSectionOrder.toSet();
     return raw
         .map((value) => value.toString())
+        // These were standalone promotional shelves, not country shelves.
+        // Do not migrate their old hidden state onto the replacement country
+        // shelves, or users with an older profile will never see US/other
+        // country sections after updating.
+        .where((oldName) =>
+            oldName != 'International Movies' &&
+            oldName != 'International Shows')
+        .map((oldName) => _legacyHomeSectionAliases[oldName] ?? oldName)
         .where(supported.contains)
         .toSet()
         .toList();
@@ -2412,7 +2466,7 @@ class HomeCustomizationStore {
             : (m['homeMediaLayout']?.toString() ?? 'Left & Right'),
         heroStyle: m['heroStyle']?.toString() ?? 'Cinematic',
         cardSize: m['cardSize']?.toString() ?? 'Medium',
-        heroItemCount: ((m['heroItemCount'] as num?)?.toInt() ?? 8).clamp(8, 40).toInt(),
+        heroItemCount: ((m['heroItemCount'] as num?)?.toInt() ?? 8).clamp(1, 40).toInt(),
         navbarPosition: m['navbarPosition']?.toString() ?? 'Bottom',
         storageBarPosition: m['storageBarPosition']?.toString() ?? 'Bottom',
         storageBarThickness: (m['storageBarThickness'] is num
@@ -2583,6 +2637,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   late HomeCustomization draft;
   late DetailsCustomization detailsDraft;
   late MusicPageCustomization musicDraft;
+  PageHeroSettings _homeHeroSettings = const PageHeroSettings();
   late CustomizationPage selectedPage;
   bool detailsPreviewTvShow = true;
   _PreviewDeviceCategory _previewCategory = _PreviewDeviceCategory.phone;
@@ -2611,10 +2666,20 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     musicDraft = MusicPageCustomizationStore.settingsFor(
       AppController.instance.currentProfile,
     );
+    unawaited(_loadHomeHeroSettings());
     storyPlacement =
         StoryPlacementStore.forProfile(AppController.instance.currentProfile);
     unawaited(_loadStoryPlacementPreference());
     _normalizeHomePositions();
+  }
+
+  Future<void> _loadHomeHeroSettings() async {
+    final loaded = await PageHeroSettingsStore.load('home');
+    if (!mounted) return;
+    setState(() {
+      _homeHeroSettings = loaded;
+      draft.heroItemCount = loaded.itemCount;
+    });
   }
 
   Future<void> _loadStoryPlacementPreference() async {
@@ -2652,6 +2717,10 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
 
     final profile = AppController.instance.currentProfile;
     await StoryPlacementStore.setForProfile(profile, storyPlacement);
+    if (selectedPage == CustomizationPage.home) {
+      draft.heroItemCount = _homeHeroSettings.itemCount;
+      await PageHeroSettingsStore.save('home', _homeHeroSettings);
+    }
 
     // First setup is a strict forward-only sequence: Home -> Details -> Music.
     // Each step saves before advancing, so a crash or app
@@ -3048,11 +3117,13 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           onChanged: (value) => setState(() => draft.cardSize = value),
         ),
         const SizedBox(height: 12),
-        _dropdown(
-          label: 'Hero banner item count',
-          value: '${draft.heroItemCount}',
-          values: const ['8', '10', '15', '20', '25', '30', '40'],
-          onChanged: (value) => setState(() => draft.heroItemCount = int.tryParse(value) ?? 8),
+        PageHeroSettingsPanel(
+          pageTitle: 'Home',
+          settings: _homeHeroSettings,
+          onChanged: (value) => setState(() {
+            _homeHeroSettings = value;
+            draft.heroItemCount = value.itemCount;
+          }),
         ),
         const SizedBox(height: 12),
         _dropdown(
@@ -3861,16 +3932,34 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             Icons.auto_awesome_outlined,
             isTvShow: false,
           ));
-        case 'International Movies':
+        case 'Movies by Country':
           sections.add(_homePreviewMediaSection(
-            'INTERNATIONAL MOVIES', 'Original titles from around the world',
+            'MOVIES FROM COUNTRY', "Grouped by each title's recorded country of origin",
             Icons.public_rounded, isTvShow: false));
-        case 'International Shows':
+        case 'Shows by Country':
           sections.add(_homePreviewMediaSection(
-            'INTERNATIONAL SHOWS', 'Original titles from around the world',
+            'SHOWS FROM COUNTRY', "Grouped by each title's recorded country of origin",
             Icons.public_rounded, isTvShow: true));
         case 'New Albums':
           sections.add(_homePreviewBar('NEW ALBUMS', Icons.album_rounded));
+        case "This Week's Top 10 Movies":
+          sections.add(_homePreviewBar("THIS WEEK'S TOP 10 MOVIES", Icons.movie_rounded));
+        case "This Week's Top 10 Shows":
+          sections.add(_homePreviewBar("THIS WEEK'S TOP 10 SHOWS", Icons.tv_rounded));
+        case "This Week's Top 10 Albums":
+          sections.add(_homePreviewBar("THIS WEEK'S TOP 10 ALBUMS", Icons.album_rounded));
+        case "This Week's Top 10 Songs":
+          sections.add(_homePreviewBar("THIS WEEK'S TOP 10 SONGS", Icons.music_note_rounded));
+        case "This Week's Top 10 Actors":
+          sections.add(_homePreviewBar("THIS WEEK'S TOP 10 ACTORS", Icons.face_rounded));
+        case "This Week's Top 10 Actresses":
+          sections.add(_homePreviewBar("THIS WEEK'S TOP 10 ACTRESSES", Icons.face_3_rounded));
+        case "This Week's Top 10 Singers":
+          sections.add(_homePreviewBar("THIS WEEK'S TOP 10 SINGERS", Icons.mic_rounded));
+        case "This Week's Top 10 Bands":
+          sections.add(_homePreviewBar("THIS WEEK'S TOP 10 BANDS", Icons.groups_rounded));
+        case 'Ranking of All Top 10s':
+          sections.add(_homePreviewBar('RANKING OF ALL TOP 10S', Icons.leaderboard_rounded));
         case 'Recommendations & Mood':
           sections.add(_homePreviewBar('RECOMMENDATIONS & MOOD', Icons.auto_awesome_outlined));
         case 'Franchise Progress':
@@ -4985,6 +5074,10 @@ enum PrimaryDestination {
   friends,
 }
 
+// Keep the active main shell alive when primary destinations change. This
+// avoids reconstructing Home/library/Friends and repeating their entry work.
+_MainScreenState? _activeMainScreenState;
+
 class _GlobalPrimaryNavigationBar extends StatelessWidget {
   const _GlobalPrimaryNavigationBar({this.vertical = false});
   final bool vertical;
@@ -5017,6 +5110,31 @@ class _GlobalPrimaryNavigationBar extends StatelessWidget {
     final destination = PrimaryDestination.values[index];
     final navigator = _appNavigatorKey.currentState;
     if (navigator == null) return;
+
+    final activeShell = _activeMainScreenState;
+    if (activeShell != null && activeShell.mounted) {
+      var foundMainRoute = false;
+      navigator.popUntil((route) {
+        final name = route.settings.name ?? '';
+        if (name.startsWith('/main/')) {
+          foundMainRoute = true;
+          return true;
+        }
+        return route.isFirst;
+      });
+      if (foundMainRoute) {
+        activeShell.selectDestination(destination);
+        _appPageState.setPage(
+          destination.name,
+          selectedPrimaryIndex: index,
+          customizing: false,
+        );
+        return;
+      }
+    }
+
+    // Safe fallback for unusual entry flows that do not have a named main
+    // route yet (for example, app links or a reset during onboarding).
     _appPageState.setPage(destination.name, selectedPrimaryIndex: index, customizing: false);
     navigator.pushAndRemoveUntil<void>(
       MaterialPageRoute<void>(
@@ -5034,6 +5152,8 @@ class _GlobalPrimaryNavigationBar extends StatelessWidget {
       builder: (context, _) {
         final selectedIndex = _appPageState.primaryIndex.clamp(0, 2).toInt();
         final profile = AppController.instance.currentProfile;
+        final rawProfileName = profile?.name.trim() ?? '';
+        final profileLabel = rawProfileName.isEmpty ? 'Profile' : rawProfileName;
         final profileAvatar = profile == null
             ? const Icon(Icons.person_outline_rounded)
             : _MainProfileAvatar(profile: profile, size: 30);
@@ -5049,7 +5169,7 @@ class _GlobalPrimaryNavigationBar extends StatelessWidget {
                 const NavigationRailDestination(icon: Icon(Icons.video_library_outlined), selectedIcon: Icon(Icons.video_library_rounded), label: Text('Watch')),
                 const NavigationRailDestination(icon: Icon(Icons.people_outline_rounded), selectedIcon: Icon(Icons.people_rounded), label: Text('Friends')),
                 const NavigationRailDestination(icon: Icon(Icons.more_horiz_rounded), selectedIcon: Icon(Icons.more_horiz_rounded), label: Text('More')),
-                NavigationRailDestination(icon: profileAvatar, selectedIcon: profileAvatar, label: const Text('Profile')),
+                NavigationRailDestination(icon: profileAvatar, selectedIcon: profileAvatar, label: Text(profileLabel)),
               ],
               onDestinationSelected: (index) => _select(context, index),
             ),
@@ -5063,7 +5183,7 @@ class _GlobalPrimaryNavigationBar extends StatelessWidget {
             const NavigationDestination(icon: Icon(Icons.video_library_outlined), selectedIcon: Icon(Icons.video_library_rounded), label: 'Watch'),
             const NavigationDestination(icon: Icon(Icons.people_outline_rounded), selectedIcon: Icon(Icons.people_rounded), label: 'Friends'),
             const NavigationDestination(icon: Icon(Icons.more_horiz_rounded), selectedIcon: Icon(Icons.more_horiz_rounded), label: 'More'),
-            NavigationDestination(icon: profileAvatar, selectedIcon: profileAvatar, label: 'Profile'),
+            NavigationDestination(icon: profileAvatar, selectedIcon: profileAvatar, label: profileLabel),
           ],
           onDestinationSelected: (index) => _select(context, index),
         );
@@ -5263,9 +5383,21 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   Timer? _presenceHeartbeat;
 
+  final Set<PrimaryDestination> _visitedDestinations = <PrimaryDestination>{};
+
+  void selectDestination(PrimaryDestination destination) {
+    if (!mounted) return;
+    setState(() {
+      selected = destination;
+      _visitedDestinations.add(destination);
+    });
+  }
+
   @override
   void initState() {
     super.initState();
+    _visitedDestinations.add(selected);
+    _activeMainScreenState = this;
     WidgetsBinding.instance.addObserver(this);
     LanguageController.instance.loadForCurrentProfile();
     unawaited(AppController.instance.loadActivity());
@@ -5314,6 +5446,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _presenceHeartbeat?.cancel();
+    if (identical(_activeMainScreenState, this)) {
+      _activeMainScreenState = null;
+    }
     super.dispose();
   }
 
@@ -5355,12 +5490,21 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
               onSurpriseMe: _showSurpriseMe,
             ),
             Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                child: KeyedSubtree(
-                  key: ValueKey(selected),
-                  child: _pageFor(selected),
-                ),
+              child: IndexedStack(
+                index: selected.index,
+                children: <Widget>[
+                  for (final destination in PrimaryDestination.values)
+                    if (_visitedDestinations.contains(destination))
+                      TickerMode(
+                        enabled: selected == destination,
+                        child: Offstage(
+                          offstage: selected != destination,
+                          child: _pageFor(destination),
+                        ),
+                      )
+                    else
+                      const SizedBox.shrink(),
+                ],
               ),
             ),
           ],
@@ -5536,6 +5680,7 @@ class _AppShellHeaderState extends State<AppShellHeader> {
               onPressed: widget.onSurpriseMe,
               icon: const Icon(Icons.shuffle_rounded),
             ),
+          ActivityButton(),
           PageCustomizeButton(pageId: widget.pageId),
         ],
       ),
@@ -5819,7 +5964,7 @@ class _HomeScreenState extends State<HomeScreen>
     unawaited(_loadStoryPlacement());
     _heroController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 700),
+      duration: const Duration(milliseconds: 180),
     )..forward();
   }
 
@@ -5952,12 +6097,6 @@ class _HomeScreenState extends State<HomeScreen>
       final type = media.type.toLowerCase();
       return type == 'tvshow' || type == 'tv_show' || type == 'tv show';
     }));
-    final internationalMovies = movies
-        .where((media) => media.tags.contains('international-catalog'))
-        .toList(growable: false);
-    final internationalShows = tvShows
-        .where((media) => media.tags.contains('international-catalog'))
-        .toList(growable: false);
     // Compute personalized ranking once per Home build rather than once per
     // section, keeping search/discovery overhead bounded on larger libraries.
     final homeRecommendations = SmartSearch.recommendations(library);
@@ -6096,8 +6235,6 @@ class _HomeScreenState extends State<HomeScreen>
                 homeRecommendations,
                 homeHeroItems: homeHeroItems,
                 heroController: _heroController,
-                internationalMovies: internationalMovies,
-                internationalShows: internationalShows,
                 profile: profile,
               ),
             const SliverToBoxAdapter(child: SizedBox(height: 100)),
@@ -6199,8 +6336,6 @@ List<Widget> _buildHomeSectionSlivers(
   List<MediaItem> recommendations, {
   required List<MediaItem> homeHeroItems,
   required AnimationController heroController,
-  required List<MediaItem> internationalMovies,
-  required List<MediaItem> internationalShows,
   required Profile? profile,
 }) {
   if (!settings.isSectionVisible(section)) return const <Widget>[];
@@ -6217,6 +6352,7 @@ List<Widget> _buildHomeSectionSlivers(
             ),
             child: HomeHeroCarousel(
               items: homeHeroItems,
+              settingsKey: 'home',
               // More Info must always show details, even when the media has a playable file.
               onOpen: (media) => Navigator.push(
                 context,
@@ -6270,32 +6406,28 @@ List<Widget> _buildHomeSectionSlivers(
               ),
             ]
           : const <Widget>[];
-    case 'International Movies':
-      if (internationalMovies.isEmpty) return const <Widget>[];
-      return <Widget>[
-        const SliverToBoxAdapter(
-          child: _PremiumSectionHeader(
-            title: 'International Movies',
-            subtitle: 'Original display titles from around the world',
-          ),
-        ),
-        SliverToBoxAdapter(
-          child: MediaHorizontalList(media: internationalMovies, enableHomePreview: true),
-        ),
-      ];
-    case 'International Shows':
-      if (internationalShows.isEmpty) return const <Widget>[];
-      return <Widget>[
-        const SliverToBoxAdapter(
-          child: _PremiumSectionHeader(
-            title: 'International Shows',
-            subtitle: 'Original display titles from around the world',
-          ),
-        ),
-        SliverToBoxAdapter(
-          child: MediaHorizontalList(media: internationalShows, enableHomePreview: true),
-        ),
-      ];
+    case 'Movies by Country':
+      return _countryShelfSlivers(items: movies, sectionLabel: 'Movies');
+    case 'Shows by Country':
+      return _countryShelfSlivers(items: tvShows, sectionLabel: 'Shows');
+    case "This Week's Top 10 Movies":
+      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'movies', title: "THIS WEEK'S TOP 10 MOVIES"))];
+    case "This Week's Top 10 Shows":
+      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'shows', title: "THIS WEEK'S TOP 10 SHOWS"))];
+    case "This Week's Top 10 Albums":
+      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'albums', title: "THIS WEEK'S TOP 10 ALBUMS"))];
+    case "This Week's Top 10 Songs":
+      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'songs', title: "THIS WEEK'S TOP 10 SONGS"))];
+    case "This Week's Top 10 Actors":
+      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'actors', title: "THIS WEEK'S TOP 10 ACTORS"))];
+    case "This Week's Top 10 Actresses":
+      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'actresses', title: "THIS WEEK'S TOP 10 ACTRESSES"))];
+    case "This Week's Top 10 Singers":
+      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'singers', title: "THIS WEEK'S TOP 10 SINGERS"))];
+    case "This Week's Top 10 Bands":
+      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'bands', title: "THIS WEEK'S TOP 10 BANDS"))];
+    case 'Ranking of All Top 10s':
+      return const <Widget>[SliverToBoxAdapter(child: WeeklyTop10LeaderboardShelf())];
     case 'New Albums':
       return <Widget>[
         SliverToBoxAdapter(
@@ -6359,7 +6491,13 @@ List<Widget> _buildHomeSectionSlivers(
     case 'People & Cast Recommendations':
       return <Widget>[
         SliverToBoxAdapter(
-          child: HomeBecauseYouWatchedPeopleShelves(library: library, watched: watched),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              HomeBecauseYouWatchedPeopleShelves(library: library, watched: watched),
+              HomeExternalPeopleRecommendationShelves(watched: watched),
+            ],
+          ),
         ),
       ];
     case 'Friends & Communities':
@@ -6404,6 +6542,41 @@ List<Widget> _homeMediaRail(
   ];
 }
 
+List<Widget> _countryShelfSlivers({
+  required List<MediaItem> items,
+  required String sectionLabel,
+}) {
+  final grouped = <String, List<MediaItem>>{};
+  for (final media in items) {
+    for (final country in mediaCountryOriginParts(media)) {
+      final bucket = grouped.putIfAbsent(country, () => <MediaItem>[]);
+      if (!bucket.any((entry) => entry.id == media.id)) bucket.add(media);
+    }
+  }
+  final countries = grouped.keys.toList()
+    ..sort((a, b) {
+      final byCount = grouped[b]!.length.compareTo(grouped[a]!.length);
+      return byCount != 0 ? byCount : a.toLowerCase().compareTo(b.toLowerCase());
+    });
+  final result = <Widget>[];
+  for (final country in countries) {
+    final titles = grouped[country]!;
+    // Use the familiar US label for American shelves while retaining the
+    // canonical full country name in metadata and country matching.
+    final displayCountry = country == 'United States' ? 'US' : country;
+    result.add(SliverToBoxAdapter(
+      child: _PremiumSectionHeader(
+        title: '$sectionLabel from $displayCountry',
+        subtitle: '${titles.length} ${titles.length == 1 ? 'title' : 'titles'} • Country of origin',
+      ),
+    ));
+    result.add(SliverToBoxAdapter(
+      child: MediaHorizontalList(media: titles, enableHomePreview: true),
+    ));
+  }
+  return result;
+}
+
 String _homeSectionDescription(String section) => switch (section) {
       'Hero Banner' => 'Featured movie/show artwork near the top of Home.',
       'Recommendations & Mood' => 'TMDB recommendations and mood-based discovery.',
@@ -6424,9 +6597,18 @@ String _homeSectionDescription(String section) => switch (section) {
       'TV Shows' => 'Your TV collection.',
       'New Additions' => 'Recently imported movies and shows.',
       'All Library' => 'Every title in your library in one shelf.',
-      'International Movies' => 'International titles using their original display names.',
-      'International Shows' => 'International series using their original display names.',
+      'Movies by Country' => 'Separate movie shelves grouped by the recorded country of origin.',
+      'Shows by Country' => 'Separate show shelves grouped by the recorded country of origin.',
       'New Albums' => 'New album covers from Spotify.',
+      "This Week's Top 10 Movies" => "TMDB's weekly trending movie chart.",
+      "This Week's Top 10 Shows" => "TMDB's weekly trending TV chart.",
+      "This Week's Top 10 Albums" => "Albums ranked by this profile's listening activity.",
+      "This Week's Top 10 Songs" => "Songs ranked by this profile's listening activity.",
+      "This Week's Top 10 Actors" => 'Trending screen actors from TMDB this week.',
+      "This Week's Top 10 Actresses" => 'Trending screen actresses from TMDB this week.',
+      "This Week's Top 10 Singers" => "Singers ranked from this profile's listening activity.",
+      "This Week's Top 10 Bands" => "Bands ranked from this profile's listening activity.",
+      'Ranking of All Top 10s' => 'Open the leaderboard for all eight weekly Top 10 charts.',
       'Music & Film' => 'Resume locally playable music.',
       'Seasonal Collections' => 'Calendar-based collections for the current season.',
       'Media Intelligence Tools' => 'Discovery, insight, and media tools.',
@@ -6759,17 +6941,55 @@ class _PremiumSectionHeader extends StatelessWidget {
   const _PremiumSectionHeader({required this.title, required this.subtitle});
 
   @override
-
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
+    final countryMatch = RegExp(r'^(Movies|Shows) from (.+)$').firstMatch(title);
+    final titleStyle = const TextStyle(fontSize: 22, fontWeight: FontWeight.w800);
+    final Widget titleWidget;
+    if (countryMatch == null) {
+      titleWidget = Text(title, style: titleStyle);
+    } else {
+      final mediaKind = countryMatch.group(1)!;
+      final country = countryMatch.group(2)!.trim();
+      final palette = countryFlagColorsForName(country);
+      final gradientColors = palette.length >= 2 ? palette : const <Color>[Colors.white, Colors.white];
+      titleWidget = Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 6,
+        runSpacing: 2,
+        children: [
+          Text('$mediaKind from', style: titleStyle),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: .06),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: Colors.white.withValues(alpha: .12)),
+            ),
+            child: Text(
+              countryFlagEmojiForName(country),
+              style: const TextStyle(fontSize: 21, height: 1.05),
+            ),
+          ),
+          ShaderMask(
+            blendMode: BlendMode.srcIn,
+            shaderCallback: (bounds) => LinearGradient(
+              colors: gradientColors,
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ).createShader(bounds),
+            child: Text(country, style: titleStyle.copyWith(color: Colors.white)),
+          ),
+        ],
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 28, 20, 13),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style:
-                  const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+          titleWidget,
           const SizedBox(height: 3),
           Text(subtitle,
               style: const TextStyle(color: Colors.white54, fontSize: 12)),
@@ -6779,6 +6999,9 @@ class _PremiumSectionHeader extends StatelessWidget {
   }
 }
 
+/// Country flag emojis carry the detailed national emblems (for example, the
+/// US stars, Mexico's coat of arms, Canada's maple leaf and the UK Union Jack).
+/// This mapping normalizes provider spellings and common aliases to ISO alpha-2.
 // ============================================================
 // ACTIVITY BUTTON
 // ============================================================
@@ -7272,6 +7495,13 @@ class _MediaCardState extends State<MediaCard> {
                   [media.displayYearLabel!, if (media.displayEditionLabel != null) media.displayEditionLabel!].join(' • '),
                   maxLines: 2, overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+                ),
+              if (media.isSeries || const <String>{'movie', 'film'}.contains(media.type.trim().toLowerCase()))
+                Text(
+                  'Origin: ${mediaCountryOriginLabel(media)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 10.5),
                 ),
             ],
           ),
@@ -8963,13 +9193,30 @@ class _MainProfileAvatar extends StatelessWidget {
 
   const _MainProfileAvatar({required this.profile, required this.size});
 
-  @override
+  Widget _fallback() {
+    final name = profile.name.trim();
+    return CircleAvatar(
+      radius: size / 2,
+      backgroundColor: Colors.white.withValues(alpha: .10),
+      child: Text(
+        name.isEmpty ? '?' : name[0].toUpperCase(),
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: size * .42,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
 
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
+  @override
   Widget build(BuildContext context) {
-    final avatar = profile.avatarUrl;
-    if (avatar != null && avatar.startsWith('avatar:')) {
-      final index = int.tryParse(avatar.substring(6)) ?? 0;
+    final avatar = profile.avatarUrl?.trim() ?? '';
+
+    // Avatar choices are saved as stable values such as `avatar:19`.
+    // Index 19 is the 007 avatar; index 18 is the G avatar.
+    if (avatar.startsWith('avatar:')) {
+      final parsedIndex = int.tryParse(avatar.substring('avatar:'.length));
       const icons = <IconData>[
         Icons.person_rounded,
         Icons.face_rounded,
@@ -8985,63 +9232,99 @@ class _MainProfileAvatar extends StatelessWidget {
         Icons.web_rounded,
         Icons.shield_rounded,
         Icons.bolt_rounded,
-        Icons.face_rounded, // Mouse Ears uses a stylized face badge.
+        Icons.face_rounded,
         Icons.flashlight_on,
         Icons.pets_rounded,
         Icons.sailing_rounded,
         Icons.smart_toy_rounded,
         Icons.verified_user_rounded,
       ];
-      final safeIndex = index.clamp(0, icons.length - 1).toInt();
-      final label = safeIndex == 18 ? 'G' : (safeIndex == 19 ? '007' : null);
-      return Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: Colors.white.withValues(alpha: .08),
+      if (parsedIndex != null && parsedIndex >= 0 && parsedIndex < icons.length) {
+        final label = parsedIndex == 18 ? 'G' : (parsedIndex == 19 ? '007' : null);
+        return Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white.withValues(alpha: .08),
+          ),
+          alignment: Alignment.center,
+          child: parsedIndex == 14
+              ? SizedBox(
+                  width: size * .58,
+                  height: size * .58,
+                  child: Stack(
+                    children: [
+                      Align(
+                        alignment: Alignment.topLeft,
+                        child: CircleAvatar(
+                          radius: size * .13,
+                          backgroundColor: Colors.white,
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.topRight,
+                        child: CircleAvatar(
+                          radius: size * .13,
+                          backgroundColor: Colors.white,
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.bottomCenter,
+                        child: CircleAvatar(
+                          radius: size * .18,
+                          backgroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : label != null
+                  ? Text(
+                      label,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: size * (label.length > 1 ? .30 : .48),
+                        fontWeight: FontWeight.w900,
+                      ),
+                    )
+                  : Icon(icons[parsedIndex], size: size * .48, color: Colors.white70),
+        );
+      }
+      return _fallback();
+    }
+
+    // Photos selected through image_picker are persisted as local paths;
+    // also accept file:// URIs and remote avatar URLs.
+    if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+      return ClipOval(
+        child: Image.network(
+          avatar,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => _fallback(),
         ),
-        alignment: Alignment.center,
-        child: safeIndex == 14
-            ? SizedBox(
-                width: size * .58,
-                height: size * .58,
-                child: Stack(
-                  children: [
-                    Align(
-                      alignment: Alignment.topLeft,
-                      child: CircleAvatar(radius: size * .13, backgroundColor: Colors.white),
-                    ),
-                    Align(
-                      alignment: Alignment.topRight,
-                      child: CircleAvatar(radius: size * .13, backgroundColor: Colors.white),
-                    ),
-                    Align(
-                      alignment: Alignment.bottomCenter,
-                      child: CircleAvatar(radius: size * .18, backgroundColor: Colors.white),
-                    ),
-                  ],
-                ),
-              )
-            : label != null
-                ? Text(label, style: TextStyle(color: Colors.white, fontSize: size * (label.length > 1 ? .30 : .48), fontWeight: FontWeight.w900))
-                : Icon(icons[safeIndex], size: size * .48, color: Colors.white70),
       );
     }
-    if (avatar != null &&
-        (avatar.startsWith('http://') || avatar.startsWith('https://'))) {
-      return CircleAvatar(
-          radius: size / 2, backgroundImage: NetworkImage(avatar));
-    }
-    if (avatar != null && avatar.isNotEmpty) {
+
+    if (avatar.isNotEmpty) {
       final uri = Uri.tryParse(avatar);
       final file = uri?.scheme == 'file' ? File.fromUri(uri!) : File(avatar);
-      return CircleAvatar(radius: size / 2, backgroundImage: FileImage(file));
+      if (file.existsSync()) {
+        return ClipOval(
+          child: Image.file(
+            file,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => _fallback(),
+          ),
+        );
+      }
     }
-    return CircleAvatar(
-        radius: size / 2,
-        child:
-            Text(profile.name.isEmpty ? '?' : profile.name[0].toUpperCase()));
+
+    return _fallback();
   }
 }
 

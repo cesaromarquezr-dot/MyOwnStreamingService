@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'app_core.dart';
 import 'artwork_selection_store.dart';
@@ -38,6 +39,29 @@ class _ArtworkGalleryScreenState extends State<ArtworkGalleryScreen>
   String? _selectedPosterPath;
   String? _selectedBackdropPath;
   bool _saving = false;
+
+  List<String> get _activePaths => _tabs.index == 1
+      ? widget.metadata.backdropPaths
+      : widget.metadata.posterPaths;
+
+  String? get _activeSelection => _tabs.index == 1
+      ? _selectedBackdropPath
+      : _selectedPosterPath;
+
+  void _stepSelection(int delta) {
+    final paths = _activePaths;
+    if (paths.isEmpty) return;
+    final current = paths.indexOf(_activeSelection ?? '');
+    final start = current < 0 ? 0 : current;
+    final next = (start + delta + paths.length) % paths.length;
+    setState(() {
+      if (_tabs.index == 1) {
+        _selectedBackdropPath = paths[next];
+      } else {
+        _selectedPosterPath = paths[next];
+      }
+    });
+  }
 
   String get _profileId => widget.profileIdOverride ??
       AppController.instance.currentProfile?.id ?? 'guest';
@@ -110,9 +134,24 @@ class _ArtworkGalleryScreenState extends State<ArtworkGalleryScreen>
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabs,
-        children: [
+      body: Focus(
+        autofocus: true,
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent) {
+            if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+              _stepSelection(-1);
+              return KeyEventResult.handled;
+            }
+            if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+              _stepSelection(1);
+              return KeyEventResult.handled;
+            }
+          }
+          return KeyEventResult.ignored;
+        },
+        child: TabBarView(
+          controller: _tabs,
+          children: [
           _galleryGrid(
             paths: posters,
             backdrop: false,
@@ -125,7 +164,8 @@ class _ArtworkGalleryScreenState extends State<ArtworkGalleryScreen>
             selectedPath: _selectedBackdropPath,
             onSelected: (path) => setState(() => _selectedBackdropPath = path),
           ),
-        ],
+          ],
+        ),
       ),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -133,25 +173,60 @@ class _ArtworkGalleryScreenState extends State<ArtworkGalleryScreen>
           animation: _tabs,
           builder: (context, _) {
             final isBackdrop = _tabs.index == 1;
-            final selected = isBackdrop
-                ? _selectedBackdropPath
-                : _selectedPosterPath;
-            return FilledButton.icon(
-              onPressed: _saving || selected == null
-                  ? null
-                  : () => _applySelection(backdrop: isBackdrop),
-              icon: _saving
-                  ? const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Icon(isBackdrop
-                      ? Icons.wallpaper_rounded
-                      : Icons.check_circle_outline_rounded),
-              label: Text(isBackdrop
-                  ? 'Set selected image as Home hero banner'
-                  : 'Set selected image for details page'),
+            final paths = isBackdrop ? backdrops : posters;
+            final selected = isBackdrop ? _selectedBackdropPath : _selectedPosterPath;
+            final selectedIndex = paths.indexOf(selected ?? '');
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    IconButton.filledTonal(
+                      tooltip: 'Previous artwork (Left Arrow)',
+                      onPressed: paths.length > 1 ? () => _stepSelection(-1) : null,
+                      icon: const Icon(Icons.chevron_left_rounded),
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          paths.isEmpty
+                              ? 'No artwork available'
+                              : '${selectedIndex < 0 ? 'Choose' : selectedIndex + 1} of ${paths.length} · Use ← / → to browse',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
+                      ),
+                    ),
+                    IconButton.filledTonal(
+                      tooltip: 'Next artwork (Right Arrow)',
+                      onPressed: paths.length > 1 ? () => _stepSelection(1) : null,
+                      icon: const Icon(Icons.chevron_right_rounded),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _saving || selected == null
+                        ? null
+                        : () => _applySelection(backdrop: isBackdrop),
+                    icon: _saving
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Icon(isBackdrop
+                            ? Icons.wallpaper_rounded
+                            : Icons.check_circle_outline_rounded),
+                    label: Text(isBackdrop
+                        ? 'Set selected image as Home hero banner'
+                        : 'Set selected image for details page'),
+                  ),
+                ),
+              ],
             );
           },
         ),

@@ -2,18 +2,23 @@
 // Purpose: Implements the series portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
 import 'release_order_grouping.dart';
 import 'details.dart';
+import 'player.dart';
 import 'localization.dart';
 import 'widgets/like_toggle_button.dart';
 import 'page_customization_button.dart';
-import 'international_catalog_shelf.dart';
 import 'media_metadata_catalog_screen.dart';
 import 'catalog_poster_image.dart';
 import 'library_view_modes.dart';
+import 'page_hero_banner.dart';
+import 'country_origin_style.dart';
+import 'home_streaming_discovery.dart' show HomeHeroCarousel;
 
 class SeriesScreen extends StatefulWidget {
   const SeriesScreen({super.key});
@@ -32,6 +37,7 @@ class _SeriesScreenState extends State<SeriesScreen>
     'shows',
     fallback: LibraryViewMode.grid,
   );
+  PageHeroSettings _heroSettings = const PageHeroSettings();
 
   @override
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
@@ -40,18 +46,28 @@ class _SeriesScreenState extends State<SeriesScreen>
 
     // Seed browseable catalog examples when Movies/TV is opened directly.
     AppController.instance.ensureDemoPreviewMedia(notify: false);
+    PageHeroSettingsStore.revision.addListener(_onHeroSettingsRevision);
+    unawaited(_reloadHeroSettings());
 
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 180),
     );
 
     _animationController.forward();
   }
 
+  Future<void> _reloadHeroSettings() async {
+    final settings = await PageHeroSettingsStore.load('series');
+    if (mounted) setState(() => _heroSettings = settings);
+  }
+
+  void _onHeroSettingsRevision() => unawaited(_reloadHeroSettings());
+
   @override
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
+    PageHeroSettingsStore.revision.removeListener(_onHeroSettingsRevision);
     _animationController.dispose();
     super.dispose();
   }
@@ -273,6 +289,15 @@ class _SeriesScreenState extends State<SeriesScreen>
     ).whenComplete(controller.dispose);
   }
 
+  void _playHeroMedia(MediaItem media) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: '/app/player'),
+        builder: (_) => PlayerScreen(media: media),
+      ),
+    );
+  }
+
   /// Performs `_openShow` for this feature. Update this documentation when its contract changes.
   void _openShow(MediaItem show) {
     Navigator.of(context).push(
@@ -318,12 +343,10 @@ class _SeriesScreenState extends State<SeriesScreen>
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final shows = _getShows();
-    final internationalShows = shows
-        .where((show) => show.tags.contains('international-catalog'))
-        .toList(growable: false);
 
     final useFeaturedGrid = _viewMode == LibraryViewMode.grid &&
-        _searchQuery.trim().isEmpty;
+        _searchQuery.trim().isEmpty &&
+        _heroSettings.enabled;
     final featuredShow = useFeaturedGrid && shows.isNotEmpty ? shows.first : null;
     final remainingShows = useFeaturedGrid && shows.length > 1
         ? shows.sublist(1)
@@ -334,8 +357,16 @@ class _SeriesScreenState extends State<SeriesScreen>
         if (show.seriesStartYear != null || show.releaseYear != null)
           (show.seriesStartYear ?? show.releaseYear).toString(),
         if (show.genres.isNotEmpty) show.genres.take(2).join(' · '),
+        mediaCountryOriginLabel(show),
         show.type,
       ].where((part) => part.trim().isNotEmpty).join(' · '),
+      subtitleBuilder: (context) => Wrap(
+        spacing: 5, runSpacing: 2, crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          if (show.seriesStartYear != null || show.releaseYear != null) Text((show.seriesStartYear ?? show.releaseYear).toString(), style: const TextStyle(color: Colors.white60, fontSize: 11)),
+          CountryOriginInline(media: show, fontSize: 10.5),
+        ],
+      ),
       year: show.seriesStartYear ?? show.releaseYear,
       artworkBuilder: (context, fit) => CatalogPosterImage(media: show, fit: fit),
       fallbackIcon: Icons.live_tv_outlined,
@@ -394,25 +425,15 @@ class _SeriesScreenState extends State<SeriesScreen>
                 : CustomScrollView(
                     physics: const BouncingScrollPhysics(),
                     slivers: [
-                      if (_searchQuery.trim().isEmpty && _viewMode == LibraryViewMode.grid && internationalShows.isNotEmpty)
-                        SliverToBoxAdapter(
-                          child: InternationalCatalogShelf(
-                            title: 'International Shows',
-                            items: internationalShows,
-                          ),
-                        ),
-                      if (featuredShow != null)
+                      if (featuredShow != null && _heroSettings.enabled)
                         SliverToBoxAdapter(
                           child: Padding(
-                            padding: const EdgeInsets.fromLTRB(
-                              18,
-                              18,
-                              18,
-                              28,
-                            ),
-                            child: _FeaturedShow(
-                              show: featuredShow,
-                              onTap: () => _openShow(featuredShow),
+                            padding: const EdgeInsets.only(top: 10),
+                            child: HomeHeroCarousel(
+                              items: shows,
+                              settingsKey: 'series',
+                              onOpen: _openShow,
+                              onPlay: _playHeroMedia,
                             ),
                           ),
                         ),
@@ -629,12 +650,14 @@ class _TvIntrosSection extends StatelessWidget {
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          if (show.imageUrl != null && show.imageUrl!.isNotEmpty)
-                            Image.network(
-                              show.imageUrl!,
+                          Positioned.fill(
+                            child: CatalogPosterImage(
+                              media: show,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                              placeholder: const SizedBox.shrink(),
+                              errorPlaceholder: const SizedBox.shrink(),
                             ),
+                          ),
                           DecoratedBox(
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
@@ -1148,17 +1171,19 @@ class _ShowCardState extends State<_ShowCard> {
                             letterSpacing: -0.25,
                           ),
                         ),
-                        if (show.releaseYear != null) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            show.releaseYear.toString(),
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.65),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '${show.seriesStartYear ?? show.releaseYear ?? ''}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.65),
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
                           ),
-                        ],
+                        ),
+                        const SizedBox(height: 2),
+                        CountryOriginInline(media: show, fontSize: 10.5),
                       ],
                     ),
                   ),

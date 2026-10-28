@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -170,6 +171,43 @@ class _ChannelEntry {
       : '${track!.artist} · ${track!.album}';
 }
 
+/// One program occupying a real wall-clock interval in a My TV channel.
+class _ScheduledProgram {
+  final _ChannelEntry entry;
+  final DateTime start;
+  final DateTime end;
+
+  const _ScheduledProgram({
+    required this.entry,
+    required this.start,
+    required this.end,
+  });
+
+  Duration get duration => end.difference(start);
+
+  bool isOnAirAt(DateTime time) =>
+      !time.isBefore(start) && time.isBefore(end);
+
+  double progressAt(DateTime time) {
+    final total = duration.inMilliseconds;
+    if (total <= 0) return 0;
+    return (time.difference(start).inMilliseconds / total)
+        .clamp(0.0, 0.999)
+        .toDouble();
+  }
+
+  int elapsedSecondsAt(DateTime time) => time
+      .difference(start)
+      .inSeconds
+      .clamp(0, duration.inSeconds > 0 ? duration.inSeconds - 1 : 0)
+      .toInt();
+
+  Duration remainingAt(DateTime time) {
+    final remaining = end.difference(time);
+    return remaining.isNegative ? Duration.zero : remaining;
+  }
+}
+
 /// Personal, ad-free channel generated only from media accessible to the
 /// selected profile. Schedules are local programming plans, not broadcasts.
 class MyTvScreen extends StatefulWidget {
@@ -190,6 +228,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
   String? _error;
   _TvMusicBreakSettings _musicBreaks = const _TvMusicBreakSettings();
   Map<String, dynamic> _musicBreakSettingsByProfile = <String, dynamic>{};
+  Timer? _clockTimer;
 
   String get _profileId =>
       AppController.instance.currentProfile?.id ?? 'default';
@@ -200,6 +239,10 @@ class _MyTvScreenState extends State<MyTvScreen> {
   void initState() {
     super.initState();
     _load();
+    // Keep the ON AIR progress bar, countdown, and red EPG marker in sync.
+    _clockTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted) setState(() {});
+    });
   }
 
   Future<void> _load() async {
@@ -359,6 +402,135 @@ class _MyTvScreenState extends State<MyTvScreen> {
       if (channel.id == _selectedChannelId) return channel;
     }
     return _channels.isEmpty ? null : _channels.first;
+  }
+
+  @override
+  void dispose() {
+    _clockTimer?.cancel();
+    super.dispose();
+  }
+
+  DateTime _channelDayStart(_MyTvChannel channel, DateTime now) => DateTime(
+        now.year,
+        now.month,
+        now.day,
+        channel.startTimeMinutes ~/ 60,
+        channel.startTimeMinutes % 60,
+      );
+
+  /// Builds the channel's rolling EPG from its daily start time. Programs keep
+  /// their actual scheduled positions; when the viewer tunes in late, the
+  /// current program is found by wall-clock time instead of list index.
+  List<_ScheduledProgram> _scheduledTimeline(
+    _MyTvChannel channel,
+    List<_ChannelEntry> entries,
+    DateTime now, {
+    int futureHours = 8,
+  }) {
+    if (entries.isEmpty) return const <_ScheduledProgram>[];
+    final todayStart = _channelDayStart(channel, now);
+    final anchor = now.isBefore(todayStart)
+        ? todayStart.subtract(const Duration(days: 1))
+        : todayStart;
+    final durations = entries
+        .map((entry) => Duration(minutes: _durationMinutes(entry) > 0 ? _durationMinutes(entry) : 1))
+        .toList(growable: false);
+    final cycleSeconds = durations.fold<int>(
+        0, (total, duration) => total + duration.inSeconds);
+    if (cycleSeconds <= 0) return const <_ScheduledProgram>[];
+
+    // Resolve the exact slot containing the wall-clock time without iterating
+    // through every program since the channel opened. The cycle restarts at
+    // the channel's configured daily start time.
+    var offset = now.difference(anchor).inSeconds % cycleSeconds;
+    var currentIndex = 0;
+    while (currentIndex < durations.length - 1 &&
+        offset >= durations[currentIndex].inSeconds) {
+      offset -= durations[currentIndex].inSeconds;
+      currentIndex++;
+    }
+    final currentStart = now.subtract(Duration(seconds: offset));
+    final horizon = now.add(Duration(hours: futureHours));
+    final result = <_ScheduledProgram>[];
+
+    // Keep enough preceding slots to show what was already in progress when
+    // the guide's left edge begins 30 minutes before the current time.
+    var pastCursor = currentStart;
+    var pastIndex = (currentIndex - 1 + entries.length) % entries.length;
+    final historyStart = now.subtract(const Duration(minutes: 120));
+    var pastGuard = 0;
+    while (pastCursor.isAfter(historyStart) && pastGuard < 200) {
+      final previousStart = pastCursor.subtract(durations[pastIndex]);
+      result.insert(0, _ScheduledProgram(
+        entry: entries[pastIndex],
+        start: previousStart,
+        end: pastCursor,
+      ));
+      pastCursor = previousStart;
+      pastIndex = (pastIndex - 1 + entries.length) % entries.length;
+      pastGuard++;
+    }
+
+    var cursor = currentStart;
+    var index = currentIndex;
+    var futureGuard = 0;
+    while (cursor.isBefore(horizon) && futureGuard < 1000) {
+      final end = cursor.add(durations[index]);
+      result.add(_ScheduledProgram(entry: entries[index], start: cursor, end: end));
+      cursor = end;
+      index = (index + 1) % entries.length;
+      futureGuard++;
+    }
+    return result;
+  }
+
+  String _clockTime(BuildContext context, DateTime value) =>
+      TimeOfDay.fromDateTime(value).format(context);
+
+  String _remainingText(Duration duration) {
+    if (duration.inSeconds > 0 && duration.inSeconds < 60) {
+      return 'Under 1 min left';
+    }
+    final minutes = duration.inMinutes < 0 ? 0 : duration.inMinutes;
+    final hours = minutes ~/ 60;
+    final remainingMinutes = minutes % 60;
+    if (hours == 0) return '$remainingMinutes min left';
+    if (remainingMinutes == 0) return '$hours h left';
+    return '$hours h $remainingMinutes min left';
+  }
+
+  int? _durationFromMetadata(dynamic node) {
+    if (node is Map) {
+      for (final entry in node.entries) {
+        final key = entry.key.toString().toLowerCase().replaceAll('_', '');
+        if (key.contains('runtime') || key.contains('duration')) {
+          final raw = entry.value;
+          final value = raw is num ? raw.toDouble() : double.tryParse(raw?.toString() ?? '');
+          if (value != null && value > 0) {
+            // Catalog episode durations are usually minutes; large values for
+            // duration fields are interpreted as seconds.
+            final minutes = key.contains('millis') || key.endsWith('ms')
+                ? (value / 60000).ceil()
+                : (key.contains('seconds') ||
+                        key.contains('secs') ||
+                        (key.contains('duration') && value > 300))
+                    ? (value / 60).ceil()
+                    : value.ceil();
+            if (minutes > 0 && minutes <= 600) return minutes;
+          }
+        }
+      }
+      for (final value in node.values) {
+        final found = _durationFromMetadata(value);
+        if (found != null) return found;
+      }
+    } else if (node is Iterable) {
+      for (final value in node) {
+        final found = _durationFromMetadata(value);
+        if (found != null) return found;
+      }
+    }
+    return null;
   }
 
   List<_ChannelEntry> _schedule(_MyTvChannel channel) {
@@ -614,25 +786,18 @@ class _MyTvScreenState extends State<MyTvScreen> {
       final durationSeconds = entry.track!.duration.inSeconds;
       return durationSeconds > 0 ? (durationSeconds + 59) ~/ 60 : 4;
     }
+    final media = entry.media;
+    if (media != null) {
+      final metadataDuration = _durationFromMetadata(media.seasons);
+      if (metadataDuration != null) return metadataDuration;
+    }
     final type = entry.media?.type.toLowerCase() ?? '';
     final isEpisode = type.contains('tv') ||
         type.contains('show') ||
         type.contains('series') ||
         type.contains('episode');
+    // Used only when the catalog has no runtime metadata.
     return isEpisode ? 30 : 120;
-  }
-
-  String _scheduleTime(
-    BuildContext context,
-    _MyTvChannel channel,
-    List<_ChannelEntry> entries,
-    int index,
-  ) {
-    final elapsed = entries
-        .take(index)
-        .fold<int>(0, (total, entry) => total + _durationMinutes(entry));
-    final minutes = (channel.startTimeMinutes + elapsed) % (24 * 60);
-    return TimeOfDay(hour: minutes ~/ 60, minute: minutes % 60).format(context);
   }
 
   Map<String, List<String>> _availableMetadataChoices() {
@@ -1234,7 +1399,11 @@ class _MyTvScreenState extends State<MyTvScreen> {
     await _save();
   }
 
-  Future<void> _play(_ChannelEntry entry, {String? channelId}) async {
+  Future<void> _play(
+    _ChannelEntry entry, {
+    String? channelId,
+    int? initialPositionSeconds,
+  }) async {
     final targetChannelId = channelId ?? _selected?.id;
     if (targetChannelId != null) {
       final recent =
@@ -1248,25 +1417,92 @@ class _MyTvScreenState extends State<MyTvScreen> {
     if (entry.track != null) {
       await MusicPlaybackController.instance.play(entry.track!);
     } else {
+      final matchedChannels = _channels.where((item) => item.id == targetChannelId);
+      final selectedChannelName = matchedChannels.isEmpty ? 'TV' : matchedChannels.first.name;
       Navigator.push(
         context,
         MaterialPageRoute(
           settings: const RouteSettings(name: '/app/player'),
           builder: (_) => PlayerScreen(
             media: entry.media!,
+            initialPositionSeconds: initialPositionSeconds,
             activityLabel:
-                "Watching TV channel ${_selected?.name ?? 'TV'}: ${entry.media!.title}",
+                "Watching TV channel $selectedChannelName: ${entry.media!.title}",
           ),
         ),
       );
     }
   }
 
+  Future<void> _tuneChannel(_MyTvChannel channel) async {
+    setState(() => _selectedChannelId = channel.id);
+    final now = DateTime.now();
+    final entries = _schedule(channel);
+    final timeline = _scheduledTimeline(channel, entries, now, futureHours: 8);
+    for (final program in timeline) {
+      if (program.isOnAirAt(now)) {
+        await _playScheduledProgram(program, channel, now);
+        return;
+      }
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No current program is available on ${channel.name}.')),
+      );
+    }
+  }
+
+  Future<void> _playScheduledProgram(
+    _ScheduledProgram program,
+    _MyTvChannel channel,
+    DateTime now,
+  ) async {
+    if (now.isBefore(program.start)) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+          '${program.entry.title} is scheduled for ${_clockTime(context, program.start)}. Tune in when it starts.',
+        ),
+      ));
+      return;
+    }
+    if (!program.isOnAirAt(now)) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+          '${program.entry.title} finished at ${_clockTime(context, program.end)}. It is not being recorded by this channel.',
+        ),
+      ));
+      return;
+    }
+    if (_selectedChannelId != channel.id) {
+      setState(() => _selectedChannelId = channel.id);
+    }
+    await _play(
+      program.entry,
+      channelId: channel.id,
+      initialPositionSeconds: program.elapsedSecondsAt(now),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
     final channel = _selected;
     final schedule =
         channel == null ? const <_ChannelEntry>[] : _schedule(channel);
+    final timeline = channel == null
+        ? const <_ScheduledProgram>[]
+        : _scheduledTimeline(channel, schedule, now, futureHours: 12);
+    var liveIndex = -1;
+    for (var i = 0; i < timeline.length; i++) {
+      if (timeline[i].isOnAirAt(now)) {
+        liveIndex = i;
+        break;
+      }
+    }
+    final liveProgram = liveIndex >= 0 ? timeline[liveIndex] : null;
+    final upcoming = liveIndex >= 0
+        ? timeline.skip(liveIndex + 1).toList()
+        : timeline.where((item) => !item.start.isBefore(now)).toList();
 
     return Scaffold(
       appBar: widget.showAppBar
@@ -1488,6 +1724,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
                     children: [
                       Expanded(
                         child: DropdownButtonFormField<String>(
+                          key: ValueKey<String?>(_selectedChannelId),
                           initialValue: _selectedChannelId,
                           items: _channels
                               .map(
@@ -1497,8 +1734,11 @@ class _MyTvScreenState extends State<MyTvScreen> {
                                 ),
                               )
                               .toList(),
-                          onChanged: (value) =>
-                              setState(() => _selectedChannelId = value),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            final matches = _channels.where((item) => item.id == value);
+                            if (matches.isNotEmpty) unawaited(_tuneChannel(matches.first));
+                          },
                           decoration:
                               const InputDecoration(labelText: 'Channel'),
                         ),
@@ -1584,29 +1824,27 @@ class _MyTvScreenState extends State<MyTvScreen> {
                         leading: Icon(Icons.tv_off_outlined),
                         title: UniversalText('No programs in this channel yet'),
                         subtitle: UniversalText(
-                          'Add content to this channel, or create another channel. The TV Guide is generated from this channel’s contents.',
+                          'Add playable movies, episodes, or music to this channel to build its daily lineup.',
                         ),
                       ),
                     )
-                  else ...[
-                    _scheduleCard(
-                      context,
-                      '${_scheduleTime(context, channel, schedule, 0)} · Now',
-                      schedule.first,
-                      'Play now',
-                      channelId: channel.id,
+                  else if (liveProgram != null) ...[
+                    _onAirCard(context, channel, liveProgram, upcoming, now),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'COMING UP',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.2,
+                          color: Colors.white60),
                     ),
-                    for (var i = 1; i < schedule.length; i++)
-                      _scheduleCard(
-                        context,
-                        _scheduleTime(context, channel, schedule, i),
-                        schedule[i],
-                        null,
-                        channelId: channel.id,
-                      ),
+                    const SizedBox(height: 6),
+                    for (final program in upcoming.take(6))
+                      _upcomingProgramCard(context, channel, program, now),
                     const SizedBox(height: 12),
                     Text(
-                      '${channel.name} · ${schedule.length} items queued',
+                      '${channel.name} · ${schedule.length} items in rotation · daily start ${TimeOfDay(hour: channel.startTimeMinutes ~/ 60, minute: channel.startTimeMinutes % 60).format(context)}',
                       style: const TextStyle(color: Colors.white54),
                     ),
                   ],
@@ -1641,12 +1879,121 @@ class _MyTvScreenState extends State<MyTvScreen> {
     return 'Music breaks are off · no commercials.';
   }
 
+  Widget _onAirCard(
+    BuildContext context,
+    _MyTvChannel channel,
+    _ScheduledProgram program,
+    List<_ScheduledProgram> upcoming,
+    DateTime now,
+  ) {
+    final progress = program.progressAt(now);
+    final remaining = program.remainingAt(now);
+    final endTime = _clockTime(context, program.end);
+    final next = upcoming.isEmpty ? null : upcoming.first;
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text('ON AIR', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
+              ),
+              const SizedBox(width: 9),
+              Text('Started ${_clockTime(context, program.start)}', style: const TextStyle(color: Colors.white60, fontSize: 12)),
+              const Spacer(),
+              Text('${(progress * 100).round()}%', style: const TextStyle(fontWeight: FontWeight.w800)),
+            ]),
+            const SizedBox(height: 10),
+            Text(program.entry.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 3),
+            Text(program.entry.subtitle, style: const TextStyle(color: Colors.white60)),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 8,
+                backgroundColor: Colors.white12,
+                color: Colors.redAccent,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(children: [
+              const Icon(Icons.schedule_rounded, size: 17, color: Colors.white60),
+              const SizedBox(width: 6),
+              Text('Ends $endTime · ${_remainingText(remaining)}', style: const TextStyle(color: Colors.white70)),
+            ]),
+            if (next != null) ...[
+              const SizedBox(height: 8),
+              Text('UP NEXT · ${_clockTime(context, next.start)} · ${next.entry.title}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
+            ],
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.icon(
+                onPressed: () => _playScheduledProgram(program, channel, DateTime.now()),
+                icon: const Icon(Icons.live_tv_rounded),
+                label: const Text('Watch live'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _upcomingProgramCard(
+    BuildContext context,
+    _MyTvChannel channel,
+    _ScheduledProgram program,
+    DateTime now,
+  ) {
+    final untilStart = program.start.difference(now);
+    final startsIn = untilStart.inMinutes <= 0
+        ? 'Starting now'
+        : untilStart.inMinutes < 60
+            ? 'Starts in ${untilStart.inMinutes} min'
+            : 'Starts in ${untilStart.inHours} h ${untilStart.inMinutes.remainder(60)} min';
+    return Card(
+      child: ListTile(
+        leading: const CircleAvatar(child: Icon(Icons.queue_play_next_rounded)),
+        title: Text(program.entry.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: Text('${_clockTime(context, program.start)}–${_clockTime(context, program.end)} · $startsIn · ${program.entry.subtitle}', maxLines: 2, overflow: TextOverflow.ellipsis),
+        trailing: const Icon(Icons.schedule_rounded),
+        onTap: () => _playScheduledProgram(program, channel, DateTime.now()),
+      ),
+    );
+  }
+
   List<Widget> _guideCards(BuildContext context) {
     final channels = _channels.toList()
       ..sort((a, b) => (b.isFavorite ? 1 : 0).compareTo(a.isFavorite ? 1 : 0));
-    const slotWidth = 170.0;
-    const channelWidth = 150.0;
+    const slotWidth = 170.0; // width of a 30-minute EPG slot
+    const channelWidth = 155.0;
     const headerHeight = 48.0;
+    const halfHourMinutes = 30;
+    const visibleHours = 4;
+    final now = DateTime.now();
+    final gridStart = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      now.hour,
+      (now.minute ~/ halfHourMinutes) * halfHourMinutes,
+    );
+    final gridEnd = gridStart.add(const Duration(hours: visibleHours));
+    final nowX = channelWidth +
+        (now.difference(gridStart).inSeconds / (halfHourMinutes * 60)) * slotWidth;
+    final timelineWidth = channelWidth + slotWidth * visibleHours * 2;
+
     return [
       Card(
         clipBehavior: Clip.antiAlias,
@@ -1654,158 +2001,146 @@ class _MyTvScreenState extends State<MyTvScreen> {
           builder: (context, constraints) {
             final rows = <Widget>[];
             for (final channel in channels) {
-              final entries = _schedule(channel).take(12).toList();
-              rows.add(SizedBox(
-                height: 94,
-                child: Row(
-                  children: [
-                    Container(
-                      width: channelWidth,
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHighest),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Row(children: [
-                            Expanded(
-                                child: Text(channel.name,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w900))),
-                            IconButton(
-                                visualDensity: VisualDensity.compact,
-                                tooltip: channel.isFavorite
-                                    ? 'Remove favorite channel'
-                                    : 'Favorite channel',
-                                onPressed: () => _toggleFavorite(channel),
-                                icon: Icon(channel.isFavorite
-                                    ? Icons.star_rounded
-                                    : Icons.star_outline_rounded),
-                                color: channel.isFavorite ? Colors.amber : null)
-                          ]),
-                          Text(channel.contentTypes.join(' · '),
+              final entries = _schedule(channel);
+              final timeline = _scheduledTimeline(
+                channel,
+                entries,
+                now,
+                futureHours: visibleHours + 2,
+              ).where((program) =>
+                  program.end.isAfter(gridStart) && program.start.isBefore(gridEnd)).toList();
+              final rowChildren = <Widget>[];
+              if (timeline.isEmpty) {
+                rowChildren.add(const Expanded(child: Center(child: UniversalText('No scheduled programs', style: TextStyle(color: Colors.white54)))));
+              } else {
+                for (final program in timeline) {
+                  final visibleStart = program.start.isBefore(gridStart) ? gridStart : program.start;
+                  final visibleEnd = program.end.isAfter(gridEnd) ? gridEnd : program.end;
+                  final visibleMinutes = visibleEnd.difference(visibleStart).inSeconds / 60;
+                  if (visibleMinutes <= 0) continue;
+                  final width = max(24.0, slotWidth * visibleMinutes / halfHourMinutes).toDouble();
+                  final isCurrent = program.isOnAirAt(now);
+                  rowChildren.add(SizedBox(
+                    width: width,
+                    child: InkWell(
+                      onTap: () => _playScheduledProgram(program, channel, DateTime.now()),
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 7, horizontal: 2),
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(9),
+                          color: isCurrent
+                              ? Theme.of(context).colorScheme.primaryContainer
+                              : Colors.white.withValues(alpha: .055),
+                          border: Border.all(color: isCurrent ? Colors.redAccent : Colors.white12, width: isCurrent ? 1.5 : 1),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${isCurrent ? '● NOW · ' : ''}${_clockTime(context, program.start)}',
                               maxLines: 1,
+                              overflow: TextOverflow.clip,
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: isCurrent ? Colors.redAccent : Colors.white60),
+                            ),
+                            const SizedBox(height: 5),
+                            Text(program.entry.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+                            const SizedBox(height: 4),
+                            Text(
+                              isCurrent
+                                  ? '${_remainingText(program.remainingAt(now))} · ends ${_clockTime(context, program.end)}'
+                                  : 'Ends ${_clockTime(context, program.end)}',
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontSize: 10, color: Colors.white54)),
-                        ],
+                              style: const TextStyle(fontSize: 10, color: Colors.white60),
+                            ),
+                            if (isCurrent) ...[
+                              const SizedBox(height: 5),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: LinearProgressIndicator(value: program.progressAt(now), minHeight: 4, backgroundColor: Colors.white12, color: Colors.redAccent),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
                     ),
-                    Expanded(
-                      child: entries.isEmpty
-                          ? const Center(
-                              child: UniversalText('No matching programs',
-                                  style: TextStyle(color: Colors.white54)))
-                          : ListView.builder(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: entries.length,
-                              itemBuilder: (context, index) {
-                                final entry = entries[index];
-                                final minutes = _durationMinutes(entry);
-                                final width = (slotWidth * (minutes / 30))
-                                    .clamp(slotWidth, slotWidth * 4);
-                                final start = _scheduleTime(
-                                    context, channel, entries, index);
-                                return SizedBox(
-                                  width: width,
-                                  child: InkWell(
-                                    onTap: () => _play(entry),
-                                    child: Container(
-                                      margin: const EdgeInsets.symmetric(
-                                          vertical: 7, horizontal: 3),
-                                      padding: const EdgeInsets.all(10),
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(12),
-                                        color: index == 0
-                                            ? Theme.of(context)
-                                                .colorScheme
-                                                .primaryContainer
-                                            : Colors.white
-                                                .withValues(alpha: .055),
-                                        border:
-                                            Border.all(color: Colors.white10),
-                                      ),
-                                      child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(start,
-                                                style: const TextStyle(
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.w800,
-                                                    color: Colors.white60)),
-                                            const SizedBox(height: 5),
-                                            Text(entry.title,
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(
-                                                    fontWeight:
-                                                        FontWeight.w900)),
-                                            const SizedBox(height: 3),
-                                            Text(entry.subtitle,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(
-                                                    fontSize: 10,
-                                                    color: Colors.white54)),
-                                          ]),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
+                  ));
+                }
+              }
+              rows.add(SizedBox(
+                height: 104,
+                child: Row(children: [
+                  Container(
+                    width: channelWidth,
+                    padding: const EdgeInsets.all(9),
+                    decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Row(children: [
+                          Expanded(child: Text(channel.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900))),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            tooltip: channel.isFavorite ? 'Remove favorite channel' : 'Favorite channel',
+                            onPressed: () => _toggleFavorite(channel),
+                            icon: Icon(channel.isFavorite ? Icons.star_rounded : Icons.star_outline_rounded),
+                            color: channel.isFavorite ? Colors.amber : null,
+                          ),
+                        ]),
+                        Text(channel.contentTypes.join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: Colors.white54)),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  SizedBox(width: slotWidth * visibleHours * 2, child: Row(children: rowChildren)),
+                ]),
               ));
             }
-            final timelineWidth =
-                max(constraints.maxWidth, channelWidth + slotWidth * 12);
+            final availableTimelineWidth = max(timelineWidth, constraints.maxWidth).toDouble();
             return SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: SizedBox(
-                width: timelineWidth,
-                child: Column(children: [
-                  SizedBox(
-                    height: headerHeight,
-                    child: Row(children: [
-                      Container(
-                          width: channelWidth,
-                          padding: const EdgeInsets.all(12),
-                          alignment: Alignment.centerLeft,
-                          child: const UniversalText('CHANNELS',
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.2))),
-                      for (var i = 0; i < 12; i++)
-                        SizedBox(
-                            width: slotWidth,
-                            child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 15),
-                                child: Text(
-                                    TimeOfDay(
-                                            hour: ((DateTime.now().hour * 60 +
-                                                        DateTime.now().minute +
-                                                        i * 30) ~/
-                                                    60) %
-                                                24,
-                                            minute: (DateTime.now().minute +
-                                                    i * 30) %
-                                                60)
-                                        .format(context),
-                                    style: const TextStyle(
-                                        fontSize: 11, color: Colors.white54)))),
+                width: availableTimelineWidth,
+                child: Stack(
+                  children: [
+                    Column(children: [
+                      SizedBox(
+                        height: headerHeight,
+                        child: Row(children: [
+                          Container(width: channelWidth, padding: const EdgeInsets.all(12), alignment: Alignment.centerLeft, child: const UniversalText('CHANNELS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.2))),
+                          for (var i = 0; i < visibleHours * 2; i++)
+                            SizedBox(
+                              width: slotWidth,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 15),
+                                child: Text(_clockTime(context, gridStart.add(Duration(minutes: i * halfHourMinutes))), style: const TextStyle(fontSize: 11, color: Colors.white54)),
+                              ),
+                            ),
+                        ]),
+                      ),
+                      ...rows,
                     ]),
-                  ),
-                  ...rows,
-                ]),
+                    if (channels.isNotEmpty && !now.isBefore(gridStart) && now.isBefore(gridEnd))
+                      Positioned(
+                        left: nowX,
+                        top: headerHeight,
+                        bottom: 0,
+                        child: IgnorePointer(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(4)),
+                              child: const Text('NOW', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.white)),
+                            ),
+                            Expanded(child: Container(width: 2, color: Colors.redAccent)),
+                          ]),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             );
           },
@@ -1814,27 +2149,4 @@ class _MyTvScreenState extends State<MyTvScreen> {
     ];
   }
 
-  Widget _scheduleCard(BuildContext context, String slot, _ChannelEntry entry,
-          String? action,
-          {String? channelId}) =>
-      Card(
-        child: ListTile(
-          leading: CircleAvatar(
-              child: Icon(entry.track == null
-                  ? Icons.movie_outlined
-                  : Icons.music_note_rounded)),
-          title: Text('$slot · ${entry.title}',
-              maxLines: 1, overflow: TextOverflow.ellipsis),
-          subtitle: Text(entry.subtitle),
-          trailing: action == null
-              ? IconButton(
-                  tooltip: 'Play now',
-                  onPressed: () => _play(entry, channelId: channelId),
-                  icon: const Icon(Icons.play_arrow_rounded))
-              : FilledButton(
-                  onPressed: () => _play(entry, channelId: channelId),
-                  child: Text(action)),
-          onTap: () => _play(entry, channelId: channelId),
-        ),
-      );
 }

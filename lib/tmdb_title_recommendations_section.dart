@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'core/services/cinematic_title_metadata_service.dart';
+import 'home_arrow_rail.dart';
 
 /// TMDB-backed title recommendations and mood-based discovery choices.
 class TMDBTitleRecommendationsSection extends StatelessWidget {
@@ -194,15 +195,14 @@ class _RecommendationCarousel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    return HomeArrowRail(
       height: 294,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: recommendations.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
-        itemBuilder: (context, index) {
-          final item = recommendations[index];
-          final poster = item.posterUrl;
+      itemCount: recommendations.length,
+      separatorExtent: 12,
+      padding: const EdgeInsets.symmetric(horizontal: 48),
+      itemBuilder: (context, index) {
+        final item = recommendations[index];
+        final poster = item.posterUrl;
           return SizedBox(
             width: 142,
             child: Material(
@@ -278,9 +278,8 @@ class _RecommendationCarousel extends StatelessWidget {
                 ),
               ),
             ),
-          );
-        },
-      ),
+        );
+      },
     );
   }
 }
