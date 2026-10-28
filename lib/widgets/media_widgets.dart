@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_core.dart';
+import '../catalog_poster_image.dart';
 import '../cinematic_title_fonts.dart';
 import '../details.dart';
 
@@ -53,21 +54,20 @@ class MediaCard extends StatelessWidget {
             Expanded(
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-                child: media.imageUrl == null
-                    ? Container(
-                        width: double.infinity,
-                        color: Colors.grey.shade900,
-                        child: const Icon(Icons.movie, size: 45),
-                      )
-                    : Image.network(
-                        media.imageUrl!,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          color: Colors.grey.shade900,
-                          child: const Icon(Icons.broken_image),
-                        ),
-                      ),
+                child: CatalogPosterImage(
+                  media: media,
+                  width: double.infinity,
+                  height: double.infinity,
+                  placeholder: Container(
+                    width: double.infinity,
+                    color: Colors.grey.shade900,
+                    child: const Icon(Icons.movie, size: 45),
+                  ),
+                  errorPlaceholder: Container(
+                    color: Colors.grey.shade900,
+                    child: const Icon(Icons.broken_image),
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 7),

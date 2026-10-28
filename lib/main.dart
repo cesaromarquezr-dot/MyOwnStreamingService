@@ -796,7 +796,7 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
     sectionDraft = AppSectionCustomizationStore.settingsFor(
         AppController.instance.currentProfile);
     StoryPlacementStore.load(AppController.instance.currentProfile);
-    if (widget.pageId == 'movies' || widget.pageId == 'series') {
+    if (widget.pageId == 'home' || widget.pageId == 'movies' || widget.pageId == 'series') {
       unawaited(PageHeroSettingsStore.load(widget.pageId).then((value) {
         if (mounted) setState(() => _heroSettings = value);
       }));
@@ -831,13 +831,24 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
         padding: const EdgeInsets.all(20),
         children: [
           const UniversalText(
-            'These settings apply only to this page.',
+            'Page colors, layout, and section visibility are saved for this page.',
             style: TextStyle(color: Colors.white70),
+          ),
+          const SizedBox(height: 12),
+          ArtworkDisplayModePicker(
+            value: sectionDraft.artworkDisplayMode,
+            onChanged: (value) => setState(() {
+              sectionDraft.artworkDisplayMode = value;
+            }),
           ),
           if (_heroSettings != null) ...[
             const SizedBox(height: 16),
             PageHeroSettingsPanel(
-              pageTitle: widget.pageId == 'series' ? 'TV Shows' : 'Movies',
+              pageTitle: widget.pageId == 'home'
+                  ? 'Home'
+                  : widget.pageId == 'series'
+                      ? 'TV Shows'
+                      : 'Movies',
               settings: _heroSettings!,
               onChanged: (value) => setState(() => _heroSettings = value),
             ),
@@ -2637,6 +2648,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   late HomeCustomization draft;
   late DetailsCustomization detailsDraft;
   late MusicPageCustomization musicDraft;
+  late AppSectionCustomization _artworkSectionDraft;
   PageHeroSettings _homeHeroSettings = const PageHeroSettings();
   late CustomizationPage selectedPage;
   bool detailsPreviewTvShow = true;
@@ -2664,6 +2676,9 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       AppController.instance.currentProfile,
     );
     musicDraft = MusicPageCustomizationStore.settingsFor(
+      AppController.instance.currentProfile,
+    );
+    _artworkSectionDraft = AppSectionCustomizationStore.settingsFor(
       AppController.instance.currentProfile,
     );
     unawaited(_loadHomeHeroSettings());
@@ -2716,6 +2731,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     });
 
     final profile = AppController.instance.currentProfile;
+    await AppSectionCustomizationStore.save(profile, _artworkSectionDraft);
     await StoryPlacementStore.setForProfile(profile, storyPlacement);
     if (selectedPage == CustomizationPage.home) {
       draft.heroItemCount = _homeHeroSettings.itemCount;
@@ -4989,7 +5005,14 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             if (widget.lockedPage == null || widget.firstSetup) _pageSelector(),
             const SizedBox(height: 18),
             _headerCard(),
-            const SizedBox(height: 18),
+            const SizedBox(height: 12),
+            ArtworkDisplayModePicker(
+              value: _artworkSectionDraft.artworkDisplayMode,
+              onChanged: (value) => setState(() {
+                _artworkSectionDraft.artworkDisplayMode = value;
+              }),
+            ),
+            const SizedBox(height: 12),
             if (isHome)
               _buildHomePage()
             else if (isMusic)

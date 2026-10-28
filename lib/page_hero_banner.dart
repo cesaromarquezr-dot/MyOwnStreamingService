@@ -55,7 +55,7 @@ class PageHeroSettingsStore {
       intervalSeconds: (prefs.getInt('${prefix}intervalSeconds') ?? 12)
           .clamp(3, 60)
           .toInt(),
-      artworkMode: const {'Both', 'Backdrops only', 'Posters only'}
+      artworkMode: const {'Both', 'Backdrops only', 'Posters only', 'Both or previews'}
               .contains(artworkMode)
           ? artworkMode
           : 'Both',
@@ -163,7 +163,8 @@ class PageHeroSettingsPanel extends StatelessWidget {
               initialValue: settings.artworkMode,
               decoration: const InputDecoration(labelText: 'Hero artwork'),
               items: const [
-                DropdownMenuItem(value: 'Both', child: Text('Both posters and backdrops')),
+                DropdownMenuItem(value: 'Both', child: Text('Poster + backdrop')),
+                DropdownMenuItem(value: 'Both or previews', child: Text('Poster + backdrop or previews')),
                 DropdownMenuItem(value: 'Backdrops only', child: Text('Backdrops only')),
                 DropdownMenuItem(value: 'Posters only', child: Text('Posters only')),
               ],

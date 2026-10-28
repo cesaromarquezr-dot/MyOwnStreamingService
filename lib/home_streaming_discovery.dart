@@ -1213,11 +1213,12 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
       children: [
         if (_heroSettings.artworkMode != 'Posters only' &&
             selectedBackdropUrl != null &&
-            !((_previewController != null &&
-                  _previewUrl == _effectivePreviewUrl(media) &&
-                  _previewController!.value.isInitialized) ||
-              (_youtubePreviewController != null &&
-                  _youtubePreviewUrl == _effectivePreviewUrl(media))))
+            !(_heroSettings.artworkMode == 'Both or previews' &&
+                ((_previewController != null &&
+                      _previewUrl == _effectivePreviewUrl(media) &&
+                      _previewController!.value.isInitialized) ||
+                  (_youtubePreviewController != null &&
+                      _youtubePreviewUrl == _effectivePreviewUrl(media)))))
           Positioned.fill(
             // Keep the backdrop contained while letting the user choose how
             // strongly it zooms on hover. ClipRRect confines the zoom to the hero.
@@ -1254,7 +1255,8 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
               ),
             ),
           )
-        else if (_youtubePreviewController != null &&
+        else if (_heroSettings.artworkMode == 'Both or previews' &&
+            _youtubePreviewController != null &&
             _youtubePreviewUrl == _effectivePreviewUrl(media))
           Positioned.fill(
             child: IgnorePointer(
@@ -1265,7 +1267,8 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
               ),
             ),
           )
-        else if (_previewController != null &&
+        else if (_heroSettings.artworkMode == 'Both or previews' &&
+            _previewController != null &&
             _previewUrl == _effectivePreviewUrl(media) &&
             _previewController!.value.isInitialized)
           FittedBox(

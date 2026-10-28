@@ -12,6 +12,7 @@ import 'package:video_player/video_player.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'backend_api.dart';
 import 'app_core.dart';
+import 'app_customization.dart';
 import 'catalog_poster_image.dart' show AlbumArtworkImage;
 import 'music_favorites.dart';
 import 'music_genre_system.dart';
@@ -4044,6 +4045,7 @@ class _MusicCustomization extends StatefulWidget {
 
 class _MusicCustomizationState extends State<_MusicCustomization> {
   late MusicPageCustomization draft;
+  late AppSectionCustomization _artworkSectionDraft;
 
   @override
   void initState() {
@@ -4051,13 +4053,19 @@ class _MusicCustomizationState extends State<_MusicCustomization> {
     draft = MusicPageCustomizationStore.settingsFor(
       AppController.instance.currentProfile,
     );
+    _artworkSectionDraft = AppSectionCustomizationStore.settingsFor(
+      AppController.instance.currentProfile,
+    );
   }
 
-  void _save() {
+  Future<void> _save() async {
+    await AppSectionCustomizationStore.save(
+      AppController.instance.currentProfile, _artworkSectionDraft);
     MusicPageCustomizationStore.apply(
       AppController.instance.currentProfile,
       draft,
     );
+    if (!mounted) return;
     Navigator.pop(context);
   }
 
@@ -4076,7 +4084,14 @@ class _MusicCustomizationState extends State<_MusicCustomization> {
               'Build a Spotify-inspired Music page without moving your audio files from the account server.',
               style: TextStyle(color: Colors.white60),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 12),
+            ArtworkDisplayModePicker(
+              value: _artworkSectionDraft.artworkDisplayMode,
+              onChanged: (value) => setState(() {
+                _artworkSectionDraft.artworkDisplayMode = value;
+              }),
+            ),
+            const SizedBox(height: 10),
             _dropdown('Card style', draft.cardStyle,
                 ['Comfortable', 'Compact', 'Large'], (v) {
               setState(() => draft.cardStyle = v);
