@@ -17,6 +17,7 @@ import 'app_accessibility.dart';
 import 'privacy_preferences.dart';
 import 'playback_interruption_bridge.dart';
 import 'core/services/original_language_defaults.dart';
+import 'energy_saver.dart';
 
 class StreamingExperiencePreferences {
   static const int automaticResolution = 0;
@@ -35,6 +36,11 @@ class StreamingExperiencePreferences {
   bool preferOriginalLanguageTracks;
   double subtitleScale;
   bool audioDescriptions;
+  String preferredAudioLanguage;
+  String preferredSubtitleLanguage;
+  double playbackSpeed;
+  bool skipKnownIntros;
+  bool skipKnownCredits;
   bool highContrast;
   bool reduceMotion;
   double appTextScale;
@@ -47,6 +53,11 @@ class StreamingExperiencePreferences {
     this.preferOriginalLanguageTracks = true,
     this.subtitleScale = 1.0,
     this.audioDescriptions = false,
+    this.preferredAudioLanguage = '',
+    this.preferredSubtitleLanguage = '',
+    this.playbackSpeed = 1.0,
+    this.skipKnownIntros = false,
+    this.skipKnownCredits = false,
     this.highContrast = false,
     this.reduceMotion = false,
     this.appTextScale = 1.0,
@@ -58,6 +69,18 @@ class StreamingExperiencePreferences {
 
   static String _key(String profileId) =>
       'mos_streaming_experience_${profileId.trim().isEmpty ? 'default' : profileId.trim()}';
+
+  static String _supportedLanguage(dynamic value) {
+    const supported = <String>{'', 'en', 'es', 'fr', 'de', 'it', 'pt', 'ja', 'ko', 'zh', 'hi', 'ru'};
+    final normalized = value?.toString().trim().toLowerCase() ?? '';
+    return supported.contains(normalized) ? normalized : '';
+  }
+
+  static double _supportedPlaybackSpeed(dynamic value) {
+    final speed = value is num ? value.toDouble() : 1.0;
+    const allowed = <double>[0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
+    return allowed.contains(speed) ? speed : 1.0;
+  }
 
   static Future<StreamingExperiencePreferences> load(
       {String? profileId}) async {
@@ -77,6 +100,11 @@ class StreamingExperiencePreferences {
         preferOriginalLanguageTracks: map['preferOriginalLanguageTracks'] != false,
         subtitleScale: scale.clamp(0.75, 2.0).toDouble(),
         audioDescriptions: map['audioDescriptions'] == true,
+        preferredAudioLanguage: _supportedLanguage(map['preferredAudioLanguage']),
+        preferredSubtitleLanguage: _supportedLanguage(map['preferredSubtitleLanguage']),
+        playbackSpeed: _supportedPlaybackSpeed(map['playbackSpeed']),
+        skipKnownIntros: map['skipKnownIntros'] == true,
+        skipKnownCredits: map['skipKnownCredits'] == true,
         highContrast: map['highContrast'] == true,
         reduceMotion: map['reduceMotion'] == true,
         appTextScale: ((map['appTextScale'] as num?)?.toDouble() ?? 1.0)
@@ -100,11 +128,50 @@ class StreamingExperiencePreferences {
         'preferOriginalLanguageTracks': preferOriginalLanguageTracks,
         'subtitleScale': subtitleScale.clamp(0.75, 2.0),
         'audioDescriptions': audioDescriptions,
+        'preferredAudioLanguage': _supportedLanguage(preferredAudioLanguage),
+        'preferredSubtitleLanguage': _supportedLanguage(preferredSubtitleLanguage),
+        'playbackSpeed': _supportedPlaybackSpeed(playbackSpeed),
+        'skipKnownIntros': skipKnownIntros,
+        'skipKnownCredits': skipKnownCredits,
         'highContrast': highContrast,
         'reduceMotion': reduceMotion,
         'appTextScale': appTextScale.clamp(0.85, 1.6),
       }),
     );
+  }
+}
+
+/// Remembers exact audio/subtitle track labels per profile and media item.
+/// A saved label is used only if that item still exposes the same track.
+class PlaybackTrackSelectionStore {
+  static String _key(String profileId, String mediaId) {
+    String encoded(String value) => base64Url.encode(utf8.encode(value)).replaceAll('=', '');
+    final profile = profileId.trim().isEmpty ? 'default' : profileId.trim();
+    return 'mos_playback_track_selection_v1_${encoded(profile)}_${encoded(mediaId.trim())}';
+  }
+
+  static Future<Map<String, String>> load({required String profileId, required String mediaId}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_key(profileId, mediaId));
+    if (raw == null || raw.isEmpty) return <String, String>{};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return <String, String>{};
+      return <String, String>{
+        for (final entry in decoded.entries)
+          if (entry.value is String) entry.key.toString(): entry.value as String,
+      };
+    } catch (_) {
+      return <String, String>{};
+    }
+  }
+
+  static Future<void> save({required String profileId, required String mediaId, required String kind, required String value}) async {
+    if (mediaId.trim().isEmpty || (kind != 'audio' && kind != 'subtitle')) return;
+    final selections = await load(profileId: profileId, mediaId: mediaId);
+    selections[kind] = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_key(profileId, mediaId), jsonEncode(selections));
   }
 }
 
@@ -183,6 +250,7 @@ class PlaybackQoeTelemetry {
     var bufferedTotalMs = 0;
     var failures = 0;
     var completed = 0;
+    var watchTimeMs = 0;
     final sessions = <String>{};
     for (final item in events) {
       final sessionId = item['sessionId']?.toString();
@@ -198,6 +266,8 @@ class PlaybackQoeTelemetry {
         failures++;
       } else if (event == 'completed') {
         completed++;
+      } else if (event == 'watch_time') {
+        watchTimeMs += value < 0 ? 0 : value;
       }
     }
     return <String, num>{
@@ -208,6 +278,7 @@ class PlaybackQoeTelemetry {
       'bufferedMs': bufferedTotalMs,
       'failures': failures,
       'completed': completed,
+      'watchTimeMs': watchTimeMs,
     };
   }
 
@@ -419,6 +490,78 @@ class _StreamingExperienceSettingsScreenState
                       onChanged: (value) =>
                           _update(() => settings.audioDescriptions = value),
                     ),
+                    ListTile(
+                      title: const UniversalText('Preferred audio language'),
+                      subtitle: const UniversalText('Used when the chosen media exposes a matching audio track.'),
+                      trailing: DropdownButton<String>(
+                        value: settings.preferredAudioLanguage,
+                        items: const <DropdownMenuItem<String>>[
+                          DropdownMenuItem(value: '', child: Text('Auto / original')),
+                          DropdownMenuItem(value: 'en', child: Text('English')),
+                          DropdownMenuItem(value: 'es', child: Text('Spanish')),
+                          DropdownMenuItem(value: 'fr', child: Text('French')),
+                          DropdownMenuItem(value: 'de', child: Text('German')),
+                          DropdownMenuItem(value: 'it', child: Text('Italian')),
+                          DropdownMenuItem(value: 'pt', child: Text('Portuguese')),
+                          DropdownMenuItem(value: 'ja', child: Text('Japanese')),
+                          DropdownMenuItem(value: 'ko', child: Text('Korean')),
+                          DropdownMenuItem(value: 'zh', child: Text('Chinese')),
+                          DropdownMenuItem(value: 'hi', child: Text('Hindi')),
+                          DropdownMenuItem(value: 'ru', child: Text('Russian')),
+                        ],
+                        onChanged: (value) { if (value != null) _update(() => settings.preferredAudioLanguage = value); },
+                      ),
+                    ),
+                    ListTile(
+                      title: const UniversalText('Preferred subtitle language'),
+                      subtitle: const UniversalText('Exact per-title subtitle choice is remembered when available; this language is the fallback.'),
+                      trailing: DropdownButton<String>(
+                        value: settings.preferredSubtitleLanguage,
+                        items: const <DropdownMenuItem<String>>[
+                          DropdownMenuItem(value: '', child: Text('Auto / original')),
+                          DropdownMenuItem(value: 'en', child: Text('English')),
+                          DropdownMenuItem(value: 'es', child: Text('Spanish')),
+                          DropdownMenuItem(value: 'fr', child: Text('French')),
+                          DropdownMenuItem(value: 'de', child: Text('German')),
+                          DropdownMenuItem(value: 'it', child: Text('Italian')),
+                          DropdownMenuItem(value: 'pt', child: Text('Portuguese')),
+                          DropdownMenuItem(value: 'ja', child: Text('Japanese')),
+                          DropdownMenuItem(value: 'ko', child: Text('Korean')),
+                          DropdownMenuItem(value: 'zh', child: Text('Chinese')),
+                          DropdownMenuItem(value: 'hi', child: Text('Hindi')),
+                          DropdownMenuItem(value: 'ru', child: Text('Russian')),
+                        ],
+                        onChanged: (value) { if (value != null) _update(() => settings.preferredSubtitleLanguage = value); },
+                      ),
+                    ),
+                    ListTile(
+                      title: const UniversalText('Playback speed'),
+                      subtitle: const UniversalText('Applied to supported media-server streams.'),
+                      trailing: DropdownButton<double>(
+                        value: settings.playbackSpeed,
+                        items: const <DropdownMenuItem<double>>[
+                          DropdownMenuItem(value: 0.75, child: Text('0.75×')),
+                          DropdownMenuItem(value: 1.0, child: Text('1.0×')),
+                          DropdownMenuItem(value: 1.25, child: Text('1.25×')),
+                          DropdownMenuItem(value: 1.5, child: Text('1.5×')),
+                          DropdownMenuItem(value: 1.75, child: Text('1.75×')),
+                          DropdownMenuItem(value: 2.0, child: Text('2.0×')),
+                        ],
+                        onChanged: (value) { if (value != null) _update(() => settings.playbackSpeed = value); },
+                      ),
+                    ),
+                    SwitchListTile(
+                      value: settings.skipKnownIntros,
+                      title: const UniversalText('Skip known intros automatically'),
+                      subtitle: const UniversalText('Only skips when the imported media has valid start and end markers.'),
+                      onChanged: (value) => _update(() => settings.skipKnownIntros = value),
+                    ),
+                    SwitchListTile(
+                      value: settings.skipKnownCredits,
+                      title: const UniversalText('Skip known end credits automatically'),
+                      subtitle: const UniversalText('Only skips near a recognized credit marker in the media metadata.'),
+                      onChanged: (value) => _update(() => settings.skipKnownCredits = value),
+                    ),
                     SwitchListTile(
                       value: settings.highContrast,
                       title: const UniversalText('High-contrast controls'),
@@ -565,6 +708,10 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
   bool _errorLogged = false;
   bool _completedLogged = false;
   bool _wasBuffering = false;
+  DateTime? _lastPlaybackWallSample;
+  int _unreportedWatchMs = 0;
+  bool _skipCheckRunning = false;
+  final Set<String> _autoSkippedMarkers = <String>{};
   double? _sliderPreviewSeconds;
   bool _loading = true;
   String? _error;
@@ -621,6 +768,7 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
       _controller = player;
       player.addListener(_onPlayerChanged);
       await player.initialize();
+      await player.setPlaybackSpeed(_preferences.playbackSpeed);
       if (!mounted) return;
       PlaybackInterruptionBridge.attach(
         owner: this,
@@ -665,8 +813,13 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
       setState(() => _loading = false);
       unawaited(player.play());
       await _createBackendSession();
+      final syncInterval = switch (EnergySaverController.instance.mode) {
+        EnergySaverMode.eco => const Duration(seconds: 45),
+        EnergySaverMode.balanced => const Duration(seconds: 25),
+        EnergySaverMode.cinema => const Duration(seconds: 15),
+      };
       _syncTimer = Timer.periodic(
-          const Duration(seconds: 15), (_) => unawaited(_syncBackendSession()));
+          syncInterval, (_) => unawaited(_syncBackendSession()));
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -681,10 +834,117 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
     }
   }
 
+  num? _markerSeconds(Map<String, dynamic> marker, List<String> aliases) {
+    for (final key in aliases) {
+      final value = marker[key];
+      if (value is num) {
+        final n = value.toDouble();
+        if (key.toLowerCase().contains('ms') || key.toLowerCase().contains('millisecond')) return n / 1000;
+        return n;
+      }
+      final text = value?.toString().trim() ?? '';
+      if (text.isEmpty) continue;
+      final number = double.tryParse(text);
+      if (number != null) {
+        if (key.toLowerCase().contains('ms') || key.toLowerCase().contains('millisecond')) return number / 1000;
+        return number;
+      }
+      final parts = text.split(':');
+      if (parts.length == 2 || parts.length == 3) {
+        final parsed = parts.map((part) => double.tryParse(part)).toList();
+        if (parsed.every((part) => part != null)) {
+          if (parts.length == 2) return parsed[0]! * 60 + parsed[1]!;
+          return parsed[0]! * 3600 + parsed[1]! * 60 + parsed[2]!;
+        }
+      }
+    }
+    return null;
+  }
+
+  Future<void> _maybeSkipKnownSegments(VideoPlayerController player) async {
+    if (_skipCheckRunning || !player.value.isInitialized || !player.value.isPlaying || player.value.isBuffering) return;
+    final position = player.value.position.inMilliseconds / 1000.0;
+    final duration = player.value.duration.inSeconds.toDouble();
+    if (duration <= 0) return;
+    double? target;
+    String? markerId;
+    if (_preferences.skipKnownIntros) {
+      for (var i = 0; i < widget.media.tvIntros.length; i++) {
+        final marker = widget.media.tvIntros[i];
+        final start = _markerSeconds(marker, const ['startSeconds', 'start_seconds', 'introStartSeconds', 'startTimeSeconds', 'start', 'startMs', 'startMilliseconds', 'start_ms']);
+        final end = _markerSeconds(marker, const ['endSeconds', 'end_seconds', 'introEndSeconds', 'endTimeSeconds', 'end', 'endMs', 'endMilliseconds', 'end_ms']);
+        final id = 'intro:$i:${end ?? -1}';
+        if (start == null || end == null || end <= start || _autoSkippedMarkers.contains(id)) continue;
+        if (position >= start && position < end && end < duration - 1) {
+          target = (end + 0.2).toDouble();
+          markerId = id;
+          break;
+        }
+      }
+    }
+    if (target == null && _preferences.skipKnownCredits) {
+      for (var i = 0; i < widget.media.xrayEvents.length; i++) {
+        final marker = widget.media.xrayEvents[i];
+        final label = <String>[marker['type'], marker['title'], marker['label'], marker['name'], marker['event']]
+            .whereType<Object>()
+            .map((value) => value.toString().toLowerCase())
+            .join(' ');
+        if (!label.contains('credit')) continue;
+        final start = _markerSeconds(marker, const ['startSeconds', 'start_seconds', 'timeSeconds', 'timestampSeconds', 'time', 'start', 'startMs', 'startMilliseconds']);
+        final id = 'credits:$i:${start ?? -1}';
+        if (start == null || _autoSkippedMarkers.contains(id)) continue;
+        if (position >= start - 1 && position <= start + 2 && start < duration - 10) {
+          target = duration - 1;
+          markerId = id;
+          break;
+        }
+      }
+    }
+    if (target == null || markerId == null) return;
+    _skipCheckRunning = true;
+    _autoSkippedMarkers.add(markerId);
+    try {
+      await player.seekTo(Duration(milliseconds: (target * 1000).round()));
+      await _record(markerId.startsWith('intro:') ? 'intro_skipped' : 'credits_skipped');
+    } catch (_) {
+      _autoSkippedMarkers.remove(markerId);
+    } finally {
+      _skipCheckRunning = false;
+    }
+  }
+
+  void _trackWatchTime(VideoPlayerValue value) {
+    final now = DateTime.now();
+    if (!value.isPlaying || value.isBuffering) {
+      _lastPlaybackWallSample = null;
+      return;
+    }
+    final last = _lastPlaybackWallSample;
+    _lastPlaybackWallSample = now;
+    if (last == null) return;
+    final elapsed = now.difference(last).inMilliseconds;
+    // Avoid counting long UI stalls as real viewing time.
+    if (elapsed > 0 && elapsed <= 2500) _unreportedWatchMs += elapsed;
+    if (_unreportedWatchMs >= 30000) {
+      final report = _unreportedWatchMs;
+      _unreportedWatchMs = 0;
+      unawaited(_record('watch_time', valueMs: report));
+    }
+  }
+
+  void _flushWatchTime() {
+    if (_unreportedWatchMs <= 0) return;
+    final report = _unreportedWatchMs;
+    _unreportedWatchMs = 0;
+    unawaited(_record('watch_time', valueMs: report));
+  }
+
   void _onPlayerChanged() {
     final player = _controller;
     if (player == null || !player.value.isInitialized) return;
     final value = player.value;
+    _trackWatchTime(value);
+    if (value.isPlaying && !value.isBuffering) unawaited(_maybeSkipKnownSegments(player));
     if (!_readyLogged) {
       _readyLogged = true;
       final elapsed = DateTime.now()
@@ -798,6 +1058,7 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
   void dispose() {
     PlaybackInterruptionBridge.detach(this);
     _syncTimer?.cancel();
+    _flushWatchTime();
     final player = _controller;
     if (_wasBuffering && _bufferStartedAt != null) {
       unawaited(_record('buffer_end',
@@ -968,7 +1229,7 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
                     const UniversalText('Playback speed'),
                     const Spacer(),
                     DropdownButton<double>(
-                      value: const <double>[0.75, 1.0, 1.25, 1.5, 2.0]
+                      value: const <double>[0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
                               .contains(value?.playbackSpeed ?? 1.0)
                           ? value?.playbackSpeed ?? 1.0
                           : 1.0,
@@ -978,11 +1239,14 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
                         DropdownMenuItem(value: 1.0, child: Text('1×')),
                         DropdownMenuItem(value: 1.25, child: Text('1.25×')),
                         DropdownMenuItem(value: 1.5, child: Text('1.5×')),
+                        DropdownMenuItem(value: 1.75, child: Text('1.75×')),
                         DropdownMenuItem(value: 2.0, child: Text('2×')),
                       ],
                       onChanged: (speed) {
                         if (speed == null) return;
                         unawaited(player.setPlaybackSpeed(speed));
+                        _preferences.playbackSpeed = speed;
+                        unawaited(_preferences.save(profileId: _profileId));
                         unawaited(_record('speed_change',
                             valueMs: (speed * 1000).round()));
                       },

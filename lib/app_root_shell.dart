@@ -166,9 +166,12 @@ class _AppPageSurface extends StatelessWidget {
         AppAccessibilitySettings.instance,
       ]),
       builder: (context, _) {
-        AppAccessibilitySettings.instance.ensureLoaded(
-          profileId: AppController.instance.currentProfile?.id,
-        );
+        final accessibilityProfileId = AppController.instance.currentProfile?.id;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          AppAccessibilitySettings.instance.ensureLoaded(
+            profileId: accessibilityProfileId,
+          );
+        });
         final appearance = PageAppearanceStore.forPage(appPageState.pageId);
         final accessibility = AppAccessibilitySettings.instance;
         final density = switch (appearance.density) {

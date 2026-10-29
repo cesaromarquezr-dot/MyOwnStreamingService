@@ -84,22 +84,16 @@ class MediaItem {
 
   /// Optional authorized title-logo/key-art asset. It is not extracted from a trailer.
   final String? titleLogoUrl;
-
   /// Provenance for the title-logo asset (provider/catalog/rights note).
   final String? titleLogoSource;
-
   /// False by default: only display title-logo artwork when catalog metadata says it is authorized.
   final bool titleLogoAuthorized;
-
   /// Presentation mode: auto, logo, trailer_title_card, movie_title_card, or case_cover.
   final String titleArtworkMode;
-
   /// Optional fallback style key: cinematic, horror, sciFi, fantasy, western, romance, retro, animation.
   final String? titleStyleKey;
-
   /// Optional #RRGGBB or #AARRGGBB accent for the styled-text fallback.
   final String? titleAccentColor;
-
   /// Optional persisted per-title typography overrides from external_media_catalog.
   final String? titleFontFamily;
   final String? titleFontFallbackFamily;
@@ -109,7 +103,6 @@ class MediaItem {
   final String? titleFontColor;
   final String? titleFontShadowColor;
   final double? titleFontShadowBlur;
-
   /// Controls cinematic reveal animation; reduced-motion OS settings still take priority.
   final bool titleRevealAnimation;
 
@@ -194,7 +187,6 @@ class MediaItem {
   final int? discNumber;
   final String? discTitleId;
   final String? discTitle;
-
   /// Optional parent movie/show for an imported bonus feature.
   final String? parentMediaId;
   final String? discMarketCountry;
@@ -410,8 +402,7 @@ class MediaItem {
           primaryGenre,
           _normalizeMediaGenres(genres, primaryGenre),
         ),
-        genreBlendLabelOverride =
-            _normalizeGenreBlendLabel(genreBlendLabelOverride),
+        genreBlendLabelOverride = _normalizeGenreBlendLabel(genreBlendLabelOverride),
         tags = tags ?? <String>[],
         studios = studios ?? <String>[],
         companies = companies ?? <String>[],
@@ -586,22 +577,15 @@ class MediaItem {
         data['originCountries'] ??
         data['origin_countries'];
     final countryOrigin = rawCountryOrigin is List
-        ? rawCountryOrigin
-            .map((entry) {
-              if (entry is Map) {
-                return (entry['name'] ??
-                        entry['english_name'] ??
-                        entry['iso_3166_1'] ??
-                        entry['code'] ??
-                        '')
-                    .toString()
-                    .trim();
-              }
-              return entry.toString().trim();
-            })
-            .where((country) => country.isNotEmpty)
-            .toSet()
-            .join(', ')
+        ? rawCountryOrigin.map((entry) {
+            if (entry is Map) {
+              return (entry['name'] ?? entry['english_name'] ??
+                      entry['iso_3166_1'] ?? entry['code'] ?? '')
+                  .toString()
+                  .trim();
+            }
+            return entry.toString().trim();
+          }).where((country) => country.isNotEmpty).toSet().join(', ')
         : rawCountryOrigin?.toString();
     return MediaItem(
       id: data['id']?.toString() ?? '',
@@ -609,70 +593,52 @@ class MediaItem {
       type: data['type']?.toString() ?? 'movie',
       imageUrl: (data['imageUrl'] ?? data['posterUrl'])?.toString(),
       description: data['description']?.toString(),
-      titleLogoUrl:
-          (data['titleLogoUrl'] ?? data['title_logo_url'] ?? data['logoUrl'])
-              ?.toString(),
-      titleLogoSource:
-          (data['titleLogoSource'] ?? data['title_logo_source'])?.toString(),
-      titleLogoAuthorized: _boolValue(
-          data['titleLogoAuthorized'] ?? data['title_logo_authorized']),
-      titleArtworkMode:
-          (data['titleArtworkMode'] ?? data['title_artwork_mode'] ?? 'auto')
-              .toString(),
-      titleStyleKey:
-          (data['titleStyleKey'] ?? data['title_style_key'])?.toString(),
-      titleAccentColor:
-          (data['titleAccentColor'] ?? data['title_accent_color'])?.toString(),
-      titleFontFamily:
-          (data['titleFontFamily'] ?? data['title_font_family'])?.toString(),
-      titleFontFallbackFamily: (data['titleFontFallbackFamily'] ??
-              data['title_font_fallback_family'])
-          ?.toString(),
-      titleFontSize:
-          _doubleValue(data['titleFontSize'] ?? data['title_font_size']),
-      titleFontWeight:
-          _intValue(data['titleFontWeight'] ?? data['title_font_weight']),
-      titleFontLetterSpacing: _doubleValue(
-          data['titleFontLetterSpacing'] ?? data['title_font_letter_spacing']),
-      titleFontColor:
-          (data['titleFontColor'] ?? data['title_font_color'])?.toString(),
-      titleFontShadowColor:
-          (data['titleFontShadowColor'] ?? data['title_font_shadow_color'])
-              ?.toString(),
-      titleFontShadowBlur: _doubleValue(
-          data['titleFontShadowBlur'] ?? data['title_font_shadow_blur']),
-      titleRevealAnimation: (data.containsKey('titleRevealAnimation') ||
-              data.containsKey('title_reveal_animation'))
-          ? _boolValue(
-              data['titleRevealAnimation'] ?? data['title_reveal_animation'])
+      titleLogoUrl: (data['titleLogoUrl'] ?? data['title_logo_url'] ?? data['logoUrl'])?.toString(),
+      titleLogoSource: (data['titleLogoSource'] ?? data['title_logo_source'])?.toString(),
+      titleLogoAuthorized: _boolValue(data['titleLogoAuthorized'] ?? data['title_logo_authorized']),
+      titleArtworkMode: (data['titleArtworkMode'] ?? data['title_artwork_mode'] ?? 'auto').toString(),
+      titleStyleKey: (data['titleStyleKey'] ?? data['title_style_key'])?.toString(),
+      titleAccentColor: (data['titleAccentColor'] ?? data['title_accent_color'])?.toString(),
+      titleFontFamily: (data['titleFontFamily'] ?? data['title_font_family'])?.toString(),
+      titleFontFallbackFamily: (data['titleFontFallbackFamily'] ?? data['title_font_fallback_family'])?.toString(),
+      titleFontSize: _doubleValue(data['titleFontSize'] ?? data['title_font_size']),
+      titleFontWeight: _intValue(data['titleFontWeight'] ?? data['title_font_weight']),
+      titleFontLetterSpacing: _doubleValue(data['titleFontLetterSpacing'] ?? data['title_font_letter_spacing']),
+      titleFontColor: (data['titleFontColor'] ?? data['title_font_color'])?.toString(),
+      titleFontShadowColor: (data['titleFontShadowColor'] ?? data['title_font_shadow_color'])?.toString(),
+      titleFontShadowBlur: _doubleValue(data['titleFontShadowBlur'] ?? data['title_font_shadow_blur']),
+      titleRevealAnimation: (data.containsKey('titleRevealAnimation') || data.containsKey('title_reveal_animation'))
+          ? _boolValue(data['titleRevealAnimation'] ?? data['title_reveal_animation'])
           : true,
-      heroTitleArtworkMode: (data['heroTitleArtworkMode'] ??
-              data['hero_title_artwork_mode'] ??
-              'inherit')
-          .toString(),
-      detailTitleArtworkMode: (data['detailTitleArtworkMode'] ??
-              data['detail_title_artwork_mode'] ??
-              'inherit')
-          .toString(),
-      heroTitleArtworkUrl:
-          (data['heroTitleArtworkUrl'] ?? data['hero_title_artwork_url'])
-              ?.toString(),
-      detailTitleArtworkUrl:
-          (data['detailTitleArtworkUrl'] ?? data['detail_title_artwork_url'])
-              ?.toString(),
-      heroTitleArtworkSource:
-          (data['heroTitleArtworkSource'] ?? data['hero_title_artwork_source'])
-              ?.toString(),
-      detailTitleArtworkSource: (data['detailTitleArtworkSource'] ??
-              data['detail_title_artwork_source'])
-          ?.toString(),
+      heroTitleArtworkMode: (
+        data['heroTitleArtworkMode'] ??
+        data['hero_title_artwork_mode'] ??
+        'inherit'
+      ).toString(),
+      detailTitleArtworkMode: (
+        data['detailTitleArtworkMode'] ??
+        data['detail_title_artwork_mode'] ??
+        'inherit'
+      ).toString(),
+      heroTitleArtworkUrl: (
+        data['heroTitleArtworkUrl'] ?? data['hero_title_artwork_url']
+      )?.toString(),
+      detailTitleArtworkUrl: (
+        data['detailTitleArtworkUrl'] ?? data['detail_title_artwork_url']
+      )?.toString(),
+      heroTitleArtworkSource: (
+        data['heroTitleArtworkSource'] ?? data['hero_title_artwork_source']
+      )?.toString(),
+      detailTitleArtworkSource: (
+        data['detailTitleArtworkSource'] ?? data['detail_title_artwork_source']
+      )?.toString(),
       heroTitleArtworkAuthorized: _boolValue(
         data['heroTitleArtworkAuthorized'] ??
-            data['hero_title_artwork_authorized'],
+        data['hero_title_artwork_authorized'],
       ),
       detailTitleArtworkAuthorized: _boolValue(
         data['detailTitleArtworkAuthorized'] ??
-            data['detail_title_artwork_authorized'],
+        data['detail_title_artwork_authorized'],
       ),
       releaseYear: _intValue(
             data['releaseYear'] ?? data['release_year'] ?? data['year'],
@@ -697,9 +663,9 @@ class MediaItem {
       seriesStartDate: parsedSeriesStartDate,
       seriesEndYear:
           _intValue(data['seriesEndYear'] ?? data['series_end_year']),
-      seriesOngoing:
-          _boolValue(data['seriesOngoing'] ?? data['series_ongoing']),
-      seriesStatus: (data['seriesStatus'] ?? data['series_status'])?.toString(),
+      seriesOngoing: _boolValue(data['seriesOngoing'] ?? data['series_ongoing']),
+      seriesStatus:
+          (data['seriesStatus'] ?? data['series_status'])?.toString(),
       rating: data['rating'] is num
           ? (data['rating'] as num).toDouble()
           : double.tryParse(
@@ -737,8 +703,7 @@ class MediaItem {
           : int.tryParse(data['discNumber']?.toString() ?? ''),
       discTitleId: data['discTitleId']?.toString(),
       discTitle: data['discTitle']?.toString(),
-      parentMediaId:
-          (data['parentMediaId'] ?? data['parent_media_id'])?.toString(),
+      parentMediaId: (data['parentMediaId'] ?? data['parent_media_id'])?.toString(),
       discMarketCountry: data['discMarketCountry']?.toString(),
       originalTitle: data['originalTitle']?.toString(),
       originalLanguage: data['originalLanguage']?.toString(),
@@ -808,52 +773,26 @@ class MediaItem {
       ),
       universeMemberships:
           (data['universeMemberships'] ?? data['universe_memberships']) is List
-              ? ((data['universeMemberships'] ?? data['universe_memberships'])
-                      as List)
+              ? ((data['universeMemberships'] ?? data['universe_memberships']) as List)
                   .whereType<Map>()
                   .map((row) => Map<String, dynamic>.from(row))
                   .toList()
               : <Map<String, dynamic>>[],
       continuityId: (data['continuityId'] ?? data['continuity_id'])?.toString(),
-      continuityName:
-          (data['continuityName'] ?? data['continuity_name'])?.toString(),
-      cinematicUniverseIds: _stringList(
-          data['cinematicUniverseIds'] ?? data['cinematic_universe_ids']),
-      cinematicUniverseNames: _stringList(
-          data['cinematicUniverseNames'] ?? data['cinematic_universe_names']),
-      cinematicUniverseSaga:
-          (data['cinematicUniverseSaga'] ?? data['cinematic_universe_saga'])
-              ?.toString(),
-      cinematicUniversePhase:
-          (data['cinematicUniversePhase'] ?? data['cinematic_universe_phase'])
-              ?.toString(),
-      cinematicUniverseReleaseOrder: _intValue(
-          data['cinematicUniverseReleaseOrder'] ??
-              data['cinematic_universe_release_order']),
-      cinematicUniverseTimelineOrder: _intValue(
-          data['cinematicUniverseTimelineOrder'] ??
-              data['cinematic_universe_timeline_order']),
-      cinematicUniverseTimelineLabel: (data['cinematicUniverseTimelineLabel'] ??
-              data['cinematic_universe_timeline_label'])
-          ?.toString(),
-      cinematicUniverseCanonStatus: (data['cinematicUniverseCanonStatus'] ??
-              data['cinematic_universe_canon_status'])
-          ?.toString(),
-      cinematicUniverseContinuityId: (data['cinematicUniverseContinuityId'] ??
-              data['cinematic_universe_continuity_id'])
-          ?.toString(),
-      postCreditSceneCount: _intValue(
-          data['postCreditSceneCount'] ?? data['post_credit_scene_count']),
-      narrativePrerequisiteIds: _stringList(data['narrativePrerequisiteIds'] ??
-          data['narrative_prerequisite_ids']),
-      universeMetadataSource:
-          (data['universeMetadataSource'] ?? data['universe_metadata_source'])
-              ?.toString(),
-      universeMetadataVerifiedAt: DateTime.tryParse(
-          (data['universeMetadataVerifiedAt'] ??
-                      data['universe_metadata_verified_at'])
-                  ?.toString() ??
-              ''),
+      continuityName: (data['continuityName'] ?? data['continuity_name'])?.toString(),
+      cinematicUniverseIds: _stringList(data['cinematicUniverseIds'] ?? data['cinematic_universe_ids']),
+      cinematicUniverseNames: _stringList(data['cinematicUniverseNames'] ?? data['cinematic_universe_names']),
+      cinematicUniverseSaga: (data['cinematicUniverseSaga'] ?? data['cinematic_universe_saga'])?.toString(),
+      cinematicUniversePhase: (data['cinematicUniversePhase'] ?? data['cinematic_universe_phase'])?.toString(),
+      cinematicUniverseReleaseOrder: _intValue(data['cinematicUniverseReleaseOrder'] ?? data['cinematic_universe_release_order']),
+      cinematicUniverseTimelineOrder: _intValue(data['cinematicUniverseTimelineOrder'] ?? data['cinematic_universe_timeline_order']),
+      cinematicUniverseTimelineLabel: (data['cinematicUniverseTimelineLabel'] ?? data['cinematic_universe_timeline_label'])?.toString(),
+      cinematicUniverseCanonStatus: (data['cinematicUniverseCanonStatus'] ?? data['cinematic_universe_canon_status'])?.toString(),
+      cinematicUniverseContinuityId: (data['cinematicUniverseContinuityId'] ?? data['cinematic_universe_continuity_id'])?.toString(),
+      postCreditSceneCount: _intValue(data['postCreditSceneCount'] ?? data['post_credit_scene_count']),
+      narrativePrerequisiteIds: _stringList(data['narrativePrerequisiteIds'] ?? data['narrative_prerequisite_ids']),
+      universeMetadataSource: (data['universeMetadataSource'] ?? data['universe_metadata_source'])?.toString(),
+      universeMetadataVerifiedAt: DateTime.tryParse((data['universeMetadataVerifiedAt'] ?? data['universe_metadata_verified_at'])?.toString() ?? ''),
       actors: actorNames,
       characters: characterNames,
       directors: directorNames,
@@ -861,9 +800,7 @@ class MediaItem {
       music: musicNames,
       genres: _stringList(data['genres']),
       primaryGenre: (data['primaryGenre'] ?? data['primary_genre'])?.toString(),
-      genreBlendLabelOverride: (data['genreBlendLabelOverride'] ??
-              data['genre_blend_label_override'])
-          ?.toString(),
+      genreBlendLabelOverride: (data['genreBlendLabelOverride'] ?? data['genre_blend_label_override'])?.toString(),
       tags: _stringList(data['tags']),
       studios: _combinedCreditNameList([
         data['studios'],
@@ -959,44 +896,16 @@ class MediaItem {
   }
 
   static const List<String> _yearMetadataKeys = <String>[
-    'releaseYear',
-    'release_year',
-    'firstAirYear',
-    'first_air_year',
-    'airYear',
-    'air_year',
-    'year',
-    'startYear',
-    'start_year',
-    'endYear',
-    'end_year',
-    'firstAirDate',
-    'first_air_date',
-    'airDate',
-    'air_date',
-    'releaseDate',
-    'release_date',
-    'premiereDate',
-    'premiere_date',
-    'firstAired',
-    'first_aired',
-    'lastAirYear',
-    'last_air_year',
-    'lastAirDate',
-    'last_air_date',
-    'finalAirDate',
-    'final_air_date',
-    'endDate',
-    'end_date',
-    'lastAired',
-    'last_aired',
-    'finaleDate',
-    'finale_date',
-    'firstEpisodeAirDate',
-    'first_episode_air_date',
-    'lastEpisodeAirDate',
-    'last_episode_air_date',
-    'date',
+    'releaseYear', 'release_year', 'firstAirYear', 'first_air_year',
+    'airYear', 'air_year', 'year', 'startYear', 'start_year',
+    'endYear', 'end_year', 'firstAirDate', 'first_air_date',
+    'airDate', 'air_date', 'releaseDate', 'release_date',
+    'premiereDate', 'premiere_date', 'firstAired', 'first_aired',
+    'lastAirYear', 'last_air_year', 'lastAirDate', 'last_air_date',
+    'finalAirDate', 'final_air_date', 'endDate', 'end_date',
+    'lastAired', 'last_aired', 'finaleDate', 'finale_date',
+    'firstEpisodeAirDate', 'first_episode_air_date',
+    'lastEpisodeAirDate', 'last_episode_air_date', 'date',
   ];
 
   static int? _yearFromValue(dynamic raw) {
@@ -1011,7 +920,8 @@ class MediaItem {
     if (direct != null) return direct >= 1800 && direct <= 2200 ? direct : null;
     final date = DateTime.tryParse(value);
     if (date != null) return date.year;
-    final match = RegExp(r'\b((?:18|19|20|21|22)\d{2})\b').firstMatch(value);
+    final match = RegExp(r'\b((?:18|19|20|21|22)\d{2})\b')
+        .firstMatch(value);
     final parsed = int.tryParse(match?.group(1) ?? '');
     return parsed != null && parsed >= 1800 && parsed <= 2200 ? parsed : null;
   }
@@ -1047,20 +957,12 @@ class MediaItem {
       .replaceAll(RegExp(r'[_-]+'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ');
 
-  bool get isSeriesOngoing =>
-      seriesOngoing ||
-      const <String>{
-        'ongoing',
-        'airing',
-        'returning',
-        'returning series',
+  bool get isSeriesOngoing => seriesOngoing || const <String>{
+        'ongoing', 'airing', 'returning', 'returning series',
       }.contains(_normalizedSeriesStatus);
 
   bool get isSeriesUpcoming => const <String>{
-        'upcoming',
-        'announced',
-        'in development',
-        'coming soon',
+        'upcoming', 'announced', 'in development', 'coming soon',
       }.contains(_normalizedSeriesStatus);
 
   /// Derives a single season's run from the season metadata and episode air dates.
@@ -1086,13 +988,12 @@ class MediaItem {
     if (isSeries) {
       final years = _knownSeriesYears;
       if (isSeriesUpcoming) {
-        final comingYear = seriesStartYear ??
-            releaseYear ??
+        final comingYear = seriesStartYear ?? releaseYear ??
             (years.isNotEmpty ? years.first : null);
         return comingYear == null ? 'Coming soon' : 'Coming $comingYear';
       }
-      final start =
-          seriesStartYear ?? (years.isNotEmpty ? years.first : releaseYear);
+      final start = seriesStartYear ??
+          (years.isNotEmpty ? years.first : releaseYear);
       final end = seriesEndYear ?? (years.isNotEmpty ? years.last : null);
       if (isSeriesOngoing) return start == null ? 'Ongoing' : '$start–Present';
       if (start == null) return end?.toString();
@@ -1117,38 +1018,20 @@ class MediaItem {
   String? get displayEditionLabel {
     final name = editionName?.trim();
     if (name != null && name.isNotEmpty) return name;
-    final kind = (editionType ?? '')
-        .trim()
-        .toLowerCase()
+    final kind = (editionType ?? '').trim().toLowerCase()
         .replaceAll(RegExp(r'[_\s]+'), '-');
     if (kind.isEmpty) return null;
     return switch (kind) {
-      'theatrical' ||
-      'theatrical-edition' ||
-      'theatrical-cut' =>
-        'Theatrical Version',
+      'theatrical' || 'theatrical-edition' || 'theatrical-cut' => 'Theatrical Version',
       'extended' || 'extended-edition' || 'extended-cut' => 'Extended Version',
-      'director-cut' ||
-      'directors-cut' ||
-      'director-s-cut' ||
-      'directors-edition' =>
-        "Director's Cut",
-      'editor-cut' ||
-      'editors-cut' ||
-      'editor-s-cut' ||
-      'editor-cut-edition' =>
-        "Editor's Cut",
+      'director-cut' || 'directors-cut' || 'director-s-cut' || 'directors-edition' => "Director's Cut",
+      'editor-cut' || 'editors-cut' || 'editor-s-cut' || 'editor-cut-edition' => "Editor's Cut",
       'unrated' || 'unrated-edition' || 'unrated-cut' => 'Unrated Version',
-      'theatrical-rerelease' ||
-      'theatrical-re-release' =>
-        'Theatrical Re-release',
+      'theatrical-rerelease' || 'theatrical-re-release' => 'Theatrical Re-release',
       'rerelease' || 're-release' || 're-release-edition' => 'Re-release',
       'encore' || 'encore-edition' => 'Encore Edition',
       'imax' || 'imax-edition' || 'imax-version' => 'IMAX Version',
-      'roadshow' ||
-      'roadshow-version' ||
-      'roadshow-edition' =>
-        'Roadshow Version',
+      'roadshow' || 'roadshow-version' || 'roadshow-edition' => 'Roadshow Version',
       'tv-cut' || 'television-cut' || 'broadcast-cut' => 'TV Cut',
       'international-cut' || 'international-version' => 'International Version',
       'final-cut' => 'Final Cut',
@@ -1235,24 +1118,10 @@ class MediaItem {
 
       final map = Map<String, dynamic>.from(item);
       for (final key in <String>[
-        'name',
-        'fullName',
-        'full_name',
-        'personName',
-        'person_name',
-        'displayName',
-        'display_name',
-        'creditedName',
-        'credited_name',
-        'actor',
-        'artist',
-        'writer',
-        'director',
-        'performer',
-        'person',
-        'member',
-        'crewMember',
-        'crew_member',
+        'name', 'fullName', 'full_name', 'personName', 'person_name',
+        'displayName', 'display_name', 'creditedName', 'credited_name',
+        'actor', 'artist', 'writer', 'director', 'performer',
+        'person', 'member', 'crewMember', 'crew_member',
       ]) {
         final candidate = map[key];
         if (candidate is String || candidate is num) {
@@ -1270,15 +1139,7 @@ class MediaItem {
         }
       }
 
-      for (final key in <String>[
-        'items',
-        'results',
-        'people',
-        'members',
-        'cast',
-        'crew',
-        'credits'
-      ]) {
+      for (final key in <String>['items', 'results', 'people', 'members', 'cast', 'crew', 'credits']) {
         if (map[key] is List || map[key] is Map) {
           visit(map[key]);
           return;
@@ -1297,11 +1158,8 @@ class MediaItem {
     for (final row in rows) {
       if (row is! Map) continue;
       final map = Map<String, dynamic>.from(row);
-      final raw = map['character'] ??
-          map['characterName'] ??
-          map['character_name'] ??
-          map['roleName'] ??
-          map['role_name'];
+      final raw = map['character'] ?? map['characterName'] ??
+          map['character_name'] ?? map['roleName'] ?? map['role_name'];
       if (raw is! String && raw is! num) continue;
       final name = raw.toString().trim();
       if (name.isNotEmpty && seen.add(name.toLowerCase())) names.add(name);
@@ -1314,32 +1172,16 @@ class MediaItem {
       final map = Map<String, dynamic>.from(value);
       final roleKeys = switch (kind) {
         'director' => <String>['directors', 'director', 'directing'],
-        'writer' => <String>[
-            'writers',
-            'screenwriters',
-            'screen_writers',
-            'writing',
-            'screenplay'
-          ],
-        'music' => <String>[
-            'composers',
-            'composer',
-            'music',
-            'score',
-            'soundtrack'
-          ],
+        'writer' => <String>['writers', 'screenwriters', 'screen_writers', 'writing', 'screenplay'],
+        'music' => <String>['composers', 'composer', 'music', 'score', 'soundtrack'],
         _ => <String>[],
       };
       final directNames = _firstCreditNameList(
         roleKeys.map((key) => map[key]).toList(growable: false),
       );
       if (directNames.isNotEmpty) return directNames;
-      value = map['items'] ??
-          map['results'] ??
-          map['people'] ??
-          map['members'] ??
-          map['crew'] ??
-          map['credits'];
+      value = map['items'] ?? map['results'] ?? map['people'] ??
+          map['members'] ?? map['crew'] ?? map['credits'];
     }
     final rows = value is List ? value : <dynamic>[];
     final matches = <Map<String, dynamic>>[];
@@ -1353,18 +1195,12 @@ class MediaItem {
         map['known_for_department']?.toString() ?? '',
       ].join(' ').toLowerCase();
       final isMatch = switch (kind) {
-        'director' =>
-          roleText.contains('director') || roleText.contains('directing'),
-        'writer' => roleText.contains('writer') ||
-            roleText.contains('writing') ||
-            roleText.contains('screenplay') ||
-            roleText.contains('script') ||
-            roleText.contains('story') ||
-            roleText.contains('author'),
-        'music' => roleText.contains('composer') ||
-            roleText.contains('music') ||
-            roleText.contains('score') ||
-            roleText.contains('songwriter'),
+        'director' => roleText.contains('director') || roleText.contains('directing'),
+        'writer' => roleText.contains('writer') || roleText.contains('writing') ||
+            roleText.contains('screenplay') || roleText.contains('script') ||
+            roleText.contains('story') || roleText.contains('author'),
+        'music' => roleText.contains('composer') || roleText.contains('music') ||
+            roleText.contains('score') || roleText.contains('songwriter'),
         _ => false,
       };
       if (isMatch) matches.add(map);
@@ -1413,7 +1249,8 @@ class MediaItem {
       'canonicalWorkId': canonicalWorkId,
       'editionFeatures': editionFeatures,
       'seriesStartYear': seriesStartYear,
-      'seriesStartDate': seriesStartDate?.toIso8601String().substring(0, 10),
+      'seriesStartDate':
+          seriesStartDate?.toIso8601String().substring(0, 10),
       'seriesEndYear': seriesEndYear,
       'seriesOngoing': seriesOngoing,
       'seriesStatus': seriesStatus,
@@ -1474,8 +1311,7 @@ class MediaItem {
       'postCreditSceneCount': postCreditSceneCount,
       'narrativePrerequisiteIds': narrativePrerequisiteIds,
       'universeMetadataSource': universeMetadataSource,
-      'universeMetadataVerifiedAt':
-          universeMetadataVerifiedAt?.toIso8601String(),
+      'universeMetadataVerifiedAt': universeMetadataVerifiedAt?.toIso8601String(),
       'actors': actors,
       'characters': characters,
       'directors': directors,
@@ -1514,8 +1350,9 @@ Map<String, dynamic>? normalizeRecommendationMediaPayload(dynamic value) {
       ? Map<String, dynamic>.from(nested)
       : Map<String, dynamic>.from(wrapper);
 
-  final rawType =
-      (media['type'] ?? media['mediaType'] ?? 'movie').toString().trim();
+  final rawType = (media['type'] ?? media['mediaType'] ?? 'movie')
+      .toString()
+      .trim();
   final compactType = rawType.toLowerCase().replaceAll(RegExp(r'[\s_-]+'), '');
   final String normalizedType = switch (compactType) {
     'tv' || 'tvshow' || 'television' || 'series' || 'episode' => 'tv show',
@@ -1527,9 +1364,7 @@ Map<String, dynamic>? normalizeRecommendationMediaPayload(dynamic value) {
   final normalized = <String, dynamic>{
     ...media,
     'type': normalizedType,
-    if (media['releaseYear'] == null &&
-        media['release_year'] == null &&
-        media['year'] != null)
+    if (media['releaseYear'] == null && media['release_year'] == null && media['year'] != null)
       'releaseYear': media['year'],
     if (media['imageUrl'] == null && media['posterUrl'] != null)
       'imageUrl': media['posterUrl'],
@@ -2454,163 +2289,39 @@ String formatCountryName(String raw) {
   final value = raw.trim();
   if (value.isEmpty) return '';
   const countries = <String, String>{
-    'US': 'United States',
-    'USA': 'United States',
-    'U.S.': 'United States',
-    'U.S.A.': 'United States',
-    'UNITED STATES OF AMERICA': 'United States',
-    'UNITED STATES': 'United States',
-    'GB': 'United Kingdom',
-    'UK': 'United Kingdom',
-    'GREAT BRITAIN': 'United Kingdom',
-    'KR': 'South Korea',
-    'REPUBLIC OF KOREA': 'South Korea',
-    'KOREA, REPUBLIC OF': 'South Korea',
-    'KP': 'North Korea',
-    'JP': 'Japan',
-    'MX': 'Mexico',
-    'CA': 'Canada',
-    'IN': 'India',
-    'FR': 'France',
-    'DE': 'Germany',
-    'ES': 'Spain',
-    'IT': 'Italy',
-    'BR': 'Brazil',
-    'CN': 'China',
-    'TW': 'Taiwan',
-    'TH': 'Thailand',
-    'AU': 'Australia',
-    'NZ': 'New Zealand',
-    'NG': 'Nigeria',
-    'PH': 'Philippines',
-    'CO': 'Colombia',
-    'AR': 'Argentina',
-    'ID': 'Indonesia',
-    'IE': 'Ireland',
-    'SE': 'Sweden',
-    'DK': 'Denmark',
-    'NO': 'Norway',
-    'BE': 'Belgium',
-    'NL': 'Netherlands',
-    'PL': 'Poland',
-    'TR': 'Turkey',
-    'ZA': 'South Africa',
-    'SG': 'Singapore',
-    'HK': 'Hong Kong',
-    'RU': 'Russia',
-    'PT': 'Portugal',
-    'CH': 'Switzerland',
-    'AT': 'Austria',
-    'GR': 'Greece',
-    'IL': 'Israel',
-    'EG': 'Egypt',
-    'PK': 'Pakistan',
-    'BD': 'Bangladesh',
-    'CL': 'Chile',
-    'PE': 'Peru',
-    'VE': 'Venezuela',
-    'MY': 'Malaysia',
-    'VN': 'Vietnam',
-    'FI': 'Finland',
-    'IS': 'Iceland',
-    'CZ': 'Czechia',
-    'RO': 'Romania',
-    'UA': 'Ukraine',
-    'AE': 'United Arab Emirates',
-    'AF': 'Afghanistan',
-    'AL': 'Albania',
-    'AM': 'Armenia',
-    'AO': 'Angola',
-    'AZ': 'Azerbaijan',
-    'BA': 'Bosnia and Herzegovina',
-    'BG': 'Bulgaria',
-    'BH': 'Bahrain',
-    'BO': 'Bolivia',
-    'BY': 'Belarus',
-    'CR': 'Costa Rica',
-    'CU': 'Cuba',
-    'CY': 'Cyprus',
-    'DO': 'Dominican Republic',
-    'DZ': 'Algeria',
-    'EC': 'Ecuador',
-    'EE': 'Estonia',
-    'ET': 'Ethiopia',
-    'GE': 'Georgia',
-    'GH': 'Ghana',
-    'GT': 'Guatemala',
-    'HR': 'Croatia',
-    'HU': 'Hungary',
-    'IQ': 'Iraq',
-    'IR': 'Iran',
-    'JM': 'Jamaica',
-    'JO': 'Jordan',
-    'KE': 'Kenya',
-    'KG': 'Kyrgyzstan',
-    'KH': 'Cambodia',
-    'KW': 'Kuwait',
-    'KZ': 'Kazakhstan',
-    'LA': 'Laos',
-    'LB': 'Lebanon',
-    'LK': 'Sri Lanka',
-    'LT': 'Lithuania',
-    'LU': 'Luxembourg',
-    'LV': 'Latvia',
-    'LY': 'Libya',
-    'MA': 'Morocco',
-    'MD': 'Moldova',
-    'ME': 'Montenegro',
-    'MK': 'North Macedonia',
-    'MM': 'Myanmar',
-    'MN': 'Mongolia',
-    'MO': 'Macao',
-    'MT': 'Malta',
-    'MU': 'Mauritius',
-    'MV': 'Maldives',
-    'MW': 'Malawi',
-    'MZ': 'Mozambique',
-    'NA': 'Namibia',
-    'NP': 'Nepal',
-    'OM': 'Oman',
-    'PA': 'Panama',
-    'PG': 'Papua New Guinea',
-    'PS': 'Palestine',
-    'PY': 'Paraguay',
-    'QA': 'Qatar',
-    'RS': 'Serbia',
-    'RW': 'Rwanda',
-    'SA': 'Saudi Arabia',
-    'SD': 'Sudan',
-    'SI': 'Slovenia',
-    'SK': 'Slovakia',
-    'SN': 'Senegal',
-    'SO': 'Somalia',
-    'SY': 'Syria',
-    'TN': 'Tunisia',
-    'TZ': 'Tanzania',
-    'UG': 'Uganda',
-    'UY': 'Uruguay',
-    'UZ': 'Uzbekistan',
-    'YE': 'Yemen',
-    'ZM': 'Zambia',
-    'ZW': 'Zimbabwe',
-    'BJ': 'Benin',
-    'BF': 'Burkina Faso',
-    'CM': 'Cameroon',
-    'CD': 'Democratic Republic of the Congo',
-    'CI': 'Côte d’Ivoire',
-    'DJ': 'Djibouti',
-    'ER': 'Eritrea',
-    'FJ': 'Fiji',
-    'GM': 'The Gambia',
-    'GN': 'Guinea',
-    'HT': 'Haiti',
-    'LR': 'Liberia',
-    'ML': 'Mali',
-    'NE': 'Niger',
-    'NI': 'Nicaragua',
-    'SR': 'Suriname',
-    'SV': 'El Salvador',
-    'XK': 'Kosovo',
+    'US': 'United States', 'USA': 'United States', 'U.S.': 'United States', 'U.S.A.': 'United States', 'UNITED STATES OF AMERICA': 'United States', 'UNITED STATES': 'United States',
+    'GB': 'United Kingdom', 'UK': 'United Kingdom', 'GREAT BRITAIN': 'United Kingdom',
+    'KR': 'South Korea', 'REPUBLIC OF KOREA': 'South Korea', 'KOREA, REPUBLIC OF': 'South Korea',
+    'KP': 'North Korea', 'JP': 'Japan', 'MX': 'Mexico', 'CA': 'Canada', 'IN': 'India',
+    'FR': 'France', 'DE': 'Germany', 'ES': 'Spain', 'IT': 'Italy', 'BR': 'Brazil',
+    'CN': 'China', 'TW': 'Taiwan', 'TH': 'Thailand', 'AU': 'Australia', 'NZ': 'New Zealand',
+    'NG': 'Nigeria', 'PH': 'Philippines', 'CO': 'Colombia', 'AR': 'Argentina', 'ID': 'Indonesia',
+    'IE': 'Ireland', 'SE': 'Sweden', 'DK': 'Denmark', 'NO': 'Norway', 'BE': 'Belgium',
+    'NL': 'Netherlands', 'PL': 'Poland', 'TR': 'Turkey', 'ZA': 'South Africa', 'SG': 'Singapore',
+    'HK': 'Hong Kong', 'RU': 'Russia', 'PT': 'Portugal', 'CH': 'Switzerland', 'AT': 'Austria',
+    'GR': 'Greece', 'IL': 'Israel', 'EG': 'Egypt', 'PK': 'Pakistan', 'BD': 'Bangladesh',
+    'CL': 'Chile', 'PE': 'Peru', 'VE': 'Venezuela', 'MY': 'Malaysia', 'VN': 'Vietnam',
+    'FI': 'Finland', 'IS': 'Iceland', 'CZ': 'Czechia', 'RO': 'Romania', 'UA': 'Ukraine',
+    'AE': 'United Arab Emirates', 'AF': 'Afghanistan', 'AL': 'Albania', 'AM': 'Armenia',
+    'AO': 'Angola', 'AZ': 'Azerbaijan', 'BA': 'Bosnia and Herzegovina', 'BG': 'Bulgaria',
+    'BH': 'Bahrain', 'BO': 'Bolivia', 'BY': 'Belarus', 'CR': 'Costa Rica', 'CU': 'Cuba',
+    'CY': 'Cyprus', 'DO': 'Dominican Republic', 'DZ': 'Algeria', 'EC': 'Ecuador', 'EE': 'Estonia',
+    'ET': 'Ethiopia', 'GE': 'Georgia', 'GH': 'Ghana', 'GT': 'Guatemala', 'HR': 'Croatia',
+    'HU': 'Hungary', 'IQ': 'Iraq', 'IR': 'Iran', 'JM': 'Jamaica', 'JO': 'Jordan', 'KE': 'Kenya',
+    'KG': 'Kyrgyzstan', 'KH': 'Cambodia', 'KW': 'Kuwait', 'KZ': 'Kazakhstan', 'LA': 'Laos',
+    'LB': 'Lebanon', 'LK': 'Sri Lanka', 'LT': 'Lithuania', 'LU': 'Luxembourg', 'LV': 'Latvia',
+    'LY': 'Libya', 'MA': 'Morocco', 'MD': 'Moldova', 'ME': 'Montenegro', 'MK': 'North Macedonia',
+    'MM': 'Myanmar', 'MN': 'Mongolia', 'MO': 'Macao', 'MT': 'Malta', 'MU': 'Mauritius',
+    'MV': 'Maldives', 'MW': 'Malawi', 'MZ': 'Mozambique', 'NA': 'Namibia', 'NP': 'Nepal',
+    'OM': 'Oman', 'PA': 'Panama', 'PG': 'Papua New Guinea', 'PS': 'Palestine', 'PY': 'Paraguay',
+    'QA': 'Qatar', 'RS': 'Serbia', 'RW': 'Rwanda', 'SA': 'Saudi Arabia', 'SD': 'Sudan',
+    'SI': 'Slovenia', 'SK': 'Slovakia', 'SN': 'Senegal', 'SO': 'Somalia', 'SY': 'Syria',
+    'TN': 'Tunisia', 'TZ': 'Tanzania', 'UG': 'Uganda', 'UY': 'Uruguay', 'UZ': 'Uzbekistan',
+    'YE': 'Yemen', 'ZM': 'Zambia', 'ZW': 'Zimbabwe', 'BJ': 'Benin', 'BF': 'Burkina Faso',
+    'CM': 'Cameroon', 'CD': 'Democratic Republic of the Congo', 'CI': 'Côte d’Ivoire',
+    'DJ': 'Djibouti', 'ER': 'Eritrea', 'FJ': 'Fiji', 'GM': 'The Gambia', 'GN': 'Guinea',
+    'HT': 'Haiti', 'LR': 'Liberia', 'ML': 'Mali', 'NE': 'Niger', 'NI': 'Nicaragua',
+    'SR': 'Suriname', 'SV': 'El Salvador', 'XK': 'Kosovo',
   };
   return countries[value.toUpperCase()] ?? value;
 }
@@ -2654,8 +2365,10 @@ List<MediaItem> internationalCatalogFirst(Iterable<MediaItem> items) {
 /// Implements the `AppController` class for this feature or UI component.
 /// True for files created by the ARM mock worker, which are text placeholders
 /// rather than real video/audio assets.
-bool isArmMockServerMediaId(String id) =>
-    id.replaceAll('\\', '/').toLowerCase().startsWith('arm_mock/');
+bool isArmMockServerMediaId(String id) => id
+    .replaceAll('\\', '/')
+    .toLowerCase()
+    .startsWith('arm_mock/');
 
 /// Normalizes scanner-derived display titles without inventing catalog metadata.
 String normalizeHomeServerMediaTitle(String raw) {
@@ -2713,11 +2426,60 @@ class AppController extends ChangeNotifier {
     final scope = _libraryMembershipScope;
     if (_loadedLibraryMembershipScope == scope) return;
 
-    final hiddenIds =
-        await LibraryMembershipStore(scopeId: scope).loadHiddenMediaIds();
-    // A profile switch may happen while the preferences read is pending.
+    final membershipStore = LibraryMembershipStore(scopeId: scope);
+    final localHiddenIds = await membershipStore.loadHiddenMediaIds();
+    final pendingOverrides = await membershipStore.loadPendingOverrides();
+    var hiddenIds = Set<String>.from(localHiddenIds);
+    final profileId = (currentProfile?.id.trim().isNotEmpty == true)
+        ? currentProfile!.id.trim()
+        : 'guest';
+    if (backendApi.isAuthenticated) {
+      try {
+        final remoteIds = (await backendApi
+                .getHiddenLibraryMediaIds(profileId: profileId)
+                .timeout(const Duration(seconds: 2)))
+            .toSet();
+        final bootstrapped = await membershipStore.isServerBootstrapComplete();
+        if (bootstrapped) {
+          hiddenIds = remoteIds;
+        } else {
+          // First run after this upgrade: preserve legacy device-local removals
+          // and merge them with any server tombstones before adopting a snapshot.
+          hiddenIds.addAll(remoteIds);
+        }
+        // Replay locally committed operations, including explicit re-adds, over
+        // the server snapshot. This prevents a stale remote hide from undoing
+        // Add to Library after a temporary network outage.
+        for (final entry in pendingOverrides.entries) {
+          if (entry.value) {
+            hiddenIds.add(entry.key);
+          } else {
+            hiddenIds.remove(entry.key);
+          }
+        }
+        if (!bootstrapped || pendingOverrides.isNotEmpty) {
+          await backendApi.replaceHiddenLibraryMediaIds(
+            profileId: profileId,
+            mediaIds: hiddenIds,
+          ).timeout(const Duration(seconds: 3));
+          await membershipStore.setServerBootstrapComplete(true);
+          for (final entry in pendingOverrides.entries) {
+            await membershipStore.clearPendingOverride(entry.key, entry.value);
+          }
+        }
+      } catch (_) {
+        // A failed read/reconciliation falls back to local durable preferences.
+      }
+    }
+
+    // A profile switch may happen while the local or remote read was pending.
     if (_libraryMembershipScope != scope) return;
 
+    try {
+      await membershipStore.saveHiddenMediaIds(hiddenIds);
+    } catch (_) {
+      // Never block library startup because a cache reconciliation failed.
+    }
     _hiddenLibraryMediaIds
       ..clear()
       ..addAll(hiddenIds);
@@ -2731,12 +2493,40 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  Future<void> _syncServerLibraryMembership({
+    required String scope,
+    required String profileId,
+    required String mediaId,
+    required bool hidden,
+  }) async {
+    if (!backendApi.isAuthenticated) return;
+    final membershipStore = LibraryMembershipStore(scopeId: scope);
+    try {
+      await backendApi
+          .setLibraryMediaHidden(
+            profileId: profileId,
+            mediaId: mediaId,
+            hidden: hidden,
+          )
+          .timeout(const Duration(seconds: 3));
+      await membershipStore.clearPendingOverride(mediaId, hidden);
+    } catch (_) {
+      // Mark the snapshot for merge/retry. The pending override is durable and
+      // replays both hides and explicit re-adds after a connection outage.
+      try {
+        await membershipStore.setServerBootstrapComplete(false);
+      } catch (_) {}
+      if (_libraryMembershipScope == scope) {
+        _loadedLibraryMembershipScope = null;
+      }
+    }
+  }
+
   Future<void> _saveLibraryMembership(Set<String> hiddenIds,
       {required String scope}) async {
     await LibraryMembershipStore(scopeId: scope).saveHiddenMediaIds(hiddenIds);
     if (_libraryMembershipScope != scope) {
-      throw StateError(
-          'The active profile changed before the library update completed.');
+      throw StateError('The active profile changed before the library update completed.');
     }
     _hiddenLibraryMediaIds
       ..clear()
@@ -3766,8 +3556,7 @@ class AppController extends ChangeNotifier {
   bool isOwned(String mediaId) {
     if (_isHiddenFromCurrentProfile(mediaId)) return false;
     return library.any(
-      (item) =>
-          item.id == mediaId &&
+      (item) => item.id == mediaId &&
           !_isHiddenFromCurrentProfile(item.id) &&
           item.isAccessibleTo(currentProfile),
     );
@@ -3775,8 +3564,9 @@ class AppController extends ChangeNotifier {
 
   String _homeServerStreamUrl(String relativeMediaId) {
     final base = backendApi.baseUrl.replaceFirst(RegExp(r'/+$'), '');
-    return Uri.parse('$base/library/stream').replace(
-        queryParameters: <String, String>{'path': relativeMediaId}).toString();
+    return Uri.parse('$base/library/stream')
+        .replace(queryParameters: <String, String>{'path': relativeMediaId})
+        .toString();
   }
 
   bool _looksLikeServerMediaFileId(String id) => RegExp(
@@ -3802,23 +3592,23 @@ class AppController extends ChangeNotifier {
       if (id.isEmpty || row['type']?.toString().toLowerCase() == 'music') {
         continue;
       }
-      final isMock =
-          isArmMockServerMediaId(id) || row['isDemoArtifact'] == true;
+      final isMock = isArmMockServerMediaId(id) || row['isDemoArtifact'] == true;
       final tags = <String>{
         if (row['tags'] is List)
           ...(row['tags'] as List).map((tag) => tag.toString()),
       };
       row['id'] = id;
-      row['title'] =
-          normalizeHomeServerMediaTitle(row['title']?.toString() ?? '');
-      row['addedSource'] =
-          isMock ? 'arm-mock-placeholder' : 'home-server-scanner';
+      row['title'] = normalizeHomeServerMediaTitle(row['title']?.toString() ?? '');
+      if (!isMock && row['type']?.toString().toLowerCase() == 'episode') {
+        _enrichScannedEpisodeRow(row);
+      }
+      row['addedSource'] = isMock
+          ? 'arm-mock-placeholder'
+          : ((row['addedSource']?.toString().trim().isNotEmpty ?? false)
+              ? row['addedSource'].toString().trim()
+              : 'home-server-scanner');
       if (isMock) {
-        tags.addAll(<String>{
-          'arm-mock-placeholder',
-          'demo-placeholder',
-          'not-playable'
-        });
+        tags.addAll(<String>{'arm-mock-placeholder', 'demo-placeholder', 'not-playable'});
         row['playbackUrl'] = null;
         row['description'] =
             'ARM mock placeholder only. The file contains text, not playable video/audio. Replace it with a real media file to enable playback.';
@@ -3829,6 +3619,82 @@ class AppController extends ChangeNotifier {
       scanned.add(MediaItem.fromJson(row));
     }
     return mergeServerScanIntoLibrary(scanned);
+  }
+
+  /// Links an episode file discovered by SxxExx / NxN naming to its parent
+  /// show and, where season metadata exists, its canonical catalog episode.
+  /// This is what lets themed-episode cards launch the actual local file rather
+  /// than merely opening the show's detail page.
+  void _enrichScannedEpisodeRow(Map<String, dynamic> row) {
+    final rawSeriesTitle = row['seriesTitle']?.toString().trim() ?? '';
+    final seasonNumber = int.tryParse(row['seasonNumber']?.toString() ?? '');
+    final episodeNumber = int.tryParse(row['episodeNumber']?.toString() ?? '');
+    if (rawSeriesTitle.isEmpty || seasonNumber == null || episodeNumber == null) {
+      return;
+    }
+
+    String normalize(String value) => value
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    final normalizedSeries = normalize(rawSeriesTitle);
+    MediaItem? parent;
+    for (final candidate in library) {
+      final type = candidate.type.toLowerCase().replaceAll('_', ' ').trim();
+      final isShow = candidate.isSeries ||
+          type == 'show' || type == 'tvshow' || type == 'tv show' ||
+          type == 'series' || type == 'television';
+      if (!isShow) continue;
+      if (normalize(candidate.title) == normalizedSeries ||
+          normalize(candidate.originalTitle ?? '') == normalizedSeries ||
+          normalize(candidate.canonicalTitle ?? '') == normalizedSeries) {
+        parent = candidate;
+        break;
+      }
+    }
+    if (parent == null) return;
+
+    row['parentMediaId'] = parent.id;
+    row['seriesTitle'] = parent.title;
+    row['seasonNumber'] = seasonNumber;
+    row['episodeNumber'] = episodeNumber;
+    for (final season in parent.seasons) {
+      final foundSeason = int.tryParse((season['seasonNumber'] ??
+              season['season_number'] ?? season['number'] ?? season['season'] ?? '')
+          .toString());
+      if (foundSeason != seasonNumber) continue;
+      final rawEpisodes = season['episodes'];
+      if (rawEpisodes is! List) continue;
+      for (final rawEpisode in rawEpisodes) {
+        if (rawEpisode is! Map) continue;
+        final episode = Map<String, dynamic>.from(rawEpisode);
+        final foundEpisode = int.tryParse((episode['episodeNumber'] ??
+                episode['episode_number'] ?? episode['number'] ?? episode['episode'] ?? '')
+            .toString());
+        if (foundEpisode != episodeNumber) continue;
+        final canonicalTitle = (episode['title'] ?? episode['name'] ?? '')
+            .toString().trim();
+        if (canonicalTitle.isNotEmpty) row['title'] = canonicalTitle;
+        final description = (episode['description'] ?? episode['overview'] ?? '')
+            .toString().trim();
+        if (description.isNotEmpty) row['description'] = description;
+        for (final key in const <String>[
+          'imageUrl', 'stillUrl', 'stillPath', 'still_path', 'posterUrl',
+          'trailerUrl',
+        ]) {
+          final value = episode[key]?.toString().trim() ?? '';
+          if (value.startsWith('http')) {
+            row[key == 'stillPath' || key == 'still_path' || key == 'posterUrl'
+                ? 'imageUrl'
+                : key] = value;
+            break;
+          }
+        }
+        return;
+      }
+    }
   }
 
   /// Merges scan results without discarding metadata-only catalog items,
@@ -3887,9 +3753,21 @@ class AppController extends ChangeNotifier {
         'imageUrl': existing?.imageUrl?.trim().isNotEmpty == true
             ? existing!.imageUrl
             : scanned.imageUrl,
+        'addedByProfileId': (existing?.addedByProfileId?.trim().isNotEmpty == true)
+            ? existing!.addedByProfileId
+            : scanned.addedByProfileId,
+        'addedByProfileName': (existing?.addedByProfileName?.trim().isNotEmpty == true)
+            ? existing!.addedByProfileName
+            : scanned.addedByProfileName,
+        'addedAt': existing?.addedAt.toIso8601String() ?? scanned.addedAt.toIso8601String(),
         'playbackUrl': playUrl,
-        'addedSource':
-            keepExistingSource ? existing.addedSource : 'home-server-scanner',
+        'addedSource': keepExistingSource
+            ? existing.addedSource
+            : (scanned.addedSource.trim().isNotEmpty &&
+                    scanned.addedSource != 'unknown' &&
+                    scanned.addedSource != 'home-server-scanner'
+                ? scanned.addedSource
+                : 'home-server-scanner'),
         'tags': mergedTags.toList(growable: false),
       });
     }
@@ -3910,11 +3788,7 @@ class AppController extends ChangeNotifier {
         description:
             'Found ${entry.value.length} ARM mock artifact file(s). These files contain placeholder text, not the actual movie/show or a playable stream.',
         addedSource: 'arm-mock-placeholder',
-        tags: <String>[
-          'arm-mock-placeholder',
-          'demo-placeholder',
-          'not-playable'
-        ],
+        tags: <String>['arm-mock-placeholder', 'demo-placeholder', 'not-playable'],
       );
     }
 
@@ -3934,8 +3808,7 @@ class AppController extends ChangeNotifier {
   void ensureDemoPreviewMedia({bool notify = true}) {
     var changed = false;
 
-    List<String> mergeNames(
-        Iterable<String> current, Iterable<String> additions) {
+    List<String> mergeNames(Iterable<String> current, Iterable<String> additions) {
       final seen = <String>{};
       final output = <String>[];
       for (final raw in <String>[...current, ...additions]) {
@@ -3958,12 +3831,7 @@ class AppController extends ChangeNotifier {
       // Never overwrite imported/user records. Only enrich the local preview
       // records created by this feature, retaining user-edited fields/artwork.
       if (existing.addedSource != 'demo-preview') return;
-      final tags = <String>{
-        ...existing.tags,
-        ...item.tags,
-        'not-playable',
-        'preview-only'
-      };
+      final tags = <String>{...existing.tags, ...item.tags, 'not-playable', 'preview-only'};
       final merged = MediaItem.fromJson(<String, dynamic>{
         ...existing.toJson(),
         'playbackUrl': null,
@@ -3986,29 +3854,19 @@ class AppController extends ChangeNotifier {
         'writers': mergeNames(existing.writers, item.writers),
         'music': mergeNames(existing.music, item.music),
         'genres': mergeNames(existing.genres, item.genres),
-        'franchiseId': existing.franchiseId?.trim().isNotEmpty == true
-            ? existing.franchiseId
-            : item.franchiseId,
-        'franchiseName': existing.franchiseName?.trim().isNotEmpty == true
-            ? existing.franchiseName
-            : item.franchiseName,
-        'franchiseType': existing.franchiseType?.trim().isNotEmpty == true
-            ? existing.franchiseType
-            : item.franchiseType,
+        'franchiseId': existing.franchiseId?.trim().isNotEmpty == true ? existing.franchiseId : item.franchiseId,
+        'franchiseName': existing.franchiseName?.trim().isNotEmpty == true ? existing.franchiseName : item.franchiseName,
+        'franchiseType': existing.franchiseType?.trim().isNotEmpty == true ? existing.franchiseType : item.franchiseType,
         'franchiseOrder': existing.franchiseOrder ?? item.franchiseOrder,
-        'franchiseNames':
-            mergeNames(existing.franchiseNames, item.franchiseNames),
-        'cinematicUniverseIds': mergeNames(
-            existing.cinematicUniverseIds, item.cinematicUniverseIds),
-        'cinematicUniverseNames': mergeNames(
-            existing.cinematicUniverseNames, item.cinematicUniverseNames),
+        'franchiseNames': mergeNames(existing.franchiseNames, item.franchiseNames),
+        'cinematicUniverseIds': mergeNames(existing.cinematicUniverseIds, item.cinematicUniverseIds),
+        'cinematicUniverseNames': mergeNames(existing.cinematicUniverseNames, item.cinematicUniverseNames),
         'universeMemberships': existing.universeMemberships.isNotEmpty
             ? existing.universeMemberships
             : item.universeMemberships,
         'continuityId': existing.continuityId ?? item.continuityId,
         'continuityName': existing.continuityName ?? item.continuityName,
-        'universeMetadataSource':
-            existing.universeMetadataSource ?? item.universeMetadataSource,
+        'universeMetadataSource': existing.universeMetadataSource ?? item.universeMetadataSource,
       });
       if (jsonEncode(merged.toJson()) != jsonEncode(existing.toJson())) {
         library[index] = merged;
@@ -4045,26 +3903,9 @@ class AppController extends ChangeNotifier {
           'seasonNumber': 1,
           'title': 'Season 1',
           'episodes': [
-            {
-              'episodeNumber': 1,
-              'title': 'The First Pulse',
-              'duration': 42,
-              'description': 'A strange signal interrupts a quiet night.'
-            },
-            {
-              'episodeNumber': 2,
-              'title': 'Dead Air',
-              'duration': 44,
-              'description':
-                  'The team traces the signal to an abandoned relay station.'
-            },
-            {
-              'episodeNumber': 3,
-              'title': 'Echoes',
-              'duration': 46,
-              'description':
-                  'A second transmission reveals a troubling pattern.'
-            },
+            {'episodeNumber': 1, 'title': 'The First Pulse', 'duration': 42, 'description': 'A strange signal interrupts a quiet night.'},
+            {'episodeNumber': 2, 'title': 'Dead Air', 'duration': 44, 'description': 'The team traces the signal to an abandoned relay station.'},
+            {'episodeNumber': 3, 'title': 'Echoes', 'duration': 46, 'description': 'A second transmission reveals a troubling pattern.'},
           ],
         },
       ],
@@ -4089,9 +3930,7 @@ class AppController extends ChangeNotifier {
     final seedTitleCounts = <String, int>{};
     for (final item in seedExamples) {
       final key = DemoCatalogMetadata.normalizeTitle(item.title);
-      if (key.isNotEmpty) {
-        seedTitleCounts.update(key, (count) => count + 1, ifAbsent: () => 1);
-      }
+      if (key.isNotEmpty) seedTitleCounts.update(key, (count) => count + 1, ifAbsent: () => 1);
     }
     final seenSeedTitleVariants = <String, int>{};
     for (var index = 0; index < seedExamples.length; index++) {
@@ -4102,10 +3941,8 @@ class AppController extends ChangeNotifier {
       final baseSlug = titleKey.isEmpty
           ? 'international-${example.year ?? 'unknown'}-$index'
           : titleKey.replaceAll(' ', '-');
-      final variantKey =
-          '$titleKey|${example.year ?? 'unknown'}|${example.isTv ? 'tv' : 'movie'}';
-      final variantIndex = seenSeedTitleVariants
-          .update(variantKey, (value) => value + 1, ifAbsent: () => 1);
+      final variantKey = '$titleKey|${example.year ?? 'unknown'}|${example.isTv ? 'tv' : 'movie'}';
+      final variantIndex = seenSeedTitleVariants.update(variantKey, (value) => value + 1, ifAbsent: () => 1);
       final needsVersion = (seedTitleCounts[titleKey] ?? 0) > 1;
       final slug = needsVersion
           ? '$baseSlug-${example.year ?? 'unknown'}-${example.isTv ? 'tv' : 'movie'}-$variantIndex'
@@ -4147,14 +3984,10 @@ class AppController extends ChangeNotifier {
         writers: DemoCatalogMetadata.writersFor(example.title),
         genres: genres,
         tags: <String>[
-          'demo-preview',
-          'preview-only',
-          'not-playable',
-          'catalog-example',
+          'demo-preview', 'preview-only', 'not-playable', 'catalog-example',
           if (isInternational) 'international-catalog',
           if (isMcu) ...['action', 'superhero', 'marvel-cinematic-universe'],
-          if (example.universe.toLowerCase().contains('wizarding'))
-            'wizarding-world',
+          if (example.universe.toLowerCase().contains('wizarding')) 'wizarding-world',
           if (example.universe.toLowerCase().contains('pixar')) 'pixar',
         ],
         addedSource: 'demo-preview',
@@ -4162,72 +3995,31 @@ class AppController extends ChangeNotifier {
         franchiseName: franchise?.name,
         franchiseType: franchise?.type,
         franchiseOrder: franchise?.order,
-        franchiseNames:
-            franchise == null ? const <String>[] : <String>[franchise.name],
-        cinematicUniverseIds:
-            isMcu ? const ['marvel-cinematic-universe'] : const <String>[],
-        cinematicUniverseNames: isMcu
-            ? const [CinematicSeedExamples.mcu]
-            : <String>[
-                if (isSpiderNoir) CinematicSeedExamples.spiderNoirContinuity
-              ],
-        cinematicUniverseSaga:
-            isMcu ? 'Marvel Cinematic Universe examples' : null,
+        franchiseNames: franchise == null ? const <String>[] : <String>[franchise.name],
+        cinematicUniverseIds: isMcu ? const ['marvel-cinematic-universe'] : const <String>[],
+        cinematicUniverseNames: isMcu ? const [CinematicSeedExamples.mcu] : <String>[if (isSpiderNoir) CinematicSeedExamples.spiderNoirContinuity],
+        cinematicUniverseSaga: isMcu ? 'Marvel Cinematic Universe examples' : null,
         cinematicUniverseCanonStatus: isMcu ? 'sample-catalog-metadata' : null,
-        continuityId: isSpiderNoir
-            ? 'spider-noir-separate-continuity'
-            : (isMcu ? 'mcu' : null),
-        continuityName: isSpiderNoir
-            ? 'Spider-Noir separate continuity'
-            : (isMcu ? CinematicSeedExamples.mcu : null),
+        continuityId: isSpiderNoir ? 'spider-noir-separate-continuity' : (isMcu ? 'mcu' : null),
+        continuityName: isSpiderNoir ? 'Spider-Noir separate continuity' : (isMcu ? CinematicSeedExamples.mcu : null),
         universeMetadataSource: 'local-demo-seed',
         universeMemberships: isMcu
             ? const <Map<String, dynamic>>[
-                {
-                  'id': 'marvel-cinematic-universe',
-                  'name': 'Marvel Cinematic Universe',
-                  'relationship': 'example-membership',
-                  'source': 'local-demo-seed'
-                }
+                {'id': 'marvel-cinematic-universe', 'name': 'Marvel Cinematic Universe', 'relationship': 'example-membership', 'source': 'local-demo-seed'}
               ]
             : (isSpiderNoir
                 ? const <Map<String, dynamic>>[
-                    {
-                      'id': 'spider-noir-separate-continuity',
-                      'name': 'Spider-Noir separate continuity',
-                      'relationship': 'separate-continuity',
-                      'source': 'local-demo-seed'
-                    }
+                    {'id': 'spider-noir-separate-continuity', 'name': 'Spider-Noir separate continuity', 'relationship': 'separate-continuity', 'source': 'local-demo-seed'}
                   ]
                 : const <Map<String, dynamic>>[]),
       ));
     }
 
     const albumExamples = <Map<String, dynamic>>[
-      {
-        'title': '1989',
-        'artist': 'Taylor Swift',
-        'year': 2014,
-        'genres': ['Pop']
-      },
-      {
-        'title': 'Rare',
-        'artist': 'Selena Gomez',
-        'year': 2020,
-        'genres': ['Pop', 'Dance Pop']
-      },
-      {
-        'title': 'YHLQMDLG',
-        'artist': 'Bad Bunny',
-        'year': 2020,
-        'genres': ['Latin', 'Reggaeton', 'Latin Trap']
-      },
-      {
-        'title': 'Colores',
-        'artist': 'J Balvin',
-        'year': 2020,
-        'genres': ['Latin', 'Reggaeton']
-      },
+      {'title': '1989', 'artist': 'Taylor Swift', 'year': 2014, 'genres': ['Pop']},
+      {'title': 'Rare', 'artist': 'Selena Gomez', 'year': 2020, 'genres': ['Pop', 'Dance Pop']},
+      {'title': 'YHLQMDLG', 'artist': 'Bad Bunny', 'year': 2020, 'genres': ['Latin', 'Reggaeton', 'Latin Trap']},
+      {'title': 'Colores', 'artist': 'J Balvin', 'year': 2020, 'genres': ['Latin', 'Reggaeton']},
     ];
     for (final album in albumExamples) {
       final title = album['title']! as String;
@@ -4236,18 +4028,11 @@ class AppController extends ChangeNotifier {
         id: 'demo-catalog-album-${DemoCatalogMetadata.normalizeTitle(title).replaceAll(' ', '-')}',
         title: title,
         type: 'album',
-        description:
-            'Music catalog example for $artist. No audio files are attached and playback is unavailable until you import your own audio. Use this item to preview artist/performer credit links.',
+        description: 'Music catalog example for $artist. No audio files are attached and playback is unavailable until you import your own audio. Use this item to preview artist/performer credit links.',
         releaseYear: album['year']! as int,
         music: <String>[artist],
         genres: (album['genres']! as List).cast<String>(),
-        tags: const [
-          'demo-preview',
-          'preview-only',
-          'not-playable',
-          'catalog-example',
-          'music-artist-example'
-        ],
+        tags: const ['demo-preview', 'preview-only', 'not-playable', 'catalog-example', 'music-artist-example'],
         addedSource: 'demo-preview',
       ));
     }
@@ -4333,6 +4118,17 @@ class AppController extends ChangeNotifier {
     final updatedHiddenIds = Set<String>.from(_hiddenLibraryMediaIds)
       ..remove(media.id.trim());
     await _saveLibraryMembership(updatedHiddenIds, scope: scope);
+    final membershipProfileId = (currentProfile?.id.trim().isNotEmpty == true)
+        ? currentProfile!.id.trim()
+        : 'guest';
+    await LibraryMembershipStore(scopeId: scope)
+        .savePendingOverride(media.id.trim(), false);
+    unawaited(_syncServerLibraryMembership(
+      scope: scope,
+      profileId: membershipProfileId,
+      mediaId: media.id.trim(),
+      hidden: false,
+    ));
 
     library.removeWhere((item) => item.id == media.id);
     library.add(media);
@@ -4399,9 +4195,7 @@ class AppController extends ChangeNotifier {
       final values = <String>[];
       for (final raw in <String>[...current, ...incoming]) {
         final value = raw.trim();
-        if (value.isNotEmpty && seen.add(value.toLowerCase())) {
-          values.add(value);
-        }
+        if (value.isNotEmpty && seen.add(value.toLowerCase())) values.add(value);
       }
       return values;
     }
@@ -4411,9 +4205,7 @@ class AppController extends ChangeNotifier {
       final date = RegExp(r'^(\d{4}-\d{2}-\d{2})').firstMatch(clean)?.group(1);
       if (date == null) return null;
       final parsed = DateTime.tryParse(date);
-      return parsed == null
-          ? null
-          : DateTime(parsed.year, parsed.month, parsed.day);
+      return parsed == null ? null : DateTime(parsed.year, parsed.month, parsed.day);
     }
 
     final current = library[index];
@@ -4422,8 +4214,7 @@ class AppController extends ChangeNotifier {
     final mergedDirectors = merge(current.directors, directors);
     final mergedWriters = merge(current.writers, writers);
     final mergedMusic = merge(current.music, music);
-    final mergedGenres = GenreSystem.normalizeGenres(
-        <String>[...current.genres, ...providerGenres]);
+    final mergedGenres = GenreSystem.normalizeGenres(<String>[...current.genres, ...providerGenres]);
     final mergedTags = merge(current.tags, providerKeywords);
     final currentPoster = current.imageUrl?.trim() ?? '';
     final incomingPoster = posterUrl?.trim() ?? '';
@@ -4433,35 +4224,18 @@ class AppController extends ChangeNotifier {
     final parsedStart = dateOnly(providerReleaseDate);
     final parsedEnd = dateOnly(providerLastAirDate);
     final cleanStatus = providerStatus?.trim() ?? '';
-    final normalizedStatus =
-        cleanStatus.toLowerCase().replaceAll(RegExp(r'[_-]+'), ' ');
-    final providerOngoing = current.isSeries &&
-        const <String>{
-          'returning series',
-          'in production',
-          'planned',
-          'pilot',
-          'ongoing',
-          'airing',
-        }.contains(normalizedStatus);
-    final fillMovieDate =
-        !current.isSeries && current.releaseDate == null && parsedStart != null;
-    final fillSeriesStart = current.isSeries &&
-        current.seriesStartDate == null &&
-        parsedStart != null;
+    final normalizedStatus = cleanStatus.toLowerCase().replaceAll(RegExp(r'[_-]+'), ' ');
+    final providerOngoing = current.isSeries && const <String>{
+      'returning series', 'in production', 'planned', 'pilot', 'ongoing', 'airing',
+    }.contains(normalizedStatus);
+    final fillMovieDate = !current.isSeries && current.releaseDate == null && parsedStart != null;
+    final fillSeriesStart = current.isSeries && current.seriesStartDate == null && parsedStart != null;
     final fillReleaseDate = current.releaseDate == null && parsedStart != null;
-    final fillSeriesEnd = current.isSeries &&
-        current.seriesEndYear == null &&
-        parsedEnd != null &&
-        !providerOngoing;
-    final fillSeriesStatus = current.isSeries &&
-        (current.seriesStatus?.trim().isNotEmpty != true) &&
-        cleanStatus.isNotEmpty;
-    final fillSeriesOngoing =
-        current.isSeries && providerOngoing && !current.seriesOngoing;
+    final fillSeriesEnd = current.isSeries && current.seriesEndYear == null && parsedEnd != null && !providerOngoing;
+    final fillSeriesStatus = current.isSeries && (current.seriesStatus?.trim().isNotEmpty != true) && cleanStatus.isNotEmpty;
+    final fillSeriesOngoing = current.isSeries && providerOngoing && !current.seriesOngoing;
     bool equal(List<String> a, List<String> b) =>
-        a.length == b.length &&
-        List.generate(a.length, (i) => a[i] == b[i]).every((v) => v);
+        a.length == b.length && List.generate(a.length, (i) => a[i] == b[i]).every((v) => v);
     final coreChanged = shouldFillPoster ||
         !equal(mergedActors, current.actors) ||
         !equal(mergedCharacters, current.characters) ||
@@ -4470,12 +4244,8 @@ class AppController extends ChangeNotifier {
         !equal(mergedMusic, current.music) ||
         !equal(mergedGenres, current.genres) ||
         !equal(mergedTags, current.tags) ||
-        fillReleaseDate ||
-        fillMovieDate ||
-        fillSeriesStart ||
-        fillSeriesEnd ||
-        fillSeriesStatus ||
-        fillSeriesOngoing;
+        fillReleaseDate || fillMovieDate || fillSeriesStart || fillSeriesEnd ||
+        fillSeriesStatus || fillSeriesOngoing;
     if (!coreChanged) return;
 
     final startDateText = parsedStart?.toIso8601String().substring(0, 10);
@@ -4490,13 +4260,10 @@ class AppController extends ChangeNotifier {
       'music': mergedMusic,
       'genres': mergedGenres,
       'tags': mergedTags,
-      if (fillReleaseDate && startDateText != null)
-        'releaseDate': startDateText,
+      if (fillReleaseDate && startDateText != null) 'releaseDate': startDateText,
       if (fillMovieDate) 'releaseYear': current.releaseYear ?? parsedStart.year,
-      if (fillSeriesStart && startDateText != null)
-        'seriesStartDate': startDateText,
-      if (fillSeriesStart)
-        'seriesStartYear': current.seriesStartYear ?? parsedStart.year,
+      if (fillSeriesStart && startDateText != null) 'seriesStartDate': startDateText,
+      if (fillSeriesStart) 'seriesStartYear': current.seriesStartYear ?? parsedStart.year,
       if (fillSeriesEnd && endDate != null) 'seriesEndYear': endDate.year,
       if (fillSeriesStatus) 'seriesStatus': cleanStatus,
       if (fillSeriesOngoing) 'seriesOngoing': true,
@@ -4552,6 +4319,17 @@ class AppController extends ChangeNotifier {
     // Persist first so a failed write cannot make the UI claim the removal is
     // durable when the server scan would otherwise put it back.
     await _saveLibraryMembership(updatedHiddenIds, scope: scope);
+    final membershipProfileId = (currentProfile?.id.trim().isNotEmpty == true)
+        ? currentProfile!.id.trim()
+        : 'guest';
+    await LibraryMembershipStore(scopeId: scope)
+        .savePendingOverride(normalizedId, true);
+    unawaited(_syncServerLibraryMembership(
+      scope: scope,
+      profileId: membershipProfileId,
+      mediaId: normalizedId,
+      hidden: true,
+    ));
 
     library.removeWhere((item) => item.id.trim() == normalizedId);
     _refreshAutomaticCollections();
@@ -4606,8 +4384,7 @@ class AppController extends ChangeNotifier {
   /// Adds a profile-scoped playback completion event for Wrapped. This is a
   /// compact activity record only: it stores metadata and timestamps, never
   /// media bytes, credentials, or a raw storage path.
-  Future<void> recordWrappedActivity(MediaItem media) =>
-      recordWrappedActivityDetails(
+  Future<void> recordWrappedActivity(MediaItem media) => recordWrappedActivityDetails(
         mediaId: media.id,
         canonicalWorkId: media.canonicalWorkId ?? media.id,
         title: media.title,
@@ -4628,9 +4405,7 @@ class AppController extends ChangeNotifier {
     String? profileIdOverride,
   }) async {
     final profileId = (profileIdOverride ?? currentProfile?.id ?? '').trim();
-    if (profileId.isEmpty || mediaId.trim().isEmpty || title.trim().isEmpty) {
-      return;
-    }
+    if (profileId.isEmpty || mediaId.trim().isEmpty || title.trim().isEmpty) return;
 
     try {
       final prefs = _badgePrefs ?? await SharedPreferences.getInstance();
@@ -4643,8 +4418,8 @@ class AppController extends ChangeNotifier {
           final decoded = jsonDecode(raw);
           if (decoded is List) {
             records.addAll(decoded.whereType<Map>().map(
-                  (entry) => Map<String, dynamic>.from(entry),
-                ));
+              (entry) => Map<String, dynamic>.from(entry),
+            ));
           }
         } catch (_) {
           // Start a fresh bounded journal if an old local cache is malformed.
@@ -4999,12 +4774,7 @@ class AppController extends ChangeNotifier {
   String _mediaTypeLabel(MediaItem media) {
     final type =
         media.type.toLowerCase().replaceAll('_', '').replaceAll(' ', '');
-    if (type == 'tvshow' ||
-        type == 'series' ||
-        type == 'episode' ||
-        type == 'tv') {
-      return 'show';
-    }
+    if (type == 'tvshow' || type == 'series' || type == 'episode' || type == 'tv') return 'show';
     if (type.contains('album') || type == 'soundtrack') return 'album';
     return 'movie';
   }
@@ -5036,9 +4806,7 @@ class AppController extends ChangeNotifier {
     }
     episodes.sort((a, b) {
       final seasonCompare = a.season.compareTo(b.season);
-      return seasonCompare != 0
-          ? seasonCompare
-          : a.episode.compareTo(b.episode);
+      return seasonCompare != 0 ? seasonCompare : a.episode.compareTo(b.episode);
     });
     final range = episodes.isEmpty
         ? ''
@@ -7086,12 +6854,9 @@ class AppController extends ChangeNotifier {
       final selectedMedia = library
           .where((item) => collection.mediaIds.contains(item.id))
           .toList(growable: false);
-      final hasMovie =
-          selectedMedia.any((item) => _mediaTypeLabel(item) == 'movie');
-      final hasShow =
-          selectedMedia.any((item) => _mediaTypeLabel(item) == 'show');
-      final hasAlbum =
-          selectedMedia.any((item) => _mediaTypeLabel(item) == 'album');
+      final hasMovie = selectedMedia.any((item) => _mediaTypeLabel(item) == 'movie');
+      final hasShow = selectedMedia.any((item) => _mediaTypeLabel(item) == 'show');
+      final hasAlbum = selectedMedia.any((item) => _mediaTypeLabel(item) == 'album');
       final collectionKind = hasAlbum && !hasMovie && !hasShow
           ? 'Music'
           : hasShow && !hasMovie && !hasAlbum
@@ -7328,13 +7093,8 @@ class AppController extends ChangeNotifier {
             ...m.actors,
             if (m.franchiseName != null) m.franchiseName!,
           ].join(' ').toLowerCase();
-          return const <String>[
-            'action',
-            'adventure',
-            'martial arts',
-            'spy',
-            'superhero'
-          ].any((keyword) => text.contains(keyword));
+          return const <String>['action', 'adventure', 'martial arts', 'spy', 'superhero']
+              .any((keyword) => text.contains(keyword));
         },
       },
       {
@@ -7472,8 +7232,7 @@ class AppController extends ChangeNotifier {
     if (!featuredCollectionOrder.contains(collection.id)) {
       featuredCollectionOrder.add(collection.id);
     }
-    addNotification(
-        action: 'a new automatic collection was created: ${collection.name}');
+    addNotification(action: 'a new automatic collection was created: ${collection.name}');
     return collection;
   }
 

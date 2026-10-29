@@ -15,6 +15,10 @@ import 'profile_content_safety.dart';
 import 'profile_administration.dart';
 import 'localization.dart';
 import 'profile_username.dart';
+import 'artwork_selection_store.dart';
+import 'core/services/cinematic_title_metadata_service.dart';
+import 'energy_saver.dart';
+import 'media_artwork_auto_resolver.dart';
 
 class _AvatarOption {
   const _AvatarOption(this.label, {this.icon, this.symbol});
@@ -55,6 +59,47 @@ int? _avatarIndexFromValue(String? value) {
       : null;
 }
 
+
+/// One image owned by a movie, show, or album that can be used as a profile picture.
+class _ProfileMediaArtworkOption {
+  const _ProfileMediaArtworkOption({
+    required this.title,
+    required this.kind,
+    required this.imageSource,
+    required this.identity,
+  });
+
+  final String title;
+  final String kind;
+  final String imageSource;
+  final String identity;
+}
+
+String? _profileArtworkSource(String? raw, {String tmdbSize = 'w500'}) {
+  final value = raw?.trim() ?? '';
+  if (value.isEmpty) return null;
+  if (value.startsWith('https://') || value.startsWith('http://') ||
+      value.startsWith('file://')) {
+    return value;
+  }
+  // Keep a real local artwork file usable on this device, matching the
+  // existing profile-photo behavior. Remote profile sync works best with URLs.
+  try {
+    if (File(value).existsSync()) return value;
+  } catch (_) {
+    // Invalid paths fall through to TMDB-path normalization below.
+  }
+  if (value.startsWith('/')) {
+    return CinematicTitleMetadataService.imageUrl(value, size: tmdbSize);
+  }
+  return null;
+}
+
+bool _isRemoteProfileArtwork(String? value) {
+  final source = value?.trim() ?? '';
+  return source.startsWith('https://') || source.startsWith('http://');
+}
+
 /// ============================================================
 /// PROFILE SELECTION SCREEN
 /// ============================================================
@@ -78,10 +123,19 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
   late final AnimationController _animationController;
   int? _selectedBackdropIndex;
   List<_ProfileBackdropItem>? _cachedProfileBackdropItems;
+  bool _contentRebuildScheduled = false;
 
   void _onContentChanged() {
     _cachedProfileBackdropItems = null;
-    if (mounted) setState(() {});
+    if (!mounted || _contentRebuildScheduled) return;
+    // Library notifications can arrive while Flutter is building the profile
+    // surface. Coalesce them into a post-frame rebuild instead of attempting
+    // to mark a widget dirty from inside that build.
+    _contentRebuildScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _contentRebuildScheduled = false;
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -89,14 +143,16 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
-    // Hide the global navbar before profile selection/creation is rendered.
-    widget.onOpened?.call();
     AppController.instance.addListener(_onContentChanged);
     MusicLibraryStore.instance.addListener(_onContentChanged);
-    // Warm all available mixed movie/show/album artwork as the profile picker
-    // opens so the backdrop rotation and artwork choices aren't populated late.
+    // Defer the parent callback until after the first frame. The callback often
+    // changes global navigation state; calling it synchronously from initState
+    // can make an ancestor rebuild while it is still building this route.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      widget.onOpened?.call();
+      // Warm movie/show/album artwork after the profile surface has completed
+      // its first build, without blocking the initial frame.
       for (final item in _profileBackdropItems()) {
         unawaited(
           precacheImage(NetworkImage(item.imageUrl), context)
@@ -1118,7 +1174,10 @@ class _ProfileAvatar extends StatelessWidget {
         );
       }
 
-      final file = File(avatarValue);
+      final avatarUri = Uri.tryParse(avatarValue);
+      final file = avatarUri?.scheme == 'file'
+          ? File.fromUri(avatarUri!)
+          : File(avatarValue);
 
       if (file.existsSync()) {
         return ClipRRect(
@@ -1309,6 +1368,7 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
 
   XFile? _selectedPhoto;
   int? _selectedAvatarIndex;
+  String? _selectedMediaArtworkUrl;
 
   bool _saving = false;
 
@@ -1323,6 +1383,10 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
       text: widget.profile.username,
     );
     _selectedAvatarIndex = _avatarIndexFromValue(widget.profile.avatarUrl);
+    if (_selectedAvatarIndex == null &&
+        _isRemoteProfileArtwork(widget.profile.avatarUrl)) {
+      _selectedMediaArtworkUrl = widget.profile.avatarUrl!.trim();
+    }
   }
 
   @override
@@ -1348,6 +1412,8 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
 
       setState(() {
         _selectedPhoto = photo;
+        _selectedMediaArtworkUrl = null;
+        _selectedAvatarIndex = null;
       });
     } catch (error) {
       if (!mounted) return;
@@ -1376,6 +1442,8 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
 
       setState(() {
         _selectedPhoto = photo;
+        _selectedMediaArtworkUrl = null;
+        _selectedAvatarIndex = null;
       });
     } catch (error) {
       if (!mounted) return;
@@ -1490,9 +1558,11 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
     try {
       final avatarUrl = _selectedPhoto != null
           ? _selectedPhoto!.path
-          : _selectedAvatarIndex == null
-              ? widget.profile.avatarUrl
-              : 'avatar:$_selectedAvatarIndex';
+          : (_selectedMediaArtworkUrl?.trim().isNotEmpty == true)
+              ? _selectedMediaArtworkUrl!.trim()
+              : _selectedAvatarIndex == null
+                  ? widget.profile.avatarUrl
+                  : 'avatar:$_selectedAvatarIndex';
 
       final api = AppController.instance.backendApi;
       if (api.isAuthenticated) {
@@ -1596,6 +1666,7 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
                   profile: widget.profile,
                   selectedPhoto: _selectedPhoto,
                   selectedAvatarIndex: _selectedAvatarIndex,
+                  selectedMediaArtworkUrl: _selectedMediaArtworkUrl,
                 ),
               ),
               const SizedBox(height: 25),
@@ -1655,12 +1726,33 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
               ),
               const SizedBox(height: 12),
               _AvatarOptionsGrid(
-                selectedIndex:
-                    _selectedPhoto == null ? _selectedAvatarIndex : null,
+                selectedIndex: _selectedPhoto == null &&
+                        _selectedMediaArtworkUrl == null
+                    ? _selectedAvatarIndex
+                    : null,
                 enabled: !_saving,
                 onSelected: (index) => setState(() {
                   _selectedPhoto = null;
+                  _selectedMediaArtworkUrl = null;
                   _selectedAvatarIndex = index;
+                }),
+              ),
+              const SizedBox(height: 24),
+              const UniversalText(
+                'Choose from your library',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _OwnedMediaAvatarPicker(
+                selectedUrl: _selectedMediaArtworkUrl,
+                enabled: !_saving,
+                onSelected: (option) => setState(() {
+                  _selectedPhoto = null;
+                  _selectedAvatarIndex = null;
+                  _selectedMediaArtworkUrl = option.imageSource;
                 }),
               ),
               const SizedBox(height: 22),
@@ -1797,11 +1889,13 @@ class _EditableProfileAvatar extends StatelessWidget {
   final Profile profile;
   final XFile? selectedPhoto;
   final int? selectedAvatarIndex;
+  final String? selectedMediaArtworkUrl;
 
   const _EditableProfileAvatar({
     required this.profile,
     required this.selectedPhoto,
     required this.selectedAvatarIndex,
+    required this.selectedMediaArtworkUrl,
   });
 
   @override
@@ -1820,6 +1914,12 @@ class _EditableProfileAvatar extends StatelessWidget {
       );
     }
 
+    if (selectedMediaArtworkUrl?.trim().isNotEmpty == true) {
+      return _ProfileArtworkAvatarPreview(
+        imageSource: selectedMediaArtworkUrl!.trim(),
+        size: 130,
+      );
+    }
     if (selectedAvatarIndex != null) {
       return _IconAvatar(
         option: _avatarOptions[selectedAvatarIndex!],
@@ -2226,6 +2326,7 @@ class _CreateProfileSheetState extends State<CreateProfileSheet> {
   final ImagePicker _imagePicker = ImagePicker();
 
   XFile? _selectedPhoto;
+  String? _selectedMediaArtworkUrl;
 
   bool _saving = false;
 
@@ -2264,6 +2365,7 @@ class _CreateProfileSheetState extends State<CreateProfileSheet> {
 
       setState(() {
         _selectedPhoto = photo;
+        _selectedMediaArtworkUrl = null;
       });
     } catch (error) {
       if (!mounted) return;
@@ -2292,6 +2394,7 @@ class _CreateProfileSheetState extends State<CreateProfileSheet> {
 
       setState(() {
         _selectedPhoto = photo;
+        _selectedMediaArtworkUrl = null;
       });
     } catch (error) {
       if (!mounted) return;
@@ -2350,7 +2453,9 @@ class _CreateProfileSheetState extends State<CreateProfileSheet> {
 
       final avatarUrl = _selectedPhoto != null
           ? _selectedPhoto!.path
-          : 'avatar:$_selectedAvatarIndex';
+          : (_selectedMediaArtworkUrl?.trim().isNotEmpty == true)
+              ? _selectedMediaArtworkUrl!.trim()
+              : 'avatar:$_selectedAvatarIndex';
       Profile? savedProfile;
 
       if (controller.isBackendAuthenticated) {
@@ -2471,6 +2576,7 @@ class _CreateProfileSheetState extends State<CreateProfileSheet> {
                 child: _CreateProfileAvatarPreview(
                   selectedPhoto: _selectedPhoto,
                   option: _avatarOptions[_selectedAvatarIndex],
+                  selectedMediaArtworkUrl: _selectedMediaArtworkUrl,
                 ),
               ),
               const SizedBox(height: 25),
@@ -2531,12 +2637,32 @@ class _CreateProfileSheetState extends State<CreateProfileSheet> {
               ),
               const SizedBox(height: 14),
               _AvatarOptionsGrid(
-                selectedIndex:
-                    _selectedPhoto == null ? _selectedAvatarIndex : null,
+                selectedIndex: _selectedPhoto == null &&
+                        _selectedMediaArtworkUrl == null
+                    ? _selectedAvatarIndex
+                    : null,
                 enabled: !_saving,
                 onSelected: (index) => setState(() {
                   _selectedPhoto = null;
+                  _selectedMediaArtworkUrl = null;
                   _selectedAvatarIndex = index;
+                }),
+              ),
+              const SizedBox(height: 24),
+              const UniversalText(
+                'Choose from your library',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _OwnedMediaAvatarPicker(
+                selectedUrl: _selectedMediaArtworkUrl,
+                enabled: !_saving,
+                onSelected: (option) => setState(() {
+                  _selectedPhoto = null;
+                  _selectedMediaArtworkUrl = option.imageSource;
                 }),
               ),
               const SizedBox(height: 20),
@@ -2605,10 +2731,12 @@ class _CreateProfileSheetState extends State<CreateProfileSheet> {
 class _CreateProfileAvatarPreview extends StatelessWidget {
   final XFile? selectedPhoto;
   final _AvatarOption option;
+  final String? selectedMediaArtworkUrl;
 
   const _CreateProfileAvatarPreview({
     required this.selectedPhoto,
     required this.option,
+    required this.selectedMediaArtworkUrl,
   });
 
   @override
@@ -2627,7 +2755,66 @@ class _CreateProfileAvatarPreview extends StatelessWidget {
       );
     }
 
+    if (selectedMediaArtworkUrl?.trim().isNotEmpty == true) {
+      return _ProfileArtworkAvatarPreview(
+        imageSource: selectedMediaArtworkUrl!.trim(),
+        size: 130,
+      );
+    }
     return _IconAvatar(option: option, size: 130);
+  }
+}
+
+class _ProfileArtworkAvatarPreview extends StatelessWidget {
+  const _ProfileArtworkAvatarPreview({
+    required this.imageSource,
+    required this.size,
+  });
+
+  final String imageSource;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final source = imageSource.trim();
+    Widget fallback() => Container(
+          width: size,
+          height: size,
+          color: const Color(0xFF202020),
+          alignment: Alignment.center,
+          child: const Icon(Icons.image_not_supported_outlined,
+              color: Colors.white54, size: 34),
+        );
+
+    Widget image;
+    if (source.startsWith('https://') || source.startsWith('http://')) {
+      image = Image.network(
+        source,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => fallback(),
+      );
+    } else {
+      try {
+        final file = source.startsWith('file://')
+            ? File.fromUri(Uri.parse(source))
+            : File(source);
+        image = Image.file(
+          file,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => fallback(),
+        );
+      } catch (_) {
+        image = fallback();
+      }
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: SizedBox(width: size, height: size, child: image),
+    );
   }
 }
 
@@ -2953,6 +3140,471 @@ class _ProfileLogo extends StatelessWidget {
 /// ============================================================
 /// PROFILE BACKGROUND
 /// ============================================================
+
+/// Browsable choices from the active account's owned movie/show/album library.
+/// Cached and imported art appears immediately; missing TMDB/album art is then
+/// enriched asynchronously while the sheet remains open.
+class _OwnedMediaAvatarPicker extends StatefulWidget {
+  const _OwnedMediaAvatarPicker({
+    required this.selectedUrl,
+    required this.enabled,
+    required this.onSelected,
+  });
+
+  final String? selectedUrl;
+  final bool enabled;
+  final ValueChanged<_ProfileMediaArtworkOption> onSelected;
+
+  @override
+  State<_OwnedMediaAvatarPicker> createState() => _OwnedMediaAvatarPickerState();
+}
+
+class _OwnedMediaAvatarPickerState extends State<_OwnedMediaAvatarPicker> {
+  final List<_ProfileMediaArtworkOption> _options = <_ProfileMediaArtworkOption>[];
+  final Set<String> _seenSources = <String>{};
+  bool _loading = true;
+  bool _enriching = false;
+  bool _disposed = false;
+  bool _rebuildScheduled = false;
+
+  void _scheduleRebuild() {
+    if (!mounted || _disposed || _rebuildScheduled) return;
+    _rebuildScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _rebuildScheduled = false;
+      if (mounted && !_disposed) setState(() {});
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _seedImportedArtwork();
+    unawaited(_loadCachedAndProviderArtwork());
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  List<MediaItem> _ownedArtworkMedia() => AppController.instance.library
+      .where((media) => MediaArtworkAutoResolver.isMovieOrShow(media) ||
+          MediaArtworkAutoResolver.isAlbum(media))
+      .toList(growable: false);
+
+  void _seedImportedArtwork() {
+    for (final media in _ownedArtworkMedia()) {
+      if (MediaArtworkAutoResolver.isAlbum(media)) {
+        _addOption(
+          title: media.title,
+          kind: 'ALBUM COVER',
+          source: media.imageUrl,
+          identity: '${media.id}:album:imported',
+        );
+      } else {
+        _addOption(
+          title: media.title,
+          kind: media.isSeries ? 'SHOW POSTER' : 'MOVIE POSTER',
+          source: media.imageUrl,
+          identity: '${media.id}:poster:imported',
+        );
+      }
+    }
+
+    // Music tracks are also part of the owned music library. Use one cover per
+    // album/artist instead of repeating the same artwork for every song.
+    final seenAlbumKeys = <String>{};
+    for (final track in MusicLibraryStore.instance.tracks) {
+      final album = track.album.trim();
+      if (album.isEmpty) continue;
+      final albumKey = '${album.toLowerCase()}|${track.artist.trim().toLowerCase()}';
+      if (!seenAlbumKeys.add(albumKey)) continue;
+      _addOption(
+        title: album,
+        kind: 'ALBUM COVER',
+        source: track.artworkUrl,
+        identity: 'track-album:$albumKey',
+      );
+    }
+  }
+
+  void _addOption({
+    required String title,
+    required String kind,
+    required String? source,
+    required String identity,
+    String tmdbSize = 'w500',
+  }) {
+    final normalized = _profileArtworkSource(source, tmdbSize: tmdbSize);
+    if (normalized == null || normalized.isEmpty ||
+        !_seenSources.add(normalized)) {
+      return;
+    }
+    _options.add(_ProfileMediaArtworkOption(
+      title: title.trim().isEmpty ? 'Library artwork' : title.trim(),
+      kind: kind,
+      imageSource: normalized,
+      identity: identity,
+    ));
+  }
+
+  Future<void> _loadCachedAndProviderArtwork() async {
+    final controller = AppController.instance;
+    final profileId = controller.currentProfile?.id ?? 'guest';
+    final mediaItems = _ownedArtworkMedia();
+    final energy = EnergySaverController.instance;
+    // initState already schedules the first frame; set the flag directly here
+    // instead of triggering an unnecessary re-entrant build.
+    _enriching = true;
+
+    for (var index = 0; index < mediaItems.length; index++) {
+      if (!mounted || _disposed) return;
+      final media = mediaItems[index];
+      final isAlbum = MediaArtworkAutoResolver.isAlbum(media);
+      final isScreen = MediaArtworkAutoResolver.isMovieOrShow(media);
+      final paths = await Future.wait<String?>(<Future<String?>>[
+        ArtworkSelectionStore.readPosterPath(
+          profileId: profileId,
+          mediaId: media.id,
+        ),
+        MediaArtworkAutoResolver.readAutoPosterUrl(media.id),
+        if (isScreen)
+          ArtworkSelectionStore.readBackdropPath(
+            profileId: profileId,
+            mediaId: media.id,
+          )
+        else
+          Future<String?>.value(null),
+        if (isScreen)
+          MediaArtworkAutoResolver.readAutoBackdropPath(media.id)
+        else
+          Future<String?>.value(null),
+      ]);
+
+      final beforeCount = _options.length;
+      _addOption(
+        title: media.title,
+        kind: isAlbum ? 'ALBUM COVER' : (media.isSeries ? 'SHOW POSTER' : 'MOVIE POSTER'),
+        source: paths[0],
+        identity: '${media.id}:poster:selected',
+      );
+      _addOption(
+        title: media.title,
+        kind: isAlbum ? 'ALBUM COVER' : (media.isSeries ? 'SHOW POSTER' : 'MOVIE POSTER'),
+        source: paths[1],
+        identity: '${media.id}:poster:auto',
+      );
+      if (isScreen) {
+        _addOption(
+          title: media.title,
+          kind: media.isSeries ? 'SHOW BACKDROP' : 'MOVIE BACKDROP',
+          source: paths[2],
+          identity: '${media.id}:backdrop:selected',
+          tmdbSize: 'w780',
+        );
+        _addOption(
+          title: media.title,
+          kind: media.isSeries ? 'SHOW BACKDROP' : 'MOVIE BACKDROP',
+          source: paths[3],
+          identity: '${media.id}:backdrop:auto',
+          tmdbSize: 'w780',
+        );
+      }
+      if (mounted && _options.length != beforeCount) _scheduleRebuild();
+
+      final hasImportedPoster = (media.imageUrl?.trim().isNotEmpty ?? false) ||
+          _profileArtworkSource(paths[0]) != null ||
+          _profileArtworkSource(paths[1]) != null;
+      final hasBackdrop = _profileArtworkSource(paths[2], tmdbSize: 'w780') != null ||
+          _profileArtworkSource(paths[3], tmdbSize: 'w780') != null;
+      final shouldResolve = isAlbum
+          ? !hasImportedPoster
+          : isScreen && (!hasImportedPoster || !hasBackdrop);
+      if (shouldResolve && CinematicTitleMetadataService.isConfigured &&
+          energy.canRunBackgroundWork(pageId: energy.activePage)) {
+        final result = await MediaArtworkAutoResolver.resolveMedia(
+          media,
+          pageId: energy.activePage,
+        );
+        if (result != null) {
+          await MediaArtworkAutoResolver.rememberResolvedArtwork(
+            media,
+            result,
+            profileId: profileId,
+            // Avatar browsing should cache artwork only; it should not
+            // write a new metadata-credit payload for every title visited.
+            persistMissingPoster: false,
+          );
+          final resolvedBefore = _options.length;
+          _addOption(
+            title: media.title,
+            kind: isAlbum ? 'ALBUM COVER' : (media.isSeries ? 'SHOW POSTER' : 'MOVIE POSTER'),
+            source: result.posterUrl,
+            identity: '${media.id}:poster:resolved',
+          );
+          _addOption(
+            title: media.title,
+            kind: media.isSeries ? 'SHOW BACKDROP' : 'MOVIE BACKDROP',
+            source: result.titleMetadata?.backdropUrl ??
+                CinematicTitleMetadataService.imageUrl(
+                  result.backdropPath,
+                  size: 'w780',
+                ),
+            identity: '${media.id}:backdrop:resolved',
+            tmdbSize: 'w780',
+          );
+          if (mounted && _options.length != resolvedBefore) _scheduleRebuild();
+        }
+      }
+
+      // Yield between items. Artwork already available locally remains usable
+      // and the profile sheet never waits for the entire provider scan.
+      if (index % 8 == 7) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        if (mounted) _scheduleRebuild();
+      }
+    }
+
+    // Fill album-cover gaps from owned music tracks if that album wasn't
+    // represented by an album MediaItem in the main library.
+    if (CinematicTitleMetadataService.isConfigured && mounted) {
+      final attempted = <String>{};
+      for (final track in MusicLibraryStore.instance.tracks) {
+        if (!mounted || _disposed) return;
+        if (!energy.canRunBackgroundWork(pageId: energy.activePage)) {
+          energy.recordBackgroundTaskSkipped();
+          break;
+        }
+        final album = track.album.trim();
+        if (album.isEmpty || track.artworkUrl?.trim().isNotEmpty == true) continue;
+        final key = '${album.toLowerCase()}|${track.artist.trim().toLowerCase()}';
+        if (!attempted.add(key)) continue;
+        final alreadyHasCover = _options.any((item) =>
+            item.title.toLowerCase() == album.toLowerCase() &&
+            item.kind == 'ALBUM COVER');
+        if (alreadyHasCover) continue;
+        final cover = await MediaArtworkAutoResolver.resolveAlbumCover(
+          title: album,
+          artist: track.artist,
+        );
+        if (cover != null) {
+          final beforeCount = _options.length;
+          _addOption(
+            title: album,
+            kind: 'ALBUM COVER',
+            source: cover,
+            identity: 'track-album:$key:resolved',
+          );
+          if (mounted && _options.length != beforeCount) _scheduleRebuild();
+        }
+      }
+    }
+
+    if (mounted) {
+      _loading = false;
+      _enriching = false;
+      _scheduleRebuild();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_options.isEmpty && _loading) {
+      return const SizedBox(
+        height: 112,
+        child: Center(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: 10),
+              Text('Loading artwork from your library...',
+                  style: TextStyle(color: Colors.white60, fontSize: 12)),
+            ],
+          ),
+        ),
+      );
+    }
+    if (_options.isEmpty && !_loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: Text(
+          'No artwork was found in your owned movies, shows, or albums yet.',
+          style: TextStyle(color: Colors.white54, fontSize: 12),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (_enriching)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: <Widget>[
+                SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(strokeWidth: 1.5),
+                ),
+                SizedBox(width: 7),
+                Text('Finding missing posters and backdrops…',
+                    style: TextStyle(color: Colors.white54, fontSize: 11)),
+              ],
+            ),
+          ),
+        SizedBox(
+          height: 280,
+          child: GridView.builder(
+            itemCount: _options.length,
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 118,
+              mainAxisExtent: 112,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+            ),
+            itemBuilder: (context, index) {
+              final option = _options[index];
+              final selected = widget.selectedUrl == option.imageSource;
+              return Tooltip(
+                message: '${option.title} · ${option.kind.toLowerCase()}',
+                child: Material(
+                  key: ValueKey<String>(option.identity),
+                  color: Colors.white.withValues(alpha: .035),
+                  borderRadius: BorderRadius.circular(12),
+                  child: InkWell(
+                    onTap: widget.enabled ? () => widget.onSelected(option) : null,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: selected ? Colors.white : Colors.white12,
+                          width: selected ? 2 : 1,
+                        ),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: <Widget>[
+                          _ProfileArtworkImage(
+                            imageSource: option.imageSource,
+                            fit: BoxFit.cover,
+                          ),
+                          const DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: <Color>[Colors.transparent, Colors.black87],
+                                stops: <double>[.35, 1],
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            left: 6,
+                            right: 5,
+                            bottom: 5,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  option.kind,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  option.title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.05,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (selected)
+                            const Positioned(
+                              top: 5,
+                              right: 5,
+                              child: CircleAvatar(
+                                radius: 10,
+                                backgroundColor: Colors.white,
+                                child: Icon(Icons.check_rounded,
+                                    size: 13, color: Colors.black),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProfileArtworkImage extends StatelessWidget {
+  const _ProfileArtworkImage({
+    required this.imageSource,
+    this.fit = BoxFit.cover,
+  });
+
+  final String imageSource;
+  final BoxFit fit;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget fallback() => const ColoredBox(
+          color: Color(0xFF202020),
+          child: Center(
+            child: Icon(Icons.image_not_supported_outlined,
+                color: Colors.white38, size: 24),
+          ),
+        );
+    if (imageSource.startsWith('https://') || imageSource.startsWith('http://')) {
+      return Image.network(
+        imageSource,
+        fit: fit,
+        errorBuilder: (_, __, ___) => fallback(),
+      );
+    }
+    try {
+      final file = imageSource.startsWith('file://')
+          ? File.fromUri(Uri.parse(imageSource))
+          : File(imageSource);
+      return Image.file(
+        file,
+        fit: fit,
+        errorBuilder: (_, __, ___) => fallback(),
+      );
+    } catch (_) {
+      return fallback();
+    }
+  }
+}
 
 class _ProfileBackdropItem {
   final String title;

@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:flutter/scheduler.dart';
 
 import 'app_core.dart';
 
@@ -7,13 +8,61 @@ import 'app_core.dart';
 class HomeHoverPreviewStore {
   HomeHoverPreviewStore._();
 
-  static final ValueNotifier<MediaItem?> current =
-      ValueNotifier<MediaItem?>(null);
+  static final ValueNotifier<MediaItem?> current = ValueNotifier<MediaItem?>(null);
+  static int _mutationRevision = 0;
+  static bool _hasPendingMutation = false;
+  static String? _pendingMediaId;
 
-  static void show(MediaItem item) => current.value = item;
+  static bool get _isBuildingFrame {
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    return phase == SchedulerPhase.persistentCallbacks ||
+        phase == SchedulerPhase.midFrameMicrotasks;
+  }
+
+  /// ValueNotifier notifies listeners synchronously. A route's initState can
+  /// clear a hover preview while Navigator is building the incoming route;
+  /// that can make the still-mounted outgoing hero call setState during build.
+  /// Coalesce those writes until post-frame, while keeping mouse-event writes
+  /// immediate when Flutter is not building the tree.
+  static void _mutate(String? pendingMediaId, VoidCallback mutation) {
+    if (!_isBuildingFrame) {
+      _mutationRevision++;
+      _hasPendingMutation = false;
+      _pendingMediaId = null;
+      mutation();
+      return;
+    }
+
+    final revision = ++_mutationRevision;
+    _hasPendingMutation = true;
+    _pendingMediaId = pendingMediaId;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (revision != _mutationRevision) return;
+      _hasPendingMutation = false;
+      _pendingMediaId = null;
+      mutation();
+    });
+  }
+
+  static void show(MediaItem item) {
+    if (current.value?.id == item.id && !_hasPendingMutation) return;
+    _mutate(item.id, () {
+      if (current.value?.id != item.id) current.value = item;
+    });
+  }
 
   static void clear(String mediaId) {
-    if (current.value?.id == mediaId) current.value = null;
+    if (current.value?.id != mediaId && _pendingMediaId != mediaId) return;
+    _mutate(null, () {
+      if (current.value?.id == mediaId) current.value = null;
+    });
+  }
+
+  static void clearCurrent() {
+    if (current.value == null && !_hasPendingMutation) return;
+    _mutate(null, () {
+      if (current.value != null) current.value = null;
+    });
   }
 }
 

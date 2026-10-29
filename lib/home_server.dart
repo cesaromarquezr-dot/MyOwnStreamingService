@@ -137,6 +137,9 @@ class _HomeServerScreenState extends State<HomeServerScreen> {
                 album: m['album']?.toString() ?? 'Unknown Album',
                 modifiedAt:
                     DateTime.tryParse(m['modifiedAt']?.toString() ?? ''),
+                addedByProfileId: m['addedByProfileId']?.toString(),
+                addedByProfileName: m['addedByProfileName']?.toString(),
+                addedSource: m['addedSource']?.toString() ?? 'home-server-scanner',
                 genres: (m['genres'] is List)
                     ? List<String>.from(
                         (m['genres'] as List).map((e) => e.toString()))

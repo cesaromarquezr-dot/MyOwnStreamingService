@@ -181,6 +181,14 @@ class MusicCatalogRoutes {
         return;
       }
 
+      if (path == '$_prefix/upcoming-albums') {
+        final limit = int.tryParse(request.uri.queryParameters['limit'] ?? '60') ?? 60;
+        await _json(request, HttpStatus.ok, await service.upcomingAlbums(
+          limit: limit.clamp(1, 100).toInt(),
+        ));
+        return;
+      }
+
       if (path == '$_prefix/featured-albums') {
         final limit = int.tryParse(request.uri.queryParameters['limit'] ?? '10') ?? 10;
         final offset = int.tryParse(request.uri.queryParameters['offset'] ?? '0') ?? 0;

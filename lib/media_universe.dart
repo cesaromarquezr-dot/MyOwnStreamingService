@@ -2,6 +2,7 @@
 // Purpose: Provides the unified Media Universe, intelligence dashboards,
 // Surprise Me, session management, library health, artwork and exploration UI.
 
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
@@ -12,6 +13,8 @@ import 'details.dart';
 import 'entertainment_studio.dart';
 import 'localization.dart';
 import 'media_text_localizer.dart';
+import 'media_artwork_auto_resolver.dart';
+import 'energy_saver.dart';
 
 class MediaUniverseScreen extends StatefulWidget {
   const MediaUniverseScreen({super.key});
@@ -276,39 +279,140 @@ class MediaSessionsScreen extends StatelessWidget {
       ));
 }
 
-class LibraryHealthScreen extends StatelessWidget {
+class LibraryHealthScreen extends StatefulWidget {
   const LibraryHealthScreen({super.key});
+
+  @override
+  State<LibraryHealthScreen> createState() => _LibraryHealthScreenState();
+}
+
+class _LibraryHealthScreenState extends State<LibraryHealthScreen> {
+  bool _repairingArtwork = false;
+  String? _repairMessage;
+
+  String _normalizeTitle(String value) => value
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+
+  Future<void> _repairMissingArtwork(List<MediaItem> missing) async {
+    if (_repairingArtwork || missing.isEmpty) return;
+    setState(() {
+      _repairingArtwork = true;
+      _repairMessage = null;
+    });
+    try {
+      await MediaArtworkAutoResolver.warmLibrary(
+        items: missing,
+        pageId: EnergySaverController.instance.activePage,
+        maxItems: missing.length,
+      );
+      if (!mounted) return;
+      setState(() {
+        _repairMessage = AppController.instance.isBackendAuthenticated
+            ? 'Artwork lookups were queued. Resolved images are cached and do not replace manual artwork.'
+            : 'Start the backend and sign in to resolve missing artwork. Existing artwork was not changed.';
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _repairMessage = 'Artwork repair could not finish: $error');
+    } finally {
+      if (mounted) setState(() => _repairingArtwork = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final library = AppController.instance.library;
-    final missingArtwork =
-        library.where((m) => m.imageUrl == null || m.imageUrl!.isEmpty).length;
-    final physical = library.where((m) => m.discType != null).length;
-    return Scaffold(
-        appBar: AppBar(title: const UniversalText('Library Health')),
-        body: ListView(padding: const EdgeInsets.all(18), children: [
-          _metric(
-              'Media items', '${library.length}', Icons.video_library_outlined),
-          _metric('Missing artwork', '$missingArtwork',
-              Icons.image_not_supported_outlined),
-          _metric('Physical imports', '$physical', Icons.album_outlined),
-          _metric('Relationships', 'Ready for graph sync',
-              Icons.account_tree_outlined),
-          const SizedBox(height: 16),
-          const UniversalText('Library Detective',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 8),
-          const UniversalText(
-              'Future checks include duplicates, edition conflicts, incomplete seasons, missing artwork, missing relationships and uncertain ARM identification. Nothing is deleted automatically.'),
-        ]));
+    return AnimatedBuilder(
+      animation: AppController.instance,
+      builder: (context, _) {
+        final library = AppController.instance.library.toList(growable: false);
+        final missingArtwork = library.where((media) =>
+          (media.imageUrl?.trim().isNotEmpty != true) &&
+          (MediaArtworkAutoResolver.isMovieOrShow(media) || MediaArtworkAutoResolver.isAlbum(media))).toList(growable: false);
+        final physical = library.where((media) => media.discType != null).length;
+        final duplicateGroups = <String, List<MediaItem>>{};
+        for (final media in library) {
+          final normalized = _normalizeTitle(media.title);
+          if (normalized.isEmpty) continue;
+          duplicateGroups.putIfAbsent('${media.type.toLowerCase()}|$normalized', () => <MediaItem>[]).add(media);
+        }
+        final duplicateCount = duplicateGroups.values
+            .where((items) => items.length > 1)
+            .fold<int>(0, (sum, items) => sum + items.length - 1);
+        final series = library.where((media) => media.isSeries ||
+          const <String>{'show', 'tvshow', 'tv show', 'series', 'television'}
+              .contains(media.type.toLowerCase().trim())).toList(growable: false);
+        final seriesWithoutEpisodes = series.where((media) {
+          if (media.seasons.isEmpty) return true;
+          return !media.seasons.any((season) => season['episodes'] is List &&
+              (season['episodes'] as List).isNotEmpty);
+        }).length;
+        final thinMetadata = library.where((media) =>
+          (media.description?.trim().isNotEmpty != true) &&
+          media.genres.isEmpty && media.tags.isEmpty).length;
+        return Scaffold(
+          appBar: AppBar(title: const UniversalText('Library Health')),
+          body: ListView(
+            padding: const EdgeInsets.all(18),
+            children: [
+              const UniversalText(
+                'Library health checks',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 6),
+              const UniversalText(
+                'Find repairable catalogue gaps without removing files or automatically deleting duplicate entries.',
+                style: TextStyle(color: Colors.white60, height: 1.4),
+              ),
+              const SizedBox(height: 16),
+              _metric('Media items', '${library.length}', Icons.video_library_outlined),
+              _metric('Missing poster/cover', '${missingArtwork.length}', Icons.image_not_supported_outlined),
+              _metric('Potential duplicate entries', '$duplicateCount', Icons.content_copy_rounded),
+              _metric('Shows without episode metadata', '$seriesWithoutEpisodes', Icons.live_tv_outlined),
+              _metric('Titles with sparse metadata', '$thinMetadata', Icons.info_outline_rounded),
+              _metric('Physical imports', '$physical', Icons.album_outlined),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _repairingArtwork || missingArtwork.isEmpty
+                    ? null
+                    : () => unawaited(_repairMissingArtwork(missingArtwork)),
+                icon: _repairingArtwork
+                    ? const SizedBox(width: 17, height: 17, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.auto_fix_high_rounded),
+                label: Text(_repairingArtwork
+                    ? 'Queueing artwork repair…'
+                    : missingArtwork.isEmpty
+                        ? 'No missing poster/cover detected'
+                        : 'Find artwork for ${missingArtwork.length} items'),
+              ),
+              if (_repairMessage != null) ...[
+                const SizedBox(height: 10),
+                Text(_repairMessage!, style: const TextStyle(color: Colors.white70, height: 1.4)),
+              ],
+              const SizedBox(height: 20),
+              const UniversalText('What the checks mean',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              const UniversalText(
+                'Potential duplicates are suggestions only: different cuts, editions, releases or language versions may be legitimate. Shows without episode metadata need a season/episode refresh before exact themed-episode playback can work. Artwork repair caches matches and keeps manual artwork selections as the higher-priority source.',
+                style: TextStyle(color: Colors.white60, height: 1.45),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Widget _metric(String title, String value, IconData icon) => Card(
-      child: ListTile(
+        child: ListTile(
           leading: Icon(icon),
           title: Text(title),
-          trailing: Text(value,
-              style: const TextStyle(fontWeight: FontWeight.w800))));
+          trailing: Text(value, style: const TextStyle(fontWeight: FontWeight.w800)),
+        ),
+      );
 }
 
 class MediaArtworkScreen extends StatefulWidget {

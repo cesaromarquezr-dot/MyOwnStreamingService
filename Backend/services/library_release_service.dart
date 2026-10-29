@@ -13,7 +13,29 @@ class LibraryReleaseService {
 
   LibraryReleaseService({required this.database}) {
     _items.addAll(database.libraryAdditionsById);
-    _timer = Timer.periodic(const Duration(minutes: 1), (_) => publishDue());
+    _scheduleNextPublication();
+  }
+
+  /// Sleeps until the next scheduled publication instead of waking the server
+  /// every minute when no release is due. Scheduled publications remain
+  /// persisted, so a restart rebuilds the timer from the database.
+  void _scheduleNextPublication() {
+    _timer?.cancel();
+    _timer = null;
+
+    DateTime? nextDue;
+    for (final item in _items.values) {
+      if (item.status != LibraryAdditionStatus.scheduled) continue;
+      final due = item.scheduledFor.toUtc();
+      if (nextDue == null || due.isBefore(nextDue)) nextDue = due;
+    }
+    if (nextDue == null) return;
+
+    final delay = nextDue.difference(DateTime.now().toUtc());
+    _timer = Timer(delay.isNegative ? Duration.zero : delay, () {
+      _timer = null;
+      unawaited(publishDue());
+    });
   }
 
   void dispose() => _timer?.cancel();
@@ -41,13 +63,16 @@ class LibraryReleaseService {
     );
     _items[item.id] = item;
     database.saveLibraryAddition(item);
+    _scheduleNextPublication();
     return item;
   }
 
   LibraryAddition? get(String id) => _items[id.trim()];
 
   List<LibraryAddition> forAccount(String accountId) => _items.values
-      .where((item) => item.accountId == accountId && item.status == LibraryAdditionStatus.scheduled)
+      .where((item) =>
+          item.accountId == accountId &&
+          item.status == LibraryAdditionStatus.scheduled)
       .toList()
     ..sort((a, b) => a.scheduledFor.compareTo(b.scheduledFor));
 
@@ -62,6 +87,7 @@ class LibraryReleaseService {
     item.status = LibraryAdditionStatus.published;
     item.publishedAt = DateTime.now().toUtc();
     database.saveLibraryAddition(item);
+    _scheduleNextPublication();
     return item;
   }
 
@@ -76,17 +102,20 @@ class LibraryReleaseService {
     item.status = LibraryAdditionStatus.cancelled;
     item.cancelledAt = DateTime.now().toUtc();
     database.saveLibraryAddition(item);
+    _scheduleNextPublication();
     return item;
   }
 
   Future<void> publishDue() async {
     final now = DateTime.now().toUtc();
     for (final item in _items.values) {
-      if (item.status == LibraryAdditionStatus.scheduled && !item.scheduledFor.isAfter(now)) {
+      if (item.status == LibraryAdditionStatus.scheduled &&
+          !item.scheduledFor.isAfter(now)) {
         item.status = LibraryAdditionStatus.published;
         item.publishedAt = now;
         database.saveLibraryAddition(item);
       }
     }
+    _scheduleNextPublication();
   }
 }

@@ -799,7 +799,7 @@ class _MyTvSpecialEventsScreenState extends State<MyTvSpecialEventsScreen> {
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: item))),
             ),
           for (final track in tracks)
-            ListTile(leading: const Icon(Icons.music_note_rounded), title: Text(track.title), subtitle: Text(track.artist)),
+            ListTile(leading: const Icon(Icons.music_note_rounded), title: Text(track.title), subtitle: Text(musicTrackSubtitle(track), maxLines: 2, overflow: TextOverflow.ellipsis)),
         ],
       ),
     );

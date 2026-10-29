@@ -62,20 +62,9 @@ class AppPageRouteObserver extends NavigatorObserver {
     int? selectedPrimaryIndex,
     required bool customizing,
   }) {
-    // The onboarding routes must update the shell state immediately.
-    // Otherwise a previously selected profile can leave the main navbar
-    // visible for a frame (or longer if another route update supersedes the
-    // pending callback).
-    if (pageId == 'server-selection' || pageId == 'profiles') {
-      _pendingPageUpdate++;
-      appPageState.setPage(
-        pageId,
-        selectedPrimaryIndex: selectedPrimaryIndex,
-        customizing: customizing,
-      );
-      return;
-    }
-
+    // Navigator observers can run while the route tree is being built.
+    // Defer global shell notifications until the frame completes to prevent
+    // setState/markNeedsBuild errors in overlay/navigation ancestors.
     final updateId = ++_pendingPageUpdate;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (updateId != _pendingPageUpdate) return;
@@ -118,7 +107,9 @@ class AppPageRouteObserver extends NavigatorObserver {
     if (name == '/app/server-selection') return 'server-selection';
     if (name != null && name.startsWith('/main/')) {
       final destination = name.substring('/main/'.length);
-      if (destination == 'home' || destination == 'library' || destination == 'friends') {
+      if (destination == 'home' ||
+          destination == 'library' ||
+          destination == 'friends') {
         return destination;
       }
     }
@@ -136,12 +127,15 @@ class AppPageRouteObserver extends NavigatorObserver {
     // is allowed to publish the visible page ID, or the global navbar can
     // flash back on over profile selection.
     if (route != null && _topRoute != null && route != _topRoute) return;
-    _pendingPageUpdate++;
-    appPageState.setPage(
-      pageId,
-      selectedPrimaryIndex: primaryIndex,
-      customizing: false,
-    );
+    final updateId = ++_pendingPageUpdate;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (updateId != _pendingPageUpdate) return;
+      appPageState.setPage(
+        pageId,
+        selectedPrimaryIndex: primaryIndex,
+        customizing: false,
+      );
+    });
   }
 
   @override

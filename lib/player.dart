@@ -38,6 +38,9 @@ class PlayerScreen extends StatefulWidget {
 }
 
 class _PlayerScreenState extends State<PlayerScreen> {
+  // Presence is advisory. A broken backend schema should not flood the debug
+  // console on both playback start and disposal for the same profile.
+  static final Set<String> _presenceFailureReportedProfiles = <String>{};
   double position = 0.0;
   final ValueNotifier<Duration> xrayPlaybackPosition =
       ValueNotifier<Duration>(Duration.zero);
@@ -138,27 +141,43 @@ class _PlayerScreenState extends State<PlayerScreen> {
         OriginalLanguageDefaults.resolveForMedia(widget.media);
     final audioTracks = widget.media.audioTracks;
     final subtitleTracks = widget.media.subtitles;
-    final selectedAudio = OriginalLanguageDefaults.bestTrack(
+    final savedTracks = await PlaybackTrackSelectionStore.load(
+      profileId: AppController.instance.currentProfile?.id ?? 'default',
+      mediaId: widget.media.id,
+    );
+    if (!mounted) return;
+    final preferredAudioLanguage = preferences.preferredAudioLanguage.isNotEmpty
+        ? preferences.preferredAudioLanguage
+        : (preferences.preferOriginalLanguageTracks ? originalLanguage : null);
+    final preferredSubtitleLanguage = preferences.preferredSubtitleLanguage.isNotEmpty
+        ? preferences.preferredSubtitleLanguage
+        : (preferences.preferOriginalLanguageTracks ? originalLanguage : null);
+    final automaticAudio = OriginalLanguageDefaults.bestTrack(
           audioTracks,
-          targetLanguage: preferences.preferOriginalLanguageTracks
-              ? originalLanguage
-              : null,
+          targetLanguage: preferredAudioLanguage,
           preferAudioDescription: preferences.audioDescriptions,
         ) ??
         '';
-    final selectedSubtitle = !preferences.subtitlesEnabled
+    final automaticSubtitle = OriginalLanguageDefaults.bestTrack(
+      subtitleTracks,
+      targetLanguage: preferredSubtitleLanguage,
+      subtitles: true,
+    );
+    final savedAudio = savedTracks['audio'];
+    final savedSubtitle = savedTracks['subtitle'];
+    final selectedAudio = audioTracks.contains(savedAudio)
+        ? savedAudio!
+        : automaticAudio;
+    final selectedSubtitle = !preferences.subtitlesEnabled ||
+            (savedTracks.containsKey('subtitle') && savedSubtitle == '')
         ? null
-        : OriginalLanguageDefaults.bestTrack(
-            subtitleTracks,
-            targetLanguage: preferences.preferOriginalLanguageTracks
-                ? originalLanguage
-                : null,
-            subtitles: true,
-          );
+        : (subtitleTracks.contains(savedSubtitle)
+            ? savedSubtitle
+            : automaticSubtitle);
 
     setState(() {
       _autoplayNextEnabled = preferences.autoplayNext;
-      subtitlesEnabled = preferences.subtitlesEnabled;
+      subtitlesEnabled = preferences.subtitlesEnabled && selectedSubtitle != null;
       this.selectedAudio = selectedAudio;
       this.selectedSubtitle = selectedSubtitle;
     });
@@ -238,9 +257,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
         );
       }
     } catch (error) {
-      debugPrint(
-        'Unable to update viewing presence: ${error.toString().replaceFirst('Exception: ', '')}',
-      );
+      if (_presenceFailureReportedProfiles.add(profile.id)) {
+        debugPrint(
+          'Unable to update viewing presence for this profile; further advisory presence errors are suppressed for this app session: '
+          '${error.toString().replaceFirst('Exception: ', '')}',
+        );
+      }
     }
   }
 
@@ -447,9 +469,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return;
     }
 
-    setState(() {
-      controlsVisible = true;
-    });
+    // controlsVisible starts true. Avoid an unnecessary setState when this is
+    // first called from initState; only rebuild when controls actually change.
+    if (!controlsVisible) {
+      setState(() => controlsVisible = true);
+    }
 
     controlsTimer = Timer(
       const Duration(seconds: 4),
@@ -812,15 +836,27 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Future<void> _changeAudioTrack(String value) async {
     if (!mounted) return;
     setState(() => selectedAudio = value);
+    await PlaybackTrackSelectionStore.save(
+      profileId: AppController.instance.currentProfile?.id ?? 'default',
+      mediaId: widget.media.id,
+      kind: 'audio',
+      value: value,
+    );
   }
 
-  /// Stores the selected subtitle track for this local playback session.
+  /// Stores the selected subtitle track (including an explicit off choice).
   Future<void> _changeSubtitleTrack(String? value) async {
     if (!mounted) return;
     setState(() {
       selectedSubtitle = value;
       subtitlesEnabled = value != null;
     });
+    await PlaybackTrackSelectionStore.save(
+      profileId: AppController.instance.currentProfile?.id ?? 'default',
+      mediaId: widget.media.id,
+      kind: 'subtitle',
+      value: value ?? '',
+    );
   }
 
   /// Performs `_showSnackBar` for this feature. Update this documentation when its contract changes.

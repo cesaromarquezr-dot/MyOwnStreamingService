@@ -434,6 +434,21 @@ class BackendApi {
     );
   }
 
+  /// Loads known future album dates from MusicBrainz. The backend rate-limits
+  /// and caches the provider request; no music-provider credential reaches Flutter.
+  Future<Map<String, dynamic>> getUpcomingMusicAlbums({int limit = 60}) async {
+    _requireAuthentication();
+    final endpoint = Uri.parse('$baseUrl/music-catalog/upcoming-albums').replace(
+      queryParameters: <String, String>{
+        'limit': '${limit.clamp(1, 100)}',
+      },
+    );
+    return _requireSuccess(
+      await _networkClient.get(endpoint, headers: _headers),
+      'Unable to load upcoming album release dates.',
+    );
+  }
+
   /// Loads Spotify's regional new-release albums for a Home artwork shelf.
   Future<Map<String, dynamic>> getSpotifyFeaturedAlbums({
     int limit = 10,

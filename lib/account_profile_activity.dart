@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'privacy_preferences.dart';
 import 'backend_api.dart';
+import 'energy_saver.dart';
 
 /// Shows the *other* profiles on the signed-in account, with live presence and
 /// profile-to-profile messaging. The currently selected profile is deliberately
@@ -23,9 +24,11 @@ class AccountProfileActivityStrip extends StatefulWidget {
 }
 
 class _AccountProfileActivityStripState
-    extends State<AccountProfileActivityStrip> {
+    extends State<AccountProfileActivityStrip> with WidgetsBindingObserver {
   Timer? _refreshTimer;
   bool _requestInFlight = false;
+  bool _appForeground = true;
+  EnergySaverMode? _observedEnergyMode;
   List<Map<String, dynamic>> _presenceProfiles = const <Map<String, dynamic>>[];
   final Map<String, List<Map<String, dynamic>>> _recentActivity =
       <String, List<Map<String, dynamic>>>{};
@@ -34,12 +37,50 @@ class _AccountProfileActivityStripState
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     AppController.instance.addListener(_onAccountChanged);
+    final energy = EnergySaverController.instance;
+    _observedEnergyMode = energy.mode;
+    energy.addListener(_onEnergySettingsChanged);
+    unawaited(energy.ensureLoaded(
+      profileId: AppController.instance.currentProfile?.id,
+    ));
     unawaited(_loadPresence());
+    _restartRefreshTimer();
+  }
+
+  Duration get _refreshInterval => switch (EnergySaverController.instance.mode) {
+        EnergySaverMode.eco => const Duration(minutes: 5),
+        EnergySaverMode.balanced => const Duration(minutes: 3),
+        EnergySaverMode.cinema => const Duration(minutes: 1),
+      };
+
+  void _restartRefreshTimer() {
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
+    if (!_appForeground || !mounted) return;
     _refreshTimer = Timer.periodic(
-      const Duration(seconds: 30),
-      (_) => unawaited(_loadPresence()),
+      _refreshInterval,
+      (_) {
+        if (_appForeground && mounted) unawaited(_loadPresence());
+      },
     );
+  }
+
+  void _onEnergySettingsChanged() {
+    final mode = EnergySaverController.instance.mode;
+    if (_observedEnergyMode == mode) return;
+    _observedEnergyMode = mode;
+    _restartRefreshTimer();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appForeground = state == AppLifecycleState.resumed;
+    if (_appForeground) {
+      unawaited(_loadPresence());
+    }
+    _restartRefreshTimer();
   }
 
   void _onAccountChanged() {
@@ -52,12 +93,14 @@ class _AccountProfileActivityStripState
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    EnergySaverController.instance.removeListener(_onEnergySettingsChanged);
     AppController.instance.removeListener(_onAccountChanged);
     super.dispose();
   }
 
   Future<void> _loadPresence() async {
-    if (_requestInFlight) return;
+    if (_requestInFlight || !_appForeground || !mounted) return;
     final controller = AppController.instance;
     final current = controller.currentProfile;
     final account = controller.currentAccount;
@@ -120,6 +163,7 @@ class _AccountProfileActivityStripState
   }
 
   Future<void> _loadOtherProfilesRecentActivity() async {
+    if (!_appForeground || !mounted) return;
     final controller = AppController.instance;
     final currentId = controller.currentProfile?.id;
     if (!controller.backendApi.isAuthenticated) return;

@@ -25,6 +25,7 @@ import 'home_server.dart';
 import 'storage_dashboard.dart';
 import 'cinematic_discovery_studio.dart';
 import 'core/services/automatic_backup_service.dart';
+import 'streaming_experience.dart';
 
 // Consolidated from lib/platform_expansion.dart.
 // Profile-scoped settings introduced by the platform expansion pass.
@@ -2890,6 +2891,77 @@ class SecurityCenterScreen extends StatelessWidget {
   }
 }
 
+// Playback time is reported only for sessions with local playback diagnostics enabled.
+// It is not backfilled from older watched-history entries and is not a power meter.
+class _PlaybackUsageStatisticsCard extends StatefulWidget {
+  const _PlaybackUsageStatisticsCard();
+
+  @override
+  State<_PlaybackUsageStatisticsCard> createState() =>
+      _PlaybackUsageStatisticsCardState();
+}
+
+class _PlaybackUsageStatisticsCardState
+    extends State<_PlaybackUsageStatisticsCard> {
+  late final String? _profileId = AppController.instance.currentProfile?.id;
+  late final Future<List<Map<String, dynamic>>> _events = _profileId == null
+      ? Future<List<Map<String, dynamic>>>.value(const <Map<String, dynamic>>[])
+      : PlaybackQoeTelemetry.loadEvents(profileId: _profileId);
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<List<Map<String, dynamic>>>(
+        future: _events,
+        builder: (context, snapshot) {
+          if (_profileId == null) {
+            return const Card(
+              child: ListTile(
+                leading: Icon(Icons.timer_outlined),
+                title: Text('Tracked viewing time'),
+                subtitle: Text('Select a profile to view profile-specific playback telemetry.'),
+              ),
+            );
+          }
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Card(
+              child: ListTile(
+                leading: Icon(Icons.timer_outlined),
+                title: Text('Tracked viewing time'),
+                subtitle: Text('Reading locally recorded playback diagnostics…'),
+                trailing: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)),
+              ),
+            );
+          }
+          final events = snapshot.data ?? const <Map<String, dynamic>>[];
+          final summary = PlaybackQoeTelemetry.summarize(events);
+          final watchTimeMs = (summary['watchTimeMs'] ?? 0).toInt();
+          final trackedHours = watchTimeMs / Duration.millisecondsPerHour;
+          final sessions = (summary['sessions'] ?? 0).toInt();
+          final failures = (summary['failures'] ?? 0).toInt();
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(children: [
+                    Icon(Icons.timer_outlined),
+                    SizedBox(width: 8),
+                    Expanded(child: Text('Tracked viewing time', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16))),
+                  ]),
+                  const SizedBox(height: 8),
+                  Text('${trackedHours.toStringAsFixed(1)} hours • $sessions sessions • $failures playback errors',
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 6),
+                  const Text('Counts viewing time recorded after telemetry was enabled for this profile. Earlier history is not estimated or backfilled.',
+                      style: TextStyle(color: Colors.white60, height: 1.4, fontSize: 12)),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+}
+
 // -----------------------------------------------------------------------------
 // STATISTICS
 // -----------------------------------------------------------------------------
@@ -2937,10 +3009,59 @@ class StatisticsScreen extends StatelessWidget {
       controller.library.length - movieCount,
     );
 
-    final streak = math.max(
-      0,
-      controller.watched.length,
-    );
+    final watchHistoryCount = math.max(0, controller.watched.length);
+    final musicStore = MusicLibraryStore.instance;
+    var totalMusicPlays = 0;
+    final artistPlays = <String, int>{};
+    for (final track in musicStore.tracks) {
+      final recordedPlays = musicStore.listenCounts[track.id] ?? 0;
+      final plays = recordedPlays < 0 ? 0 : recordedPlays;
+      totalMusicPlays += plays;
+      if (plays <= 0) continue;
+      for (final artist in <String>[track.artist, ...track.featuredArtists]) {
+        final normalized = artist.trim();
+        if (normalized.isEmpty) continue;
+        artistPlays[normalized] = (artistPlays[normalized] ?? 0) + plays;
+      }
+    }
+    final topArtists = artistPlays.entries.toList()
+      ..sort((a, b) {
+        final byPlays = b.value.compareTo(a.value);
+        return byPlays != 0
+            ? byPlays
+            : a.key.toLowerCase().compareTo(b.key.toLowerCase());
+      });
+    final watchedIds = controller.watched.map((item) => item.id).toSet();
+    final franchiseBuckets = <String, List<MediaItem>>{};
+    for (final media in controller.library) {
+      final franchiseId = media.franchiseId?.trim() ?? '';
+      final franchiseName = media.franchiseName?.trim() ?? '';
+      final key = franchiseId.isNotEmpty
+          ? 'id:$franchiseId'
+          : (franchiseName.isNotEmpty
+              ? 'name:${franchiseName.toLowerCase()}'
+              : '');
+      if (key.isNotEmpty) {
+        franchiseBuckets.putIfAbsent(key, () => <MediaItem>[]).add(media);
+      }
+    }
+    var completedFranchises = 0;
+    for (final bucket in franchiseBuckets.values) {
+      final knownTotals = bucket
+          .map((item) => item.franchiseTotalTitles)
+          .whereType<int>()
+          .where((count) => count > 0)
+          .toList();
+      if (knownTotals.isEmpty) continue;
+      knownTotals.sort();
+      final expectedTotal = knownTotals.last;
+      final watchedOwnedTitles = bucket
+          .map((item) => item.id)
+          .toSet()
+          .where(watchedIds.contains)
+          .length;
+      if (watchedOwnedTitles >= expectedTotal) completedFranchises++;
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -2992,9 +3113,25 @@ class StatisticsScreen extends StatelessWidget {
             averageRating.toStringAsFixed(1),
           ),
           _stat(
-            'Watch streak',
-            '$streak day activity streak',
+            'Music plays logged',
+            '$totalMusicPlays',
           ),
+          _stat(
+            'Top listening artist',
+            topArtists.isEmpty
+                ? 'Not enough play history yet'
+                : '${topArtists.first.key} • ${topArtists.first.value} plays',
+          ),
+          _stat(
+            'Franchises completed (known totals)',
+            '$completedFranchises',
+          ),
+          _stat(
+            'Watch history entries',
+            '$watchHistoryCount',
+          ),
+          const SizedBox(height: 12),
+          const _PlaybackUsageStatisticsCard(),
           const SizedBox(height: 18),
           const UniversalText(
             'Profile personality',

@@ -11,6 +11,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'app_core.dart';
+import 'widgets/added_by_profile_label.dart';
 import 'cinematic_title_fonts.dart';
 import 'backend_api.dart';
 import 'core/services/self_driving_network_engine.dart';
@@ -59,6 +60,9 @@ import 'social_home.dart';
 import 'streaming_experience.dart';
 import 'perfect_streaming_experience.dart';
 import 'app_accessibility.dart';
+import 'energy_saver.dart';
+import 'power_performance_screen.dart';
+import 'media_artwork_auto_resolver.dart';
 import 'accessibility_offline_settings.dart';
 import 'production_readiness.dart';
 import 'security_settings.dart';
@@ -80,6 +84,10 @@ import 'innovation_hub.dart';
 import 'streaming_upgrade_center.dart';
 import 'jellyfin_plugins_hub.dart';
 import 'core/services/automatic_backup_service.dart';
+import 'library_protection_center.dart';
+import 'media_extras_library.dart';
+import 'profiles_permissions_hub.dart';
+import 'coming_soon_release_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -160,6 +168,12 @@ class _AppPageState extends ChangeNotifier {
     primaryIndex = nextPrimaryIndex;
     isCustomizing = nextCustomizing;
     notifyListeners();
+    // Route changes update the energy governor and enqueue a small, serialized
+    // batch of artwork work for the destination being entered.
+    unawaited(EnergySaverController.instance.pageChanged(
+      value,
+      profileId: AppController.instance.currentProfile?.id,
+    ).then((_) => MediaArtworkAutoResolver.warmForPage(value)));
   }
 
   void refresh() => notifyListeners();
@@ -175,20 +189,9 @@ class _AppPageRouteObserver extends NavigatorObserver {
     int? selectedPrimaryIndex,
     required bool customizing,
   }) {
-    // The onboarding routes must update the shell state immediately.
-    // Otherwise a previously selected profile can leave the main navbar
-    // visible for a frame (or longer if another route update supersedes the
-    // pending callback).
-    if (pageId == 'server-selection' || pageId == 'profiles') {
-      _pendingPageUpdate++;
-      _appPageState.setPage(
-        pageId,
-        selectedPrimaryIndex: selectedPrimaryIndex,
-        customizing: customizing,
-      );
-      return;
-    }
-
+    // Navigator observers can run while the route tree is being built.
+    // Always defer global shell notifications until the frame completes; even
+    // onboarding routes must not dirty the app-wide overlay during that build.
     final updateId = ++_pendingPageUpdate;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (updateId != _pendingPageUpdate) return;
@@ -578,11 +581,15 @@ class _AppPageSurface extends StatelessWidget {
         AppController.instance,
         AppAccessibilitySettings.instance,
         HomeCustomizationStore.revision,
+        EnergySaverController.instance,
       ]),
       builder: (context, _) {
-        AppAccessibilitySettings.instance.ensureLoaded(
-          profileId: AppController.instance.currentProfile?.id,
-        );
+        final accessibilityProfileId = AppController.instance.currentProfile?.id;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          AppAccessibilitySettings.instance.ensureLoaded(
+            profileId: accessibilityProfileId,
+          );
+        });
         final appearance = _PageAppearanceStore.forPage(_appPageState.pageId);
         final accessibility = AppAccessibilitySettings.instance;
         final density = switch (appearance.density) {
@@ -653,7 +660,8 @@ class _AppPageSurface extends StatelessWidget {
             ? globalNavigationRailWidth + safe.right : 0.0;
         return MediaQuery(
           data: media.copyWith(
-            disableAnimations: accessibility.reduceMotion,
+            disableAnimations: accessibility.reduceMotion ||
+                EnergySaverController.instance.reduceAnimations,
             textScaler: TextScaler.linear(effectiveTextScale),
           ),
           child: Theme(
@@ -713,6 +721,7 @@ String _pageTitleFor(String pageId) => switch (pageId) {
       'hey-marathon' => 'Hey Marathon',
       'store-creation' => 'Store Creation',
       'store-settings' => 'Store Settings',
+      'power-performance' => 'Power & Performance',
       'seller-dashboard' => 'Seller Dashboard',
       'favorites' => 'Favorites',
       'coming-soon' => 'Coming Soon',
@@ -3960,21 +3969,21 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         case 'New Albums':
           sections.add(_homePreviewBar('NEW ALBUMS', Icons.album_rounded));
         case "This Week's Top 10 Movies":
-          sections.add(_homePreviewBar("THIS WEEK'S TOP 10 MOVIES", Icons.movie_rounded));
+          sections.add(_homePreviewBar("YOUR TOP 10 OWNED MOVIES", Icons.movie_rounded));
         case "This Week's Top 10 Shows":
-          sections.add(_homePreviewBar("THIS WEEK'S TOP 10 SHOWS", Icons.tv_rounded));
+          sections.add(_homePreviewBar("YOUR TOP 10 OWNED SHOWS", Icons.tv_rounded));
         case "This Week's Top 10 Albums":
-          sections.add(_homePreviewBar("THIS WEEK'S TOP 10 ALBUMS", Icons.album_rounded));
+          sections.add(_homePreviewBar("YOUR TOP 10 OWNED ALBUMS", Icons.album_rounded));
         case "This Week's Top 10 Songs":
-          sections.add(_homePreviewBar("THIS WEEK'S TOP 10 SONGS", Icons.music_note_rounded));
+          sections.add(_homePreviewBar("YOUR TOP 10 OWNED SONGS", Icons.music_note_rounded));
         case "This Week's Top 10 Actors":
-          sections.add(_homePreviewBar("THIS WEEK'S TOP 10 ACTORS", Icons.face_rounded));
+          sections.add(_homePreviewBar("YOUR TOP 10 ACTORS FROM OWNED TITLES", Icons.face_rounded));
         case "This Week's Top 10 Actresses":
-          sections.add(_homePreviewBar("THIS WEEK'S TOP 10 ACTRESSES", Icons.face_3_rounded));
+          sections.add(_homePreviewBar("YOUR TOP 10 ACTRESSES FROM OWNED TITLES", Icons.face_3_rounded));
         case "This Week's Top 10 Singers":
-          sections.add(_homePreviewBar("THIS WEEK'S TOP 10 SINGERS", Icons.mic_rounded));
+          sections.add(_homePreviewBar("YOUR TOP 10 SINGERS FROM OWNED TRACKS", Icons.mic_rounded));
         case "This Week's Top 10 Bands":
-          sections.add(_homePreviewBar("THIS WEEK'S TOP 10 BANDS", Icons.groups_rounded));
+          sections.add(_homePreviewBar("YOUR TOP 10 BANDS FROM OWNED TRACKS", Icons.groups_rounded));
         case 'Ranking of All Top 10s':
           sections.add(_homePreviewBar('RANKING OF ALL TOP 10S', Icons.leaderboard_rounded));
         case 'Recommendations & Mood':
@@ -5239,6 +5248,11 @@ void _showGlobalMore() {
         Navigator.of(sheetContext).pop();
         push(const AccountSettingsScreen(), routeName: '/app/page/settings');
       },
+      onPowerPerformance: () {
+        Navigator.of(sheetContext).pop();
+        push(const PowerPerformanceScreen(),
+            routeName: '/app/page/power-performance');
+      },
       onStreamingExperience: () {
         Navigator.of(sheetContext).pop();
         push(const StreamingExperienceSettingsScreen(),
@@ -5406,6 +5420,14 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   Timer? _presenceHeartbeat;
+  EnergySaverMode? _presenceEnergyMode;
+
+  Duration get _presenceHeartbeatInterval =>
+      switch (EnergySaverController.instance.mode) {
+        EnergySaverMode.eco => const Duration(minutes: 5),
+        EnergySaverMode.balanced => const Duration(minutes: 3),
+        EnergySaverMode.cinema => const Duration(minutes: 1),
+      };
 
   final Set<PrimaryDestination> _visitedDestinations = <PrimaryDestination>{};
 
@@ -5423,18 +5445,45 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     _visitedDestinations.add(selected);
     _activeMainScreenState = this;
     WidgetsBinding.instance.addObserver(this);
+    _presenceEnergyMode = EnergySaverController.instance.mode;
+    EnergySaverController.instance.addListener(_onPresenceEnergyChanged);
+    unawaited(EnergySaverController.instance.ensureLoaded(
+      profileId: AppController.instance.currentProfile?.id,
+    ));
     LanguageController.instance.loadForCurrentProfile();
     unawaited(AppController.instance.loadActivity());
     _startPresenceHeartbeat();
   }
 
-  void _startPresenceHeartbeat() {
+  void _onPresenceEnergyChanged() {
+    final mode = EnergySaverController.instance.mode;
+    if (_presenceEnergyMode == mode) return;
+    _presenceEnergyMode = mode;
+    // Only restart an active timer. Lifecycle resume owns restarting it after
+    // the app has been backgrounded, and mode changes should not send an
+    // extra network heartbeat immediately.
+    if (_presenceHeartbeat != null) {
+      _startPresenceHeartbeat(sendImmediately: false);
+    }
+  }
+
+  void _startPresenceHeartbeat({bool sendImmediately = true}) {
     _presenceHeartbeat?.cancel();
-    unawaited(_touchSocialPresence());
+    if (sendImmediately) unawaited(_touchSocialPresence());
     _presenceHeartbeat = Timer.periodic(
-      const Duration(minutes: 1),
+      _presenceHeartbeatInterval,
       (_) => unawaited(_touchSocialPresence()),
     );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _startPresenceHeartbeat();
+    } else {
+      _presenceHeartbeat?.cancel();
+      _presenceHeartbeat = null;
+    }
   }
 
   Future<void> _touchSocialPresence() async {
@@ -5457,18 +5506,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _startPresenceHeartbeat();
-    } else {
-      _presenceHeartbeat?.cancel();
-      _presenceHeartbeat = null;
-    }
-  }
-
-  @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    EnergySaverController.instance.removeListener(_onPresenceEnergyChanged);
     _presenceHeartbeat?.cancel();
     if (identical(_activeMainScreenState, this)) {
       _activeMainScreenState = null;
@@ -5723,6 +5763,7 @@ class _MoreChoice {
 
 class _MoreActionsSheet extends StatelessWidget {
   final VoidCallback onSettings;
+  final VoidCallback onPowerPerformance;
   final VoidCallback onStreamingExperience;
   final VoidCallback onPerfectStreaming;
   final VoidCallback onDevices;
@@ -5751,6 +5792,7 @@ class _MoreActionsSheet extends StatelessWidget {
 
   const _MoreActionsSheet({
     required this.onSettings,
+    required this.onPowerPerformance,
     required this.onStreamingExperience,
     required this.onPerfectStreaming,
     required this.onDevices,
@@ -5817,6 +5859,11 @@ class _MoreActionsSheet extends StatelessWidget {
               'Settings',
               'Account, subscription, device, playback and support settings',
               onSettings),
+          _moreCard(
+              Icons.energy_savings_leaf_rounded,
+              'Power & Performance',
+              'Eco mode, preview power, background work and electricity estimates',
+              onPowerPerformance),
           _moreCard(
               Icons.auto_awesome_rounded,
               'My Entertainment Wrapped',
@@ -6264,6 +6311,13 @@ class _HomeScreenState extends State<HomeScreen>
                   builder: (_) => const MyTvScreen(),
                 ),
               ),
+              onComingSoon: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  settings: const RouteSettings(name: '/app/coming-soon'),
+                  builder: (_) => const ComingSoonReleaseScreen(),
+                ),
+              ),
             );
 
             return Column(
@@ -6529,21 +6583,21 @@ List<Widget> _buildHomeSectionSlivers(
     case 'Shows by Country':
       return _countryShelfSlivers(items: tvShows, sectionLabel: 'Shows');
     case "This Week's Top 10 Movies":
-      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'movies', title: "THIS WEEK'S TOP 10 MOVIES"))];
+      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'movies', title: "YOUR TOP 10 OWNED MOVIES"))];
     case "This Week's Top 10 Shows":
-      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'shows', title: "THIS WEEK'S TOP 10 SHOWS"))];
+      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'shows', title: "YOUR TOP 10 OWNED SHOWS"))];
     case "This Week's Top 10 Albums":
-      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'albums', title: "THIS WEEK'S TOP 10 ALBUMS"))];
+      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'albums', title: "YOUR TOP 10 OWNED ALBUMS"))];
     case "This Week's Top 10 Songs":
-      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'songs', title: "THIS WEEK'S TOP 10 SONGS"))];
+      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'songs', title: "YOUR TOP 10 OWNED SONGS"))];
     case "This Week's Top 10 Actors":
-      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'actors', title: "THIS WEEK'S TOP 10 ACTORS"))];
+      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'actors', title: "YOUR TOP 10 ACTORS FROM OWNED TITLES"))];
     case "This Week's Top 10 Actresses":
-      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'actresses', title: "THIS WEEK'S TOP 10 ACTRESSES"))];
+      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'actresses', title: "YOUR TOP 10 ACTRESSES FROM OWNED TITLES"))];
     case "This Week's Top 10 Singers":
-      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'singers', title: "THIS WEEK'S TOP 10 SINGERS"))];
+      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'singers', title: "YOUR TOP 10 SINGERS FROM OWNED TRACKS"))];
     case "This Week's Top 10 Bands":
-      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'bands', title: "THIS WEEK'S TOP 10 BANDS"))];
+      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'bands', title: "YOUR TOP 10 BANDS FROM OWNED TRACKS"))];
     case 'Ranking of All Top 10s':
       return const <Widget>[SliverToBoxAdapter(child: WeeklyTop10LeaderboardShelf())];
     case 'New Albums':
@@ -6718,15 +6772,15 @@ String _homeSectionDescription(String section) => switch (section) {
       'Movies by Country' => 'Separate movie shelves grouped by the recorded country of origin.',
       'Shows by Country' => 'Separate show shelves grouped by the recorded country of origin.',
       'New Albums' => 'New album covers from Spotify.',
-      "This Week's Top 10 Movies" => "TMDB's weekly trending movie chart.",
-      "This Week's Top 10 Shows" => "TMDB's weekly trending TV chart.",
-      "This Week's Top 10 Albums" => "Albums ranked by this profile's listening activity.",
-      "This Week's Top 10 Songs" => "Songs ranked by this profile's listening activity.",
-      "This Week's Top 10 Actors" => 'Trending screen actors from TMDB this week.',
-      "This Week's Top 10 Actresses" => 'Trending screen actresses from TMDB this week.',
-      "This Week's Top 10 Singers" => "Singers ranked from this profile's listening activity.",
-      "This Week's Top 10 Bands" => "Bands ranked from this profile's listening activity.",
-      'Ranking of All Top 10s' => 'Open the leaderboard for all eight weekly Top 10 charts.',
+      "This Week's Top 10 Movies" => "Your owned movies, ranked by personal ratings, favorites and playback progress.",
+      "This Week's Top 10 Shows" => "Your owned shows, ranked by personal ratings, favorites and playback progress.",
+      "This Week's Top 10 Albums" => "Albums grouped from tracks in your library, with listening activity as a tie-breaker.",
+      "This Week's Top 10 Songs" => "Songs present in your owned music library, ranked with listening activity as a tie-breaker.",
+      "This Week's Top 10 Actors" => 'Cast members credited on your owned movies and shows.',
+      "This Week's Top 10 Actresses" => 'Cast members explicitly classified as actresses in your owned catalogue.',
+      "This Week's Top 10 Singers" => "Singers credited on tracks in your music library.",
+      "This Week's Top 10 Bands" => "Bands inferred from artists credited on tracks in your music library.",
+      'Ranking of All Top 10s' => 'Open the leaderboard for all eight library Top 10 charts.',
       'Music & Film' => 'Resume locally playable music.',
       'Seasonal Collections' => 'Calendar-based collections for the current season.',
       'Media Intelligence Tools' => 'Discovery, insight, and media tools.',
@@ -7557,6 +7611,14 @@ class _MediaCardState extends State<MediaCard> {
                           ),
                         ),
                       ),
+                      if (media.addedByProfileName?.trim().isNotEmpty == true ||
+                          const <String>{'home-server-scanner', 'import/rip', 'disc_ingestion_center', 'approved-arm-import', 'arm-import'}
+                              .contains(media.addedSource.trim().toLowerCase()))
+                        Positioned(
+                          left: 7,
+                          bottom: 7,
+                          child: AddedByProfileLabel.forMedia(media, onArtwork: true),
+                        ),
                       if (_hovering && widget.enableHomePreview)
                         Positioned.fill(
                           child: DecoratedBox(
@@ -10296,6 +10358,86 @@ class HomeMediaIntelligenceToolsShelf extends StatelessWidget {
         page: const VerifiedBackupRecoveryCenterScreen(),
         route: '/app/verified-backup-recovery'
       ),
+      (
+        title: 'Library Protection Center',
+        subtitle: 'Recovery points, duplicates, removal markers',
+        icon: Icons.health_and_safety_rounded,
+        color: const Color(0xFF7DDECC),
+        page: const LibraryProtectionCenterScreen(),
+        route: '/app/library-protection'
+      ),
+      (
+        title: 'Automatic Library Repair',
+        subtitle: 'Review missing artwork, sources and dates',
+        icon: Icons.build_circle_outlined,
+        color: const Color(0xFFFFC17C),
+        page: const LibraryRepairCenterScreen(),
+        route: '/app/library-repair'
+      ),
+      (
+        title: 'Power & Eco Manager',
+        subtitle: 'Eco, Balanced, Cinema and background activity',
+        icon: Icons.energy_savings_leaf_rounded,
+        color: const Color(0xFFA8E6A1),
+        page: const PowerPerformanceScreen(),
+        route: '/app/power-performance'
+      ),
+      (
+        title: 'Adaptive Playback Settings',
+        subtitle: 'Quality, language, speed and segment skipping',
+        icon: Icons.slow_motion_video_rounded,
+        color: const Color(0xFF8EC8FF),
+        page: const StreamingExperienceSettingsScreen(),
+        route: '/app/streaming-experience'
+      ),
+      (
+        title: 'Movie Extras Library',
+        subtitle: 'Deleted scenes, commentaries and bonus videos',
+        icon: Icons.library_add_rounded,
+        color: const Color(0xFFD3A9FF),
+        page: const MediaExtrasLibraryScreen(),
+        route: '/app/media-extras'
+      ),
+      (
+        title: 'Personal Media Statistics',
+        subtitle: 'Watch telemetry, music artists and franchises',
+        icon: Icons.query_stats_rounded,
+        color: const Color(0xFFFFB2CB),
+        page: const StatisticsScreen(),
+        route: '/app/media-statistics'
+      ),
+      (
+        title: 'My TV Schedule',
+        subtitle: 'Clock-based personal channels and TV guide',
+        icon: Icons.live_tv_rounded,
+        color: const Color(0xFFFF8787),
+        page: const MyTvScreen(),
+        route: '/app/my-tv-schedule'
+      ),
+      (
+        title: 'Personal Discovery Graph',
+        subtitle: 'Explore franchises, credits and linked media',
+        icon: Icons.hub_rounded,
+        color: const Color(0xFFB9B4FF),
+        page: const MediaUniverseScreen(),
+        route: '/app/media-universe'
+      ),
+      (
+        title: 'Profiles & Permissions',
+        subtitle: 'Household roles and profile safety controls',
+        icon: Icons.family_restroom_rounded,
+        color: const Color(0xFFB2DFFF),
+        page: const ProfilesAndPermissionsHubScreen(),
+        route: '/app/profiles-permissions'
+      ),
+      (
+        title: 'Customize Home Screen',
+        subtitle: 'Reorder, pin and hide Home rows',
+        icon: Icons.dashboard_customize_rounded,
+        color: const Color(0xFFFFD7A0),
+        page: const CustomizeHomeScreen(),
+        route: '/app/customize-home'
+      ),
     ];
     return Padding(
       padding: const EdgeInsets.only(top: 6, bottom: 3),
@@ -10305,10 +10447,10 @@ class HomeMediaIntelligenceToolsShelf extends StatelessWidget {
           const _PremiumSectionHeader(
             title: 'Library Intelligence & System Tools',
             subtitle:
-                'Catalog quality, collection progress, smart planning, health, and recovery',
+                'Protection, repair, playback, power, My TV, discovery, and household tools',
           ),
           HomeArrowRail(
-            height: 126,
+            height: 148,
             itemCount: tools.length,
             separatorExtent: 10,
             padding: const EdgeInsets.symmetric(horizontal: 48),

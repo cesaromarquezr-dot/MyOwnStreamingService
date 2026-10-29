@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 /// A reusable horizontal Home shelf with explicit previous/next controls.
 /// Buttons move by most of the visible viewport and remain disabled at edges.
@@ -28,33 +29,52 @@ class _HomeArrowRailState extends State<HomeArrowRail> {
   final ScrollController _controller = ScrollController();
   bool _canGoBack = false;
   bool _canGoForward = false;
+  bool _edgeRefreshScheduled = false;
 
   @override
   void initState() {
     super.initState();
-    _controller.addListener(_refreshEdges);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshEdges());
+    _controller.addListener(_scheduleEdgeRefresh);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshEdgesNow());
   }
 
   @override
   void didUpdateWidget(covariant HomeArrowRail oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.itemCount != widget.itemCount) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _refreshEdges());
+      WidgetsBinding.instance.addPostFrameCallback((_) => _refreshEdgesNow());
     }
   }
 
-  void _refreshEdges() {
+  /// Scroll notifications may arrive during layout. Coalesce edge updates and
+  /// defer state changes until after the current frame to avoid
+  /// setState/markNeedsBuild errors while Flutter is building the rail.
+  void _scheduleEdgeRefresh() {
+    if (!mounted || _edgeRefreshScheduled) return;
+    _edgeRefreshScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _edgeRefreshScheduled = false;
+      _refreshEdgesNow();
+    });
+  }
+
+  void _refreshEdgesNow() {
     if (!mounted || !_controller.hasClients) return;
+    // Defensive guard for any caller invoked during Flutter's build/layout
+    // pipeline. State changes are only applied after the frame is complete.
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      _scheduleEdgeRefresh();
+      return;
+    }
     final position = _controller.position;
     final back = position.pixels > 1;
     final forward = position.pixels < position.maxScrollExtent - 1;
-    if (back != _canGoBack || forward != _canGoForward) {
-      setState(() {
-        _canGoBack = back;
-        _canGoForward = forward;
-      });
-    }
+    if (back == _canGoBack && forward == _canGoForward) return;
+    setState(() {
+      _canGoBack = back;
+      _canGoForward = forward;
+    });
   }
 
   void _scroll(bool forward) {
@@ -73,7 +93,7 @@ class _HomeArrowRailState extends State<HomeArrowRail> {
 
   @override
   void dispose() {
-    _controller.removeListener(_refreshEdges);
+    _controller.removeListener(_scheduleEdgeRefresh);
     _controller.dispose();
     super.dispose();
   }
@@ -111,27 +131,33 @@ class _HomeArrowRailState extends State<HomeArrowRail> {
   Widget build(BuildContext context) {
     if (widget.itemCount <= 0) return const SizedBox.shrink();
     final rtl = Directionality.of(context) == TextDirection.rtl;
-    // Initial edge state is refreshed after ListView lays out its extent.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshEdges());
+    // Initial edge state is refreshed from initState/didUpdateWidget and from
+    // scroll notifications. Avoid registering frame callbacks during build.
     final showArrows = widget.itemCount > 1;
     return SizedBox(
       height: widget.height,
       child: Stack(
         alignment: Alignment.center,
         children: [
-          NotificationListener<ScrollNotification>(
+          NotificationListener<ScrollMetricsNotification>(
             onNotification: (_) {
-              _refreshEdges();
+              _scheduleEdgeRefresh();
               return false;
             },
-            child: ListView.separated(
-              controller: _controller,
-              padding: widget.padding,
-              scrollDirection: Axis.horizontal,
-              physics: widget.physics,
-              itemCount: widget.itemCount,
-              separatorBuilder: (_, __) => SizedBox(width: widget.separatorExtent),
-              itemBuilder: widget.itemBuilder,
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (_) {
+                _scheduleEdgeRefresh();
+                return false;
+              },
+              child: ListView.separated(
+                controller: _controller,
+                padding: widget.padding,
+                scrollDirection: Axis.horizontal,
+                physics: widget.physics,
+                itemCount: widget.itemCount,
+                separatorBuilder: (_, __) => SizedBox(width: widget.separatorExtent),
+                itemBuilder: widget.itemBuilder,
+              ),
             ),
           ),
           if (showArrows) ...[

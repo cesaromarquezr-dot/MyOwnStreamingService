@@ -386,17 +386,37 @@ class SupabaseSyncRoutes {
       if (bits.length == 1 &&
           bits[0] == 'presence' &&
           request.method == 'POST') {
-        await store.setSocialProfilePresence(
-          accountExternalId: account.id,
-          profileExternalId: profile,
-          availability: _optionalText(body, 'availability', 16),
-          activityType: _optionalText(body, 'activityType', 16),
-          activityText: _optionalText(body, 'activityText', 160),
-          nickname: _optionalText(body, 'nickname', 48),
-          clearActivity: body['clearActivity'] == true,
-          clearNickname: body['clearNickname'] == true,
-        );
-        return _json(request.response, HttpStatus.ok, {'success': true});
+        try {
+          await store.setSocialProfilePresence(
+            accountExternalId: account.id,
+            profileExternalId: profile,
+            availability: _optionalText(body, 'availability', 16),
+            activityType: _optionalText(body, 'activityType', 16),
+            activityText: _optionalText(body, 'activityText', 160),
+            nickname: _optionalText(body, 'nickname', 48),
+            clearActivity: body['clearActivity'] == true,
+            clearNickname: body['clearNickname'] == true,
+          );
+          return _json(request.response, HttpStatus.ok, {'success': true});
+        } on StateError catch (error) {
+          final message = error.message ?? 'Presence storage is unavailable.';
+          final isProfileMappingIssue = message.toLowerCase().contains('profile') ||
+              message.toLowerCase().contains('account is not synchronized');
+          return _json(request.response,
+              isProfileMappingIssue ? HttpStatus.conflict : HttpStatus.serviceUnavailable, {
+            'success': false,
+            'error': message,
+          });
+        } catch (error, stackTrace) {
+          // Presence is non-critical to playback. Keep the endpoint response
+          // actionable while preserving the real backend error in server logs.
+          stderr.writeln('Social profile presence persistence failed: $error');
+          stderr.writeln(stackTrace);
+          return _json(request.response, HttpStatus.serviceUnavailable, {
+            'success': false,
+            'error': 'Presence storage is unavailable. Apply the social_presence_repair.sql migration and verify Supabase connectivity.',
+          });
+        }
       }
 
       if (bits.length == 1 &&

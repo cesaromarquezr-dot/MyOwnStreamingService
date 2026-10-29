@@ -151,7 +151,7 @@ class HomeChannelsSection extends StatelessWidget {
               ],
             ),
             SizedBox(
-              height: 126,
+              height: 148,
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 children: [

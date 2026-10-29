@@ -46,6 +46,16 @@ class SupabaseStore {
 
   SupabaseClient? _client;
 
+  // Scanner hot-path caches: a media-tree scan can contain thousands of files,
+  // and the account/server/catalog identity is stable across the scan. Caching
+  // these IDs avoids repeated lookup round-trips without caching media content.
+  final Map<String, String> _internalAccountIdCache = <String, String>{};
+  final Map<String, String> _homeServerIdCache = <String, String>{};
+  final Map<String, DateTime> _serverLastSeenRefresh = <String, DateTime>{};
+  final Map<String, String> _mediaCatalogIdCache = <String, String>{};
+  final Map<String, String> _canonicalServerMediaPathCache = <String, String>{};
+  final Map<String, bool> _approvedArmPathCache = <String, bool>{};
+
   bool get enabled => _client != null;
 
   // ---------------------------------------------------------------------------
@@ -2769,7 +2779,12 @@ class SupabaseStore {
         .from('accounts')
         .select('id')
         .eq('external_account_id', accountExternalId)
-        .single();
+        .maybeSingle();
+    if (account == null) {
+      throw StateError(
+        'Account is not synchronized to Supabase yet; synchronize the account before publishing presence.',
+      );
+    }
     final accountId = account['id'].toString();
     final profile = await c
         .from('profiles')
@@ -2778,7 +2793,7 @@ class SupabaseStore {
         .eq('external_profile_id', profileExternalId)
         .eq('is_active', true)
         .maybeSingle();
-    if (profile == null) throw StateError('Profile not found.');
+    if (profile == null) throw StateError('Profile is not synchronized or is inactive.');
 
     if (availability != null &&
         !{'active', 'away', 'busy'}.contains(availability)) {
@@ -6308,6 +6323,99 @@ class SupabaseStore {
   // SERVER MEDIA
   // ---------------------------------------------------------------------------
 
+  /// Loads attribution for media indexed on this account's home server.
+  /// The original import metadata is retained in both server_media and the
+  /// canonical media_catalog record so repeat scans do not erase who ripped it.
+  Future<Map<String, Map<String, dynamic>>> loadServerMediaAttributions({
+    required String accountExternalId,
+  }) async {
+    final c = _db;
+    if (c == null) return <String, Map<String, dynamic>>{};
+    final cleanAccountId = _requiredId(accountExternalId, field: 'accountExternalId');
+    var internalAccountId = _internalAccountIdCache[cleanAccountId];
+    if (internalAccountId == null) {
+      final account = await c.from('accounts').select('id')
+          .eq('external_account_id', cleanAccountId).maybeSingle();
+      if (account == null) return <String, Map<String, dynamic>>{};
+      internalAccountId = _requiredId(account['id']?.toString(), field: 'accounts.id');
+      _internalAccountIdCache[cleanAccountId] = internalAccountId;
+    }
+    var serverId = _homeServerIdCache[internalAccountId];
+    if (serverId == null) {
+      final server = await c.from('servers').select('id')
+          .eq('account_id', internalAccountId).maybeSingle();
+      if (server == null) return <String, Map<String, dynamic>>{};
+      serverId = _requiredId(server['id']?.toString(), field: 'servers.id');
+      _homeServerIdCache[internalAccountId] = serverId;
+    }
+
+    // Supabase applies a row cap to unpaginated SELECTs. Page deterministically
+    // so attribution for large libraries is not silently missing after the
+    // first page of server_media rows.
+    const pageSize = 500;
+    final rows = <Map<String, dynamic>>[];
+    var offset = 0;
+    while (true) {
+      final rawPage = await c.from('server_media')
+          .select('server_media_id,media_catalog_id,metadata')
+          .eq('server_id', serverId)
+          .order('server_media_id')
+          .range(offset, offset + pageSize - 1);
+      final page = rawPage.whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row)).toList(growable: false);
+      rows.addAll(page);
+      if (page.length < pageSize) break;
+      offset += page.length;
+    }
+    final catalogIds = rows.map((row) => row['media_catalog_id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty).toSet().toList(growable: false);
+    final catalogMetadata = <String, Map<String, dynamic>>{};
+    // Keep each IN query bounded for large libraries and URL/header limits.
+    for (var start = 0; start < catalogIds.length; start += 200) {
+      final batchIds = catalogIds.skip(start).take(200).toList(growable: false);
+      final rawCatalog = await c.from('media_catalog').select('id,metadata')
+          .inFilter('id', batchIds);
+      for (final raw in rawCatalog.whereType<Map>()) {
+        final row = Map<String, dynamic>.from(raw);
+        final metadata = row['metadata'];
+        catalogMetadata[row['id']?.toString() ?? ''] = metadata is Map
+            ? Map<String, dynamic>.from(metadata)
+            : <String, dynamic>{};
+      }
+    }
+
+    final output = <String, Map<String, dynamic>>{};
+    for (final row in rows) {
+      final relativeId = row['server_media_id']?.toString().trim() ?? '';
+      if (relativeId.isEmpty) continue;
+      final rawServerMetadata = row['metadata'];
+      final serverMetadata = rawServerMetadata is Map
+          ? Map<String, dynamic>.from(rawServerMetadata)
+          : <String, dynamic>{};
+      final catalog = catalogMetadata[row['media_catalog_id']?.toString() ?? '']
+          ?? <String, dynamic>{};
+      dynamic choose(String key) {
+        final serverValue = serverMetadata[key];
+        if (serverValue != null && serverValue.toString().trim().isNotEmpty &&
+            !(key == 'addedSource' && serverValue.toString() == 'home-server-scanner')) {
+          return serverValue;
+        }
+        final catalogValue = catalog[key];
+        if (catalogValue != null && catalogValue.toString().trim().isNotEmpty) return catalogValue;
+        if (serverValue != null && serverValue.toString().trim().isNotEmpty) return serverValue;
+        return null;
+      }
+      final attribution = <String, dynamic>{
+        for (final key in const <String>[
+          'addedByProfileId', 'addedByProfileName', 'addedAt', 'addedSource',
+        ])
+          if (choose(key) != null) key: choose(key),
+      };
+      if (attribution.isNotEmpty) output[relativeId] = attribution;
+    }
+    return output;
+  }
+
   Future<void> upsertServerMedia({
     required String accountExternalId,
     required String relativeMediaId,
@@ -6362,85 +6470,93 @@ class SupabaseStore {
       );
     }
 
-    final account = await c
-        .from('accounts')
-        .select('id')
-        .eq(
-          'external_account_id',
-          cleanAccountId,
-        )
-        .maybeSingle();
-
-    if (account == null) {
-      throw StateError(
-        'Account not found in Supabase.',
+    var internalAccountId = _internalAccountIdCache[cleanAccountId];
+    if (internalAccountId == null) {
+      final account = await c
+          .from('accounts')
+          .select('id')
+          .eq('external_account_id', cleanAccountId)
+          .maybeSingle();
+      if (account == null) {
+        throw StateError('Account not found in Supabase.');
+      }
+      internalAccountId = _requiredId(
+        account['id']?.toString(),
+        field: 'accounts.id',
       );
+      _internalAccountIdCache[cleanAccountId] = internalAccountId;
     }
 
-    final internalAccountId = _requiredId(
-      account['id']?.toString(),
-      field: 'accounts.id',
-    );
-
-    final server = await c
-        .from('servers')
-        .select('id')
-        .eq(
-          'account_id',
-          internalAccountId,
-        )
-        .maybeSingle();
-
-    late String serverId;
-
-    if (server == null) {
-      final created = await c
+    var serverId = _homeServerIdCache[internalAccountId];
+    final now = DateTime.now().toUtc();
+    final lastSeenUpdate = serverId == null
+        ? null
+        : _serverLastSeenRefresh[serverId];
+    final shouldRefreshServerStatus = serverId == null ||
+        lastSeenUpdate == null ||
+        now.difference(lastSeenUpdate) >= const Duration(seconds: 30);
+    if (serverId == null) {
+      final server = await c
           .from('servers')
-          .insert({
-            'account_id': internalAccountId,
-            'name': 'Home Server',
-            'status': 'online',
-            'server_type': 'home',
-            'last_seen_at': DateTime.now().toUtc().toIso8601String(),
-          })
           .select('id')
-          .single();
-
-      serverId = _requiredId(
-        created['id']?.toString(),
-        field: 'servers.id',
-      );
-    } else {
-      serverId = _requiredId(
-        server['id']?.toString(),
-        field: 'servers.id',
-      );
-
+          .eq('account_id', internalAccountId)
+          .maybeSingle();
+      if (server == null) {
+        final created = await c.from('servers').insert({
+          'account_id': internalAccountId,
+          'name': 'Home Server',
+          'status': 'online',
+          'server_type': 'home',
+          'last_seen_at': now.toIso8601String(),
+        }).select('id').single();
+        serverId = _requiredId(created['id']?.toString(), field: 'servers.id');
+      } else {
+        serverId = _requiredId(server['id']?.toString(), field: 'servers.id');
+        await c.from('servers').update({
+          'status': 'online',
+          'last_seen_at': now.toIso8601String(),
+        }).eq('id', serverId);
+      }
+      _homeServerIdCache[internalAccountId] = serverId;
+      _serverLastSeenRefresh[serverId] = now;
+    } else if (shouldRefreshServerStatus) {
       await c.from('servers').update({
         'status': 'online',
-        'last_seen_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq(
-        'id',
-        serverId,
-      );
+        'last_seen_at': now.toIso8601String(),
+      }).eq('id', serverId);
+      _serverLastSeenRefresh[serverId] = now;
     }
 
     final incomingMetadata = metadata ?? const <String, dynamic>{};
     if (incomingMetadata['source'] == 'home-server-scanner') {
-      final existing = await c
-          .from('server_media')
-          .select('id,metadata')
-          .eq('server_id', serverId)
-          .eq('server_media_id', cleanRelativeMediaId)
-          .maybeSingle();
-      final existingMetadata = existing?['metadata'];
-      if (existing != null &&
-          existingMetadata is Map &&
-          existingMetadata['source'] == 'approved-arm-import') {
+      final approvedPathCacheKey = '$serverId|$cleanRelativeMediaId';
+      var isApprovedImportPath = _approvedArmPathCache[approvedPathCacheKey];
+      if (isApprovedImportPath == null) {
+        final existing = await c
+            .from('server_media')
+            .select('id,metadata')
+            .eq('server_id', serverId)
+            .eq('server_media_id', cleanRelativeMediaId)
+            .maybeSingle();
+        final existingMetadata = existing?['metadata'];
+        isApprovedImportPath = existing != null &&
+            existingMetadata is Map &&
+            existingMetadata['source'] == 'approved-arm-import';
+        _approvedArmPathCache[approvedPathCacheKey] = isApprovedImportPath;
+        if (isApprovedImportPath) {
+          await c.from('server_media').update({
+            'availability': 'available',
+            'last_seen_at': DateTime.now().toUtc().toIso8601String(),
+          }).eq('id', existing['id']);
+          return;
+        }
+      } else if (isApprovedImportPath) {
+        // The prior scan already confirmed this is an approved import. Update
+        // by its server-scoped relative path without a redundant SELECT.
         await c.from('server_media').update({
           'availability': 'available',
           'last_seen_at': DateTime.now().toUtc().toIso8601String(),
-        }).eq('id', existing['id']);
+        }).eq('server_id', serverId).eq('server_media_id', cleanRelativeMediaId);
         return;
       }
     }
@@ -6450,86 +6566,78 @@ class SupabaseStore {
     final canonicalKey =
         '$normalizedType:${cleanTitle.toLowerCase()}:${year ?? ''}';
 
-    final catalog = await c
-        .from('media_catalog')
-        .select('id')
-        .eq(
-          'canonical_key',
-          canonicalKey,
-        )
-        .maybeSingle();
+    var catalogId = _mediaCatalogIdCache[canonicalKey];
+    final catalog = catalogId == null
+        ? await c.from('media_catalog').select('id')
+            .eq('canonical_key', canonicalKey).maybeSingle()
+        : null;
 
-    final mediaType = _mediaType(
-      cleanType,
-    );
-
+    final mediaType = _mediaType(cleanType);
     final safeMetadata = _sanitizeJsonMap(
       metadata ?? const {},
       maxBytes: _maxSnapshotBytes,
     );
-
     final catalogMetadata = <String, dynamic>{
       ...safeMetadata,
       if (trailerUrl != null && trailerUrl.trim().isNotEmpty)
-        'trailerUrl': _boundedText(
-          trailerUrl,
-          field: 'trailerUrl',
-          maxLength: 2048,
-        ),
+        'trailerUrl': _boundedText(trailerUrl, field: 'trailerUrl', maxLength: 2048),
       if (fileSizeBytes != null) 'fileSizeBytes': fileSizeBytes,
     };
-
     final catalogValues = <String, dynamic>{
       'canonical_key': canonicalKey,
       'title': cleanTitle,
       'media_type': mediaType,
       'year': year,
-      'description': _safeNullableText(
-        description,
-        maxLength: 5000,
-      ),
-      'poster_url': _safeNullableText(
-        posterUrl,
-        maxLength: 2048,
-      ),
+      'description': _safeNullableText(description, maxLength: 5000),
+      'poster_url': _safeNullableText(posterUrl, maxLength: 2048),
       'metadata': catalogMetadata,
     };
 
-    late String catalogId;
+    if (catalogId == null && catalog == null) {
+      final created = await c.from('media_catalog')
+          .insert(catalogValues).select('id').single();
+      catalogId = _requiredId(created['id']?.toString(), field: 'media_catalog.id');
+    } else if (catalogId == null) {
+      catalogId = _requiredId(catalog?['id']?.toString(), field: 'media_catalog.id');
+      // A scanner refresh must not erase posters/descriptions that came from
+      // a richer import/catalog pipeline just because its row has no metadata.
+      if (incomingMetadata['source'] != 'home-server-scanner') {
+        await c.from('media_catalog').update(catalogValues).eq('id', catalogId);
+      }
+    } else if (incomingMetadata['source'] != 'home-server-scanner') {
+      await c.from('media_catalog').update(catalogValues).eq('id', catalogId);
+    }
+    final resolvedCatalogId = catalogId;
+    if (resolvedCatalogId.isEmpty) {
+      throw StateError('The media catalog ID could not be resolved.');
+    }
+    _mediaCatalogIdCache[canonicalKey] = resolvedCatalogId;
 
-    if (catalog == null) {
-      final created = await c
-          .from('media_catalog')
-          .insert(catalogValues)
-          .select('id')
-          .single();
-
-      catalogId = _requiredId(
-        created['id']?.toString(),
-        field: 'media_catalog.id',
-      );
-    } else {
-      catalogId = _requiredId(
-        catalog['id']?.toString(),
-        field: 'media_catalog.id',
-      );
-
-      await c.from('media_catalog').update(catalogValues).eq(
-            'id',
-            catalogId,
-          );
+    final canonicalPathCacheKey = '$serverId|$resolvedCatalogId';
+    final rememberedCanonicalPath = _canonicalServerMediaPathCache[canonicalPathCacheKey];
+    if (rememberedCanonicalPath != null &&
+        rememberedCanonicalPath != cleanRelativeMediaId) {
+      if (incomingMetadata['source'] == 'approved-arm-import') {
+        throw FormatException('"$cleanTitle" already exists on this home server at "$rememberedCanonicalPath".');
+      }
+      return;
     }
 
-    final existingCanonicalCopy = await c
+    final existingCanonicalCopy = rememberedCanonicalPath == null
+        ? await c
         .from('server_media')
         .select('id,server_media_id,metadata')
         .eq('server_id', serverId)
-        .eq('media_catalog_id', catalogId)
+        .eq('media_catalog_id', resolvedCatalogId)
         .neq('server_media_id', cleanRelativeMediaId)
         .limit(1)
-        .maybeSingle();
+        .maybeSingle()
+        : null;
     if (existingCanonicalCopy != null) {
       final existingPath = existingCanonicalCopy['server_media_id']?.toString() ?? '';
+      if (existingPath.isNotEmpty) {
+        _canonicalServerMediaPathCache[canonicalPathCacheKey] = existingPath;
+      }
       if (incomingMetadata['source'] == 'approved-arm-import') {
         throw FormatException('"$cleanTitle" already exists on this home server${existingPath.isEmpty ? '.' : ' at "$existingPath".'}');
       }
@@ -6539,7 +6647,7 @@ class SupabaseStore {
     await c.from('server_media').upsert(
       {
         'server_id': serverId,
-        'media_catalog_id': catalogId,
+        'media_catalog_id': resolvedCatalogId,
         'server_media_id': cleanRelativeMediaId,
         'availability': 'available',
         'metadata': safeMetadata,
@@ -6547,6 +6655,10 @@ class SupabaseStore {
       },
       onConflict: 'server_id,server_media_id',
     );
+    _canonicalServerMediaPathCache[canonicalPathCacheKey] = cleanRelativeMediaId;
+    if (incomingMetadata['source'] == 'approved-arm-import') {
+      _approvedArmPathCache['$serverId|$cleanRelativeMediaId'] = true;
+    }
   }
 
   Future<void> updateServerMediaMetadata({
@@ -6775,17 +6887,15 @@ class SupabaseStore {
 
     if (server == null) return;
 
+    final serverId = server['id']?.toString() ?? '';
     await c
         .from('server_media')
         .delete()
-        .eq(
-          'server_id',
-          server['id'],
-        )
-        .eq(
-          'server_media_id',
-          cleanRelativeMediaId,
-        );
+        .eq('server_id', serverId)
+        .eq('server_media_id', cleanRelativeMediaId);
+    _approvedArmPathCache.remove('$serverId|$cleanRelativeMediaId');
+    _canonicalServerMediaPathCache.removeWhere((key, value) =>
+        key.startsWith('$serverId|') && value == cleanRelativeMediaId);
   }
 
   // ---------------------------------------------------------------------------

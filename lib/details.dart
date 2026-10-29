@@ -24,11 +24,14 @@ import 'media_actions.dart';
 import 'media_continuity.dart';
 import 'media_knowledge.dart';
 import 'widgets/like_toggle_button.dart';
+import 'widgets/added_by_profile_label.dart';
 import 'social_sharing.dart';
 import 'food_delivery.dart';
 import 'catalog_entity_details.dart';
 import 'page_customization_button.dart';
 import 'recommendation_ownership.dart';
+import 'media_artwork_auto_resolver.dart';
+import 'energy_saver.dart';
 import 'streaming_experience.dart';
 import 'core/services/original_language_defaults.dart';
 import 'core/services/cinematic_title_metadata_service.dart';
@@ -107,6 +110,16 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   void initState() {
     super.initState();
     unawaited(_loadDefaultLanguageTracks());
+    unawaited(EnergySaverController.instance.ensureLoaded(
+      profileId: AppController.instance.currentProfile?.id,
+    ).then((_) async {
+      await Future<void>.delayed(Duration.zero);
+      // Movie/show details already request TMDB title metadata below. The
+      // generic resolver is needed here for album/music detail pages instead.
+      if (mounted && !_supportsCinematicProviderMetadata) {
+        await MediaArtworkAutoResolver.warmSelectedMedia(media);
+      }
+    }));
     if (CinematicTitleMetadataService.isConfigured &&
         _supportsCinematicProviderMetadata) {
       unawaited(_loadProviderTitleMetadata());
@@ -133,6 +146,19 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         isTv: media.isSeries || _isLegacyTvType(media.type),
         year: media.releaseYear ?? media.seriesStartYear,
       );
+      if (metadata != null &&
+          EnergySaverController.instance.canRunBackgroundWork(pageId: 'details')) {
+        unawaited(MediaArtworkAutoResolver.rememberResolvedArtwork(
+          media,
+          MediaArtworkResult(
+            posterUrl: metadata.posterUrl,
+            backdropPath: metadata.backdropPath,
+            titleMetadata: metadata,
+          ),
+          profileId: AppController.instance.currentProfile?.id ?? 'guest',
+          persistMissingPoster: media.imageUrl?.trim().isNotEmpty != true,
+        ).catchError((Object _) {}));
+      }
       final savedTrailerUrl = await _loadSavedDetailsTrailerUrl(metadata);
       final profileId = AppController.instance.currentProfile?.id ?? 'guest';
       final savedPosterPath = metadata == null
@@ -2152,14 +2178,13 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                       fontSize: 14,
                     ),
                   ),
-                  if (media.addedByProfileName?.trim().isNotEmpty ?? false)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        'Added by ${media.addedByProfileName}',
-                        style: const TextStyle(color: Colors.white54, fontSize: 12),
-                      ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: AddedByProfileLabel.forMedia(
+                      media,
+                      compact: false,
                     ),
+                  ),
                 ],
               ),
             ),

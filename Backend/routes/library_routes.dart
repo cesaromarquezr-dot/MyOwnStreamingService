@@ -16,6 +16,7 @@
 // provide a separate storage root/worker boundary for each account rather
 // than sharing one MEDIA_ROOT between unrelated accounts.
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -34,6 +35,12 @@ class LibraryRoutes {
       '/api/v1/library/ownership-declaration';
   static const String _deletionPath =
       '/api/v1/library/deletion-request';
+  static const String _membershipPath = '/api/v1/library/membership';
+
+  // Membership overrides live outside the media scanner's index, so a full
+  // scan or server restart cannot resurrect a removed item. Writes are queued
+  // to prevent concurrent requests from losing each other's updates.
+  static Future<void> _membershipQueue = Future<void>.value();
 
   static final RegExp _supportedMediaExtension = RegExp(
     r'\.(mkv|mp4|m4v|avi|mov|webm|mp3|flac|m4a|aac|wav)$',
@@ -85,6 +92,153 @@ class LibraryRoutes {
 
     try {
       // --------------------------------------------------------------
+      // DURABLE PROFILE-SCOPED LIBRARY MEMBERSHIP OVERRIDES
+      // --------------------------------------------------------------
+
+      if (request.method == 'GET' && path == _membershipPath) {
+        final profileId = (request.uri.queryParameters['profile_id'] ??
+                request.uri.queryParameters['profileId'] ?? '')
+            .trim();
+        if (profileId.isEmpty || profileId.length > 200) {
+          await _json(request.response, HttpStatus.badRequest, <String, dynamic>{
+            'success': false,
+            'error': 'A valid profile_id is required.',
+          });
+          return;
+        }
+        final hiddenIds = await _withMembershipLock<List<String>>(() async {
+          final data = await _readMembershipState();
+          final accounts = data['accounts'] as Map<String, dynamic>;
+          final profiles = accounts[account.id] is Map
+              ? Map<String, dynamic>.from(accounts[account.id] as Map)
+              : <String, dynamic>{};
+          final raw = profiles[profileId];
+          if (raw is! List) return <String>[];
+          return raw.map((value) => value.toString().trim())
+              .where((value) => value.isNotEmpty).toSet().toList()..sort();
+        });
+        await _json(request.response, HttpStatus.ok, <String, dynamic>{
+          'success': true,
+          'profileId': profileId,
+          'hiddenMediaIds': hiddenIds,
+        });
+        return;
+      }
+
+      if (request.method == 'PUT' && path == _membershipPath) {
+        final body = await _body(request);
+        final profileId = (body['profileId'] ?? '').toString().trim();
+        if (profileId.isEmpty || profileId.length > 200) {
+          await _json(request.response, HttpStatus.badRequest, <String, dynamic>{
+            'success': false,
+            'error': 'A valid profileId is required.',
+          });
+          return;
+        }
+
+        if (body['replace'] == true && body['hiddenMediaIds'] is List) {
+          final rawIds = body['hiddenMediaIds'] as List;
+          if (rawIds.length > 5000) {
+            await _json(request.response, HttpStatus.badRequest, <String, dynamic>{
+              'success': false,
+              'error': 'At most 5000 hidden media IDs can be reconciled at once.',
+            });
+            return;
+          }
+          final ids = <String>{};
+          for (final rawId in rawIds) {
+            final id = rawId.toString().trim();
+            if (id.isEmpty) continue;
+            if (id.length > 512) {
+              await _json(request.response, HttpStatus.badRequest, <String, dynamic>{
+                'success': false,
+                'error': 'A media ID exceeds the supported length.',
+              });
+              return;
+            }
+            ids.add(id);
+          }
+          final count = await _withMembershipLock<int>(() async {
+            final data = await _readMembershipState();
+            final accounts = data['accounts'] as Map<String, dynamic>;
+            final profiles = accounts[account.id] is Map
+                ? Map<String, dynamic>.from(accounts[account.id] as Map)
+                : <String, dynamic>{};
+            if (ids.isEmpty) {
+              profiles.remove(profileId);
+            } else {
+              final normalized = ids.toList()..sort();
+              profiles[profileId] = normalized;
+            }
+            if (profiles.isEmpty) {
+              accounts.remove(account.id);
+            } else {
+              accounts[account.id] = profiles;
+            }
+            data['accounts'] = accounts;
+            await _writeMembershipState(data);
+            return ids.length;
+          });
+          await _json(request.response, HttpStatus.ok, <String, dynamic>{
+            'success': true,
+            'profileId': profileId,
+            'hiddenCount': count,
+            'replaced': true,
+          });
+          return;
+        }
+
+        final mediaId = (body['mediaId'] ?? '').toString().trim();
+        final hidden = body['hidden'];
+        if (mediaId.isEmpty || mediaId.length > 512 || hidden is! bool) {
+          await _json(request.response, HttpStatus.badRequest, <String, dynamic>{
+            'success': false,
+            'error': 'profileId, mediaId and a boolean hidden value are required.',
+          });
+          return;
+        }
+        final result = await _withMembershipLock<Map<String, dynamic>>(() async {
+          final data = await _readMembershipState();
+          final accounts = data['accounts'] as Map<String, dynamic>;
+          final profiles = accounts[account.id] is Map
+              ? Map<String, dynamic>.from(accounts[account.id] as Map)
+              : <String, dynamic>{};
+          final ids = (profiles[profileId] is List
+                  ? (profiles[profileId] as List)
+                      .map((value) => value.toString().trim())
+                      .where((value) => value.isNotEmpty).toSet()
+                  : <String>{});
+          if (hidden) {
+            ids.add(mediaId);
+          } else {
+            ids.remove(mediaId);
+          }
+          final normalized = ids.toList()..sort();
+          if (normalized.isEmpty) {
+            profiles.remove(profileId);
+          } else {
+            profiles[profileId] = normalized;
+          }
+          if (profiles.isEmpty) {
+            accounts.remove(account.id);
+          } else {
+            accounts[account.id] = profiles;
+          }
+          data['accounts'] = accounts;
+          await _writeMembershipState(data);
+          return <String, dynamic>{
+            'success': true,
+            'profileId': profileId,
+            'mediaId': mediaId,
+            'hidden': hidden,
+            'hiddenCount': normalized.length,
+          };
+        });
+        await _json(request.response, HttpStatus.ok, result);
+        return;
+      }
+
+      // --------------------------------------------------------------
       // AUTHENTICATED MEDIA STREAMING
       // --------------------------------------------------------------
 
@@ -135,6 +289,27 @@ class LibraryRoutes {
         // Keep the request metadata isolated from the incoming decoded body,
         // then enrich it with the server-generated import information below.
         final metadata = Map<String, dynamic>.from(requestedMetadata);
+        // Trust the current account's canonical profile record for attribution;
+        // never accept an arbitrary profile name supplied by a client.
+        final submittedProfileId = metadata['addedByProfileId']?.toString().trim() ?? '';
+        dynamic addingProfile;
+        if (submittedProfileId.isNotEmpty) {
+          for (final profile in account.profiles) {
+            if (profile.id == submittedProfileId) {
+              addingProfile = profile;
+              break;
+            }
+          }
+        }
+        if (addingProfile != null) {
+          metadata['addedByProfileId'] = addingProfile.id;
+          metadata['addedByProfileName'] = addingProfile.name;
+        } else {
+          metadata.remove('addedByProfileId');
+          metadata.remove('addedByProfileName');
+        }
+        metadata['addedAt'] ??= DateTime.now().toUtc().toIso8601String();
+        metadata['addedSource'] = 'import/rip';
         if (title.isEmpty) {
           await _json(request.response, HttpStatus.badRequest, {
             'success': false,
@@ -658,6 +833,9 @@ class LibraryRoutes {
   }) async {
     final root = _mediaRoot();
     final files = <Map<String, dynamic>>[];
+    final attributions = await store.loadServerMediaAttributions(
+      accountExternalId: accountExternalId,
+    );
     var persisted = 0;
 
     if (root.existsSync()) {
@@ -686,16 +864,15 @@ class LibraryRoutes {
         }
 
         final segments = relative.split('/');
-        final type = _mediaType(
-          lower,
-          segments,
-        );
-
+        final type = _mediaType(lower, segments);
         final fileName = entity.uri.pathSegments.isEmpty
             ? entity.path
             : entity.uri.pathSegments.last;
-
-        final title = _cleanTitle(fileName);
+        final episodeMetadata = type == 'episode'
+            ? _episodeFileMetadata(fileName, segments)
+            : null;
+        final title = episodeMetadata?['episodeTitle']?.toString() ??
+            _cleanTitle(fileName);
         final fileSize = entity.lengthSync();
         final modifiedAt = entity.lastModifiedSync().toUtc().toIso8601String();
         final isDemoArtifact = relative
@@ -707,6 +884,11 @@ class LibraryRoutes {
           'id': relative,
           'title': title,
           'type': type,
+          if (episodeMetadata != null) ...<String, dynamic>{
+            'seriesTitle': episodeMetadata['seriesTitle'],
+            'seasonNumber': episodeMetadata['seasonNumber'],
+            'episodeNumber': episodeMetadata['episodeNumber'],
+          },
           'fileSize': fileSize,
           'modifiedAt': modifiedAt,
           'isDemoArtifact': isDemoArtifact,
@@ -715,6 +897,8 @@ class LibraryRoutes {
           if (isDemoArtifact)
             'description': 'ARM mock placeholder only; the file contains text, not playable media.',
         };
+        final attribution = attributions[relative];
+        if (attribution != null) item.addAll(attribution);
         if (type == 'music') {
           final album = _inferMusicAlbum(segments);
           final artist = _inferMusicArtist(segments);
@@ -735,6 +919,7 @@ class LibraryRoutes {
                 'source': 'home-server-scanner',
                 'relativeMediaId': relative,
                 'modifiedAt': modifiedAt,
+                if (attribution != null) ...attribution,
                 if (item['album'] != null) 'album': item['album'],
                 if (item['artist'] != null) 'artist': item['artist'],
               },
@@ -1011,6 +1196,17 @@ class LibraryRoutes {
       return 'music';
     }
 
+    // Preserve episode-level identity when filenames use the common S02E03 or
+    // 2x03 pattern. Treating these as generic shows makes exact themed-episode
+    // playback and episode progress impossible.
+    final episodeFileName = segments.isEmpty ? lowerPath : segments.last.toLowerCase();
+    final hasEpisodeNumber = RegExp(
+      r'\bS(\d{1,2})[ ._-]*E(\d{1,3})\b',
+      caseSensitive: false,
+    ).hasMatch(episodeFileName) || RegExp(r'\b(\d{1,2})x(\d{1,3})\b',
+        caseSensitive: false).hasMatch(episodeFileName);
+    if (hasEpisodeNumber) return 'episode';
+
     final looksLikeShow = segments.any(
       (segment) {
         final lower = segment.toLowerCase();
@@ -1027,6 +1223,70 @@ class LibraryRoutes {
     );
 
     return looksLikeShow ? 'tvShow' : 'movie';
+  }
+
+  Map<String, dynamic>? _episodeFileMetadata(
+    String fileName,
+    List<String> segments,
+  ) {
+    final withoutExtension = fileName.replaceFirst(RegExp(r'\.[^.]+$'), '');
+    final marker = RegExp(
+      r'\bS(\d{1,2})[ ._-]*E(\d{1,3})\b',
+      caseSensitive: false,
+    ).firstMatch(withoutExtension) ??
+        RegExp(r'\b(\d{1,2})x(\d{1,3})\b', caseSensitive: false)
+            .firstMatch(withoutExtension);
+    if (marker == null) return null;
+    final isSxxExx = marker.group(1) != null &&
+        withoutExtension.substring(marker.start, marker.end).toLowerCase().contains('e');
+    final seasonNumber = int.tryParse(marker.group(1) ?? '');
+    final episodeNumber = int.tryParse(marker.group(2) ?? '');
+    if (seasonNumber == null || episodeNumber == null) return null;
+
+    var episodeTitle = withoutExtension.substring(marker.end)
+        .replaceAll(RegExp(r'^[\s._-]+'), '')
+        .replaceAll(RegExp(
+          r'\b(480p|720p|1080p|2160p|4k|webrip|web[ ._-]?dl|bluray|blu[ ._-]?ray|x264|x265|hevc|hdr|proper|repack)\b.*$',
+          caseSensitive: false,
+        ), '')
+        .replaceAll(RegExp(r'[._]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (episodeTitle.isEmpty) {
+      episodeTitle = withoutExtension.substring(0, marker.start)
+          .replaceAll(RegExp(r'[._]+'), ' ').trim();
+    }
+    episodeTitle = episodeTitle.isEmpty ? _cleanTitle(fileName) : episodeTitle;
+
+    const genericFolders = <String>{
+      'tv', 'tvs', 'shows', 'show', 'series', 'television', 'video', 'videos',
+      'media', 'library', 'movies', 'episodes',
+    };
+    var folderIndex = segments.length - 2;
+    if (folderIndex >= 0 && RegExp(r'^(season|series|s)[ ._-]*\d+$',
+        caseSensitive: false).hasMatch(_cleanTitle(segments[folderIndex]))) {
+      folderIndex--;
+    }
+    String seriesTitle = '';
+    if (folderIndex >= 0) {
+      final folder = _cleanTitle(segments[folderIndex]);
+      if (!genericFolders.contains(folder.toLowerCase())) seriesTitle = folder;
+    }
+    if (seriesTitle.isEmpty) {
+      final prefix = withoutExtension.substring(0, marker.start)
+          .replaceAll(RegExp(r'[._]+'), ' ')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+      seriesTitle = prefix.isEmpty ? 'Unknown Series' : prefix;
+    }
+
+    return <String, dynamic>{
+      'seriesTitle': seriesTitle,
+      'seasonNumber': seasonNumber,
+      'episodeNumber': episodeNumber,
+      'episodeTitle': episodeTitle,
+      'numberingFormat': isSxxExx ? 'SxxExx' : 'NxN',
+    };
   }
 
   ContentType _contentType(String path) {
@@ -1316,6 +1576,75 @@ class LibraryRoutes {
     HttpResponse response,
   ) {
     return response.headers.contentType != null;
+  }
+
+  static Future<T> _withMembershipLock<T>(Future<T> Function() action) {
+    final completer = Completer<T>();
+    _membershipQueue = _membershipQueue.then((_) async {
+      try {
+        completer.complete(await action());
+      } catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      }
+    });
+    return completer.future;
+  }
+
+  File _membershipStateFile() {
+    final configured = Platform.environment['LIBRARY_MEMBERSHIP_STORE_PATH']?.trim();
+    if (configured != null && configured.isNotEmpty) return File(configured);
+    final separator = Platform.pathSeparator;
+    return File('${Directory.current.path}${separator}data${separator}library_membership_overrides.json');
+  }
+
+  Future<Map<String, dynamic>> _readMembershipState() async {
+    final file = _membershipStateFile();
+    final backup = File('${file.path}.bak');
+    File source = file;
+    if (!await source.exists() && await backup.exists()) source = backup;
+    if (!await source.exists()) {
+      return <String, dynamic>{'schemaVersion': 1, 'accounts': <String, dynamic>{}};
+    }
+    try {
+      final decoded = jsonDecode(await source.readAsString());
+      if (decoded is! Map) throw const FormatException('Membership data must be an object.');
+      final data = Map<String, dynamic>.from(decoded);
+      final rawAccounts = data['accounts'];
+      data['schemaVersion'] = 1;
+      data['accounts'] = rawAccounts is Map
+          ? Map<String, dynamic>.from(rawAccounts)
+          : <String, dynamic>{};
+      return data;
+    } on FormatException {
+      // Do not silently overwrite a corrupt file: keep a diagnostic copy and
+      // start with an empty state only after preserving the original bytes.
+      final corrupt = File('${file.path}.corrupt-${DateTime.now().millisecondsSinceEpoch}');
+      if (await file.exists()) await file.copy(corrupt.path);
+      rethrow;
+    }
+  }
+
+  Future<void> _writeMembershipState(Map<String, dynamic> data) async {
+    final file = _membershipStateFile();
+    await file.parent.create(recursive: true);
+    final temp = File('${file.path}.tmp-${pid}-${DateTime.now().microsecondsSinceEpoch}');
+    final backup = File('${file.path}.bak');
+    await temp.writeAsString(jsonEncode(data), flush: true);
+    try {
+      if (await file.exists()) {
+        if (await backup.exists()) await backup.delete();
+        await file.rename(backup.path);
+      }
+      await temp.rename(file.path);
+      if (await backup.exists()) await backup.delete();
+    } catch (_) {
+      if (!await file.exists() && await backup.exists()) {
+        await backup.rename(file.path);
+      }
+      rethrow;
+    } finally {
+      if (await temp.exists()) await temp.delete();
+    }
   }
 
   void _applyCorsHeaders(

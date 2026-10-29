@@ -43,6 +43,8 @@ class MusicCatalogService {
 
   String? _spotifyToken;
   DateTime? _spotifyTokenExpiresAt;
+  Map<String, dynamic>? _upcomingAlbumsCache;
+  DateTime? _upcomingAlbumsCacheUntil;
 
   // MusicBrainz asks clients to stay at or below one request per second.
   // This queue serializes calls across concurrent app users on this backend.
@@ -201,6 +203,83 @@ class MusicCatalogService {
       'spotify': spotify,
       'musicBrainz': musicBrainz,
       'warnings': warnings,
+    };
+  }
+
+  /// Lists MusicBrainz album release groups with known dates in the next year.
+  /// Results are cached in this backend process to avoid unnecessary requests
+  /// against MusicBrainz' rate-limited public search API.
+  Future<Map<String, dynamic>> upcomingAlbums({int limit = 60}) async {
+    final now = DateTime.now().toUtc();
+    if (_upcomingAlbumsCache != null &&
+        _upcomingAlbumsCacheUntil != null &&
+        now.isBefore(_upcomingAlbumsCacheUntil!)) {
+      final cachedItems = _upcomingAlbumsCache!['items'];
+      final items = cachedItems is List ? cachedItems : const <dynamic>[];
+      return <String, dynamic>{
+        ..._upcomingAlbumsCache!,
+        'items': items.take(limit.clamp(1, 100).toInt()).toList(growable: false),
+      };
+    }
+    final start = DateTime.utc(now.year, now.month, now.day);
+    final end = start.add(const Duration(days: 366));
+    String dateString(DateTime value) =>
+        '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+    final from = dateString(start);
+    final to = dateString(end);
+    final uri = Uri.https('musicbrainz.org', '/ws/2/release-group/', <String, String>{
+      'query': 'firstreleasedate:[$from TO $to] AND primarytype:album',
+      'fmt': 'json',
+      'limit': '100',
+      'offset': '0',
+    });
+    final payload = await _musicBrainzGet(uri);
+    final raw = payload['release-groups'];
+    final items = <Map<String, dynamic>>[];
+    if (raw is List) {
+      for (final rawItem in raw.whereType<Map>()) {
+        final item = Map<String, dynamic>.from(rawItem);
+        final mbid = item['id']?.toString().trim() ?? '';
+        final title = item['title']?.toString().trim() ?? '';
+        final date = item['first-release-date']?.toString().trim() ?? '';
+        if (mbid.isEmpty || title.isEmpty || date.length < 10) continue;
+        final parsed = DateTime.tryParse(date.substring(0, 10));
+        if (parsed == null) continue;
+        final releaseDay = DateTime.utc(parsed.year, parsed.month, parsed.day);
+        if (releaseDay.isBefore(start) || releaseDay.isAfter(end)) continue;
+        items.add(<String, dynamic>{
+          'id': mbid,
+          'title': title,
+          'artist': _musicBrainzArtistCredits(item['artist-credit']),
+          'releaseDate': date.substring(0, 10),
+          'firstReleaseDate': date.substring(0, 10),
+          'primaryType': item['primary-type']?.toString() ?? 'Album',
+          'secondaryTypes': item['secondary-types'] is List
+              ? (item['secondary-types'] as List).map((value) => value.toString()).toList(growable: false)
+              : const <String>[],
+          'imageUrl': _coverArtFrontUrl(mbid, entity: 'release-group'),
+          'releaseUrl': 'https://musicbrainz.org/release-group/$mbid',
+          'source': 'MusicBrainz',
+          'type': 'album',
+        });
+      }
+    }
+    items.sort((a, b) =>
+        (a['releaseDate']?.toString() ?? '').compareTo(b['releaseDate']?.toString() ?? ''));
+    final result = <String, dynamic>{
+      'success': true,
+      'source': 'MusicBrainz',
+      'from': from,
+      'to': to,
+      'items': items,
+      'count': items.length,
+      'note': 'These are known first-release dates. Announced dates may change and country-specific availability can differ.',
+    };
+    _upcomingAlbumsCache = result;
+    _upcomingAlbumsCacheUntil = now.add(const Duration(hours: 6));
+    return <String, dynamic>{
+      ...result,
+      'items': items.take(limit.clamp(1, 100).toInt()).toList(growable: false),
     };
   }
 

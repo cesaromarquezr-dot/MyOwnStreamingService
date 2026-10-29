@@ -472,7 +472,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               Card(child: ListTile(
                 leading: const Icon(Icons.music_note_rounded),
                 title: LocalizedMediaText(track.title),
-                subtitle: Text(track.artist),
+                subtitle: Text(musicTrackSubtitle(track), maxLines: 2, overflow: TextOverflow.ellipsis),
                 trailing: LikeToggleButton(
                   liked: true,
                   onPressed: () async {

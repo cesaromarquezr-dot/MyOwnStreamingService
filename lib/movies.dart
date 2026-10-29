@@ -12,6 +12,7 @@ import 'details.dart';
 import 'player.dart';
 import 'localization.dart';
 import 'widgets/like_toggle_button.dart';
+import 'widgets/added_by_profile_label.dart';
 import 'page_customization_button.dart';
 import 'media_metadata_catalog_screen.dart';
 import 'catalog_poster_image.dart';
@@ -45,7 +46,7 @@ class _MoviesScreenState extends State<MoviesScreen>
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
-    HomeHoverPreviewStore.current.value = null;
+    HomeHoverPreviewStore.clearCurrent();
 
     // Seed browseable catalog examples when Movies/TV is opened directly.
     AppController.instance.ensureDemoPreviewMedia(notify: false);
@@ -157,6 +158,8 @@ class _MoviesScreenState extends State<MoviesScreen>
         if (movie.genres.isNotEmpty) movie.genres.take(2).join(' · '),
         mediaCountryOriginLabel(movie),
         movie.type,
+        if ((movie.addedByProfileName?.trim().isNotEmpty ?? false)) 'Added by ${movie.addedByProfileName!.trim()}',
+        if ((movie.addedByProfileName?.trim().isNotEmpty != true) && const <String>{'home-server-scanner', 'import/rip', 'disc_ingestion_center', 'approved-arm-import', 'arm-import'}.contains(movie.addedSource.trim().toLowerCase())) 'Added by unknown profile',
       ].where((part) => part.trim().isNotEmpty).join(' · '),
       subtitleBuilder: (context) => Wrap(
         spacing: 5,
@@ -166,6 +169,7 @@ class _MoviesScreenState extends State<MoviesScreen>
           if (movie.releaseYear != null) Text('${movie.releaseYear}', style: const TextStyle(color: Colors.white60, fontSize: 11)),
           if (movie.genres.isNotEmpty) Text(movie.genres.take(2).join(' · '), style: const TextStyle(color: Colors.white60, fontSize: 11)),
           CountryOriginInline(media: movie, fontSize: 10.5),
+          AddedByProfileLabel.forMedia(movie),
         ],
       ),
       year: movie.releaseYear,
@@ -1210,6 +1214,8 @@ class _MovieCardState extends State<_MovieCard> {
                                 )),
                               const SizedBox(height: 2),
                               CountryOriginInline(media: movie, fontSize: 10.5),
+                              const SizedBox(height: 3),
+                              AddedByProfileLabel.forMedia(movie, compact: true),
                             ],
                           ),
                         ),

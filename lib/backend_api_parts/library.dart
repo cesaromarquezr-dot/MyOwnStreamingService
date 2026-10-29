@@ -60,6 +60,67 @@ extension BackendApiLibraryMethods on BackendApi {
     );
   }
 
+  /// Reads durable profile-scoped removal markers from the home server.
+  /// The server scopes these markers to the authenticated account.
+  Future<List<String>> getHiddenLibraryMediaIds({
+    required String profileId,
+  }) async {
+    _requireAuthentication();
+    final uri = Uri.parse('$baseUrl/library/membership').replace(
+      queryParameters: <String, String>{'profile_id': profileId},
+    );
+    final response = await _networkClient.get(uri, headers: _headers);
+    final data = await _requireSuccess(
+      response,
+      'Unable to load saved library removals.',
+    );
+    final raw = data['hiddenMediaIds'];
+    if (raw is! List) return <String>[];
+    return raw.map((value) => value.toString().trim())
+        .where((value) => value.isNotEmpty).toSet().toList(growable: false);
+  }
+
+  /// Replaces the full hidden-ID snapshot during first-time reconciliation.
+  /// This is only used when migrating pre-existing local tombstones or when a
+  /// prior server sync failed; normal UI actions use setLibraryMediaHidden.
+  Future<void> replaceHiddenLibraryMediaIds({
+    required String profileId,
+    required Iterable<String> mediaIds,
+  }) async {
+    _requireAuthentication();
+    final normalized = mediaIds.map((id) => id.trim())
+        .where((id) => id.isNotEmpty).toSet().toList()..sort();
+    final response = await _networkClient.put(
+      Uri.parse('$baseUrl/library/membership'),
+      headers: _headers,
+      body: jsonEncode(<String, dynamic>{
+        'profileId': profileId,
+        'replace': true,
+        'hiddenMediaIds': normalized,
+      }),
+    );
+    await _requireSuccess(response, 'Unable to reconcile saved library removals.');
+  }
+
+  /// Saves or clears a durable profile-scoped removal marker on the home server.
+  Future<void> setLibraryMediaHidden({
+    required String profileId,
+    required String mediaId,
+    required bool hidden,
+  }) async {
+    _requireAuthentication();
+    final response = await _networkClient.put(
+      Uri.parse('$baseUrl/library/membership'),
+      headers: _headers,
+      body: jsonEncode(<String, dynamic>{
+        'profileId': profileId,
+        'mediaId': mediaId,
+        'hidden': hidden,
+      }),
+    );
+    await _requireSuccess(response, 'Unable to save the library membership change.');
+  }
+
   /// Scans the home server's completed media directories.
   Future<Map<String, dynamic>> scanServerLibrary() async {
     _requireAuthentication();

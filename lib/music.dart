@@ -12,7 +12,6 @@ import 'package:video_player/video_player.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'backend_api.dart';
 import 'app_core.dart';
-import 'app_customization.dart';
 import 'catalog_poster_image.dart' show AlbumArtworkImage;
 import 'music_favorites.dart';
 import 'music_genre_system.dart';
@@ -29,7 +28,6 @@ import 'cinematic_title_fonts.dart';
 import 'music_video_search_screen.dart';
 import 'music_lyrics_search_screen.dart';
 import 'library_view_modes.dart';
-import 'recommendation_ownership.dart';
 
 /// A music track imported from the account's home-server library.
 class MusicTrack {
@@ -61,6 +59,9 @@ class MusicTrack {
   /// Filesystem modification time supplied by the home-server scanner. This
   /// is a freshness signal, not the official album release date.
   final DateTime? modifiedAt;
+  final String? addedByProfileId;
+  final String? addedByProfileName;
+  final String addedSource;
 
   const MusicTrack({
     required this.id,
@@ -78,6 +79,9 @@ class MusicTrack {
     this.matureTheme = false,
     this.lyrics = '',
     this.modifiedAt,
+    this.addedByProfileId,
+    this.addedByProfileName,
+    this.addedSource = 'unknown',
   });
 
   /// Canonicalized broad genres plus subgenres, without changing source tags.
@@ -106,6 +110,78 @@ class MusicTrack {
         genres,
         subgenres: subgenres,
       );
+}
+
+String? _musicTrackAttribution(MusicTrack track) {
+  final name = track.addedByProfileName?.trim() ?? '';
+  if (name.isNotEmpty) return 'Added by $name';
+
+  final source = track.addedSource.trim().toLowerCase();
+  const importedSources = <String>{
+    'home-server-scanner',
+    'import/rip',
+    'disc_ingestion_center',
+    'approved-arm-import',
+    'arm-import',
+  };
+
+  // Older scanner payloads may omit track-level attribution while the album
+  // record still carries the profile responsible for importing/ripping it.
+  // Do not stamp catalog/recommendation tracks with ownership just because an
+  // identically named album exists in the user's collection.
+  final albumTitle = track.album.trim().toLowerCase();
+  if (importedSources.contains(source) && albumTitle.isNotEmpty) {
+    final albumRecords = AppController.instance.library.where((media) =>
+        media.title.trim().toLowerCase() == albumTitle &&
+        (media.type.toLowerCase().contains('album') ||
+            media.type.toLowerCase() == 'music'));
+    for (final media in albumRecords) {
+      final albumOwner = media.addedByProfileName?.trim() ?? '';
+      if (albumOwner.isNotEmpty) return 'Added by $albumOwner';
+    }
+    if (albumRecords.any((media) =>
+        importedSources.contains(media.addedSource.trim().toLowerCase()))) {
+      return 'Added by unknown profile';
+    }
+  }
+
+  if (importedSources.contains(source)) {
+    return 'Added by unknown profile';
+  }
+  return null;
+}
+
+String _musicTrackSubtitle(MusicTrack track, {String? prefix}) {
+  final base = prefix?.trim().isNotEmpty == true ? prefix!.trim() : track.artist;
+  final attribution = _musicTrackAttribution(track);
+  return attribution == null ? base : '$base • $attribution';
+}
+
+/// Public presentation helper for song rows outside the Music destination.
+String musicTrackSubtitle(MusicTrack track, {String? prefix}) =>
+    _musicTrackSubtitle(track, prefix: prefix);
+
+/// Attribution label, when known or when an imported item has missing ownership.
+String? musicTrackAttributionLabel(MusicTrack track) =>
+    _musicTrackAttribution(track);
+
+String? _albumAttribution(List<MusicTrack> tracks, String albumTitle, String artist) {
+  final normalizedAlbum = albumTitle.trim().toLowerCase();
+  final normalizedArtist = artist.trim().toLowerCase();
+  final matching = tracks.where((track) =>
+      track.album.trim().toLowerCase() == normalizedAlbum &&
+      (normalizedArtist.isEmpty || track.artist.trim().toLowerCase() == normalizedArtist));
+  final knownNames = matching.map((track) => track.addedByProfileName?.trim() ?? '')
+      .where((name) => name.isNotEmpty).toSet();
+  if (knownNames.length == 1) return knownNames.first;
+  if (knownNames.length > 1) return 'multiple profiles';
+  final catalogAlbum = AppController.instance.library.where((media) =>
+      media.type.toLowerCase().contains('album') &&
+      media.title.trim().toLowerCase() == normalizedAlbum &&
+      (media.addedByProfileName?.trim().isNotEmpty ?? false)).toList();
+  if (catalogAlbum.isNotEmpty) return catalogAlbum.first.addedByProfileName!.trim();
+  if (matching.any((track) => _musicTrackAttribution(track) != null)) return 'unknown profile';
+  return null;
 }
 
 /// Stores per-profile music presentation and discovery preferences.
@@ -288,6 +364,8 @@ class MusicLibraryStore extends ChangeNotifier {
 
   final List<MusicTrack> tracks = <MusicTrack>[];
   final Map<String, List<String>> playlists = <String, List<String>>{};
+  final Map<String, String> playlistAddedByProfileNames = <String, String>{};
+  final Map<String, String> playlistAddedByProfileIds = <String, String>{};
   final Map<String, int> listenCounts = <String, int>{};
 
   /// Recent per-profile listening timestamps used for an actual rolling 7-day chart.
@@ -406,6 +484,12 @@ class MusicLibraryStore extends ChangeNotifier {
       ..addAll(_decodePlaylists(
         _playlistPreferences!.getString('music_playlists_$_playlistProfileKey'),
       ));
+    playlistAddedByProfileNames
+      ..clear()
+      ..addAll(_decodeStringMap(_playlistPreferences!.getString('music_playlist_added_by_name_$_playlistProfileKey')));
+    playlistAddedByProfileIds
+      ..clear()
+      ..addAll(_decodeStringMap(_playlistPreferences!.getString('music_playlist_added_by_id_$_playlistProfileKey')));
     listenCounts
       ..clear()
       ..addAll(_decodeListenCounts(
@@ -517,6 +601,17 @@ class MusicLibraryStore extends ChangeNotifier {
     }
   }
 
+  Map<String, String> _decodeStringMap(String? encoded) {
+    if (encoded == null || encoded.isEmpty) return <String, String>{};
+    try {
+      final decoded = jsonDecode(encoded);
+      if (decoded is! Map) return <String, String>{};
+      return decoded.map((key, value) => MapEntry(key.toString(), value.toString()));
+    } catch (_) {
+      return <String, String>{};
+    }
+  }
+
   Map<String, int> _decodeListenCounts(String? encoded) {
     if (encoded == null || encoded.isEmpty) return <String, int>{};
     try {
@@ -569,6 +664,14 @@ class MusicLibraryStore extends ChangeNotifier {
     _playlistPreferences?.setString(
       'music_playlists_$_playlistProfileKey',
       jsonEncode(playlists),
+    );
+    _playlistPreferences?.setString(
+      'music_playlist_added_by_name_$_playlistProfileKey',
+      jsonEncode(playlistAddedByProfileNames),
+    );
+    _playlistPreferences?.setString(
+      'music_playlist_added_by_id_$_playlistProfileKey',
+      jsonEncode(playlistAddedByProfileIds),
     );
   }
 
@@ -698,6 +801,11 @@ class MusicLibraryStore extends ChangeNotifier {
     final clean = name.trim();
     if (clean.isEmpty || playlists.containsKey(clean)) return;
     playlists[clean] = trackIds.toList();
+    final creator = AppController.instance.currentProfile;
+    if (creator != null) {
+      playlistAddedByProfileNames[clean] = creator.name;
+      playlistAddedByProfileIds[clean] = creator.id;
+    }
     _persistPlaylists();
     AppController.instance.addNotification(action: 'created a new playlist: $clean');
     notifyListeners();
@@ -711,6 +819,8 @@ class MusicLibraryStore extends ChangeNotifier {
       return;
     }
     playlists.remove(name);
+    playlistAddedByProfileNames.remove(name);
+    playlistAddedByProfileIds.remove(name);
     _persistPlaylists();
     if (activePlaylist == name) activePlaylist = null;
     notifyListeners();
@@ -1162,7 +1272,7 @@ class _MusicScreenState extends State<MusicScreen> {
               children: [
                 LocalizedMediaText(track.title,
                     style: const TextStyle(fontWeight: FontWeight.w800)),
-                Text(track.artist,
+                Text(_musicTrackSubtitle(track),
                     style: const TextStyle(color: Colors.white60)),
               ],
             ),
@@ -1205,7 +1315,7 @@ class _MusicScreenState extends State<MusicScreen> {
                 LocalizedMediaText(track.title,
                     style: const TextStyle(
                         fontSize: 20, fontWeight: FontWeight.w800)),
-                Text(track.artist,
+                Text(_musicTrackSubtitle(track),
                     style: const TextStyle(color: Colors.white60)),
                 const SizedBox(height: 12),
                 ListTile(
@@ -1802,7 +1912,7 @@ class _MusicScreenState extends State<MusicScreen> {
                                         overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(
                                             fontWeight: FontWeight.w800)),
-                                    Text(track.artist,
+                                    Text(_musicTrackSubtitle(track),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(
@@ -1891,9 +2001,13 @@ class _MusicScreenState extends State<MusicScreen> {
       final tracksOnAlbum = library.tracks
           .where((item) => item.album.trim().toLowerCase() == albumTitle.toLowerCase())
           .length;
+      final albumCreator = _albumAttribution(library.tracks, albumTitle, track.artist);
       return LibraryViewEntry(
         title: albumTitle,
-        subtitle: '${track.artist} · $tracksOnAlbum track${tracksOnAlbum == 1 ? '' : 's'}',
+        subtitle: [
+          '${track.artist} · $tracksOnAlbum track${tracksOnAlbum == 1 ? '' : 's'}',
+          if (albumCreator != null) 'Added by $albumCreator',
+        ].join(' · '),
         fallbackIcon: Icons.album_rounded,
         artworkBuilder: (context, fit) => AlbumArtworkImage(
           title: albumTitle,
@@ -2131,11 +2245,14 @@ class _MusicScreenState extends State<MusicScreen> {
                             leading: const Icon(Icons.music_note_rounded),
                             title: Text(track.title),
                             subtitle: Text(
-                              name == 'On Repeat' ||
-                                      name == 'Top 100 Most Played' ||
-                                      name == 'Most Played'
-                                  ? '${track.artist} • ${library.listenCounts[track.id] ?? 0} plays'
-                                  : track.artist,
+                              _musicTrackSubtitle(track,
+                                prefix: name == 'On Repeat' ||
+                                        name == 'Top 100 Most Played' ||
+                                        name == 'Most Played'
+                                    ? '${track.artist} • ${library.listenCounts[track.id] ?? 0} plays'
+                                    : track.artist),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             trailing: Wrap(children: [
                               IconButton(
@@ -2240,7 +2357,15 @@ class _MusicScreenState extends State<MusicScreen> {
               child: ListTile(
                 onTap: () => _editPlaylistSongs(entry.key),
                 title: Text(entry.key),
-                subtitle: UniversalText('${entry.value.length} songs'),
+                subtitle: Text(
+                  <String>[
+                    '${entry.value.length} songs',
+                    if (!const <String>{'Favorites', 'Movie Soundtracks', 'TV Soundtracks'}.contains(entry.key))
+                      'Added by ${(library.playlistAddedByProfileNames[entry.key]?.trim().isNotEmpty ?? false) ? library.playlistAddedByProfileNames[entry.key]!.trim() : 'unknown profile'}',
+                  ].join(' • '),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 trailing: Wrap(
                   children: [
                     IconButton(
@@ -2469,7 +2594,7 @@ class _MusicScreenState extends State<MusicScreen> {
                               child: const Icon(Icons.drag_handle_rounded)),
                           title: LocalizedMediaText(track.title,
                               maxLines: 1, overflow: TextOverflow.ellipsis),
-                          subtitle: Text(track.artist,
+                          subtitle: Text(_musicTrackSubtitle(track),
                               maxLines: 1, overflow: TextOverflow.ellipsis),
                           trailing: Wrap(children: [
                             IconButton(
@@ -2629,7 +2754,7 @@ class _MusicScreenState extends State<MusicScreen> {
                               secondary: _artwork(track, size: 40),
                               title: LocalizedMediaText(track.title,
                                   maxLines: 1, overflow: TextOverflow.ellipsis),
-                              subtitle: Text(track.artist,
+                              subtitle: Text(_musicTrackSubtitle(track),
                                   maxLines: 1, overflow: TextOverflow.ellipsis),
                               onChanged: (value) => setDialogState(() {
                                 if (value == true) {
@@ -2694,7 +2819,7 @@ class _MusicScreenState extends State<MusicScreen> {
                         secondary: _artwork(track, size: 40),
                         title: LocalizedMediaText(track.title,
                             maxLines: 1, overflow: TextOverflow.ellipsis),
-                        subtitle: Text(track.artist,
+                        subtitle: Text(_musicTrackSubtitle(track),
                             maxLines: 1, overflow: TextOverflow.ellipsis),
                         onChanged: (value) => setDialogState(() {
                           if (value == true) {
@@ -2853,7 +2978,7 @@ class _MusicTrackDisplayScreenState extends State<MusicTrackDisplayScreen> {
                                         : Icons.play_circle,
                                     size: 48)),
                         ] else ...[
-                          Text(widget.track.artist,
+                          Text(_musicTrackSubtitle(widget.track),
                               style: const TextStyle(color: Colors.white60)),
                           const SizedBox(height: 32),
                           const _MusicVisualizerBars(),
@@ -3486,28 +3611,7 @@ class _SpotifyArtistPopularSectionState extends State<_SpotifyArtistPopularSecti
       child: ListTile(
         leading: SizedBox(width: 48, height: 48, child: image.trim().startsWith('http') ? Image.network(image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.music_note_rounded)) : const Icon(Icons.music_note_rounded)),
         title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              local != null
-                  ? (canPlay ? '$artist · In your library' : '$artist · No playable audio source imported')
-                  : '$artist · $score',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.white54, fontSize: 11),
-            ),
-            const SizedBox(height: 4),
-            RecommendationOwnershipBadge(
-              isOwned: local != null,
-              isWatched: local != null &&
-                  (MusicLibraryStore.instance.listenCounts[local.id] ?? 0) > 0,
-              watchedLabel: 'Listened',
-              compact: true,
-            ),
-          ],
-        ),
+        subtitle: Text(canPlay ? '$artist · In your library' : '$artist · $score · Not in library', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 11)),
         trailing: IconButton(
           tooltip: canPlay ? 'Play imported track' : 'Import this track to enable playback',
           icon: Icon(canPlay ? Icons.play_arrow_rounded : Icons.lock_outline_rounded),
@@ -3608,7 +3712,7 @@ class _ArtistMusicVideosSectionState extends State<_ArtistMusicVideosSection> {
             return ListTile(
               leading: SizedBox(width: 64, height: 48, child: thumb.startsWith('http') ? Image.network(thumb, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.music_video_rounded)) : const Icon(Icons.music_video_rounded)),
               title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
-              subtitle: Text('${track.title} · ${video['channelTitle']?.toString() ?? track.artist}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+              subtitle: Text('${track.title} · ${video['channelTitle']?.toString() ?? track.artist} • ${_musicTrackSubtitle(track)}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 11)),
               trailing: IconButton(
                 tooltip: (track.musicVideoUrl?.trim().isNotEmpty ?? false) ? 'Play stored music video' : 'Find music video',
                 icon: const Icon(Icons.play_circle_outline_rounded),
@@ -4067,7 +4171,6 @@ class _MusicCustomization extends StatefulWidget {
 
 class _MusicCustomizationState extends State<_MusicCustomization> {
   late MusicPageCustomization draft;
-  late AppSectionCustomization _artworkSectionDraft;
 
   @override
   void initState() {
@@ -4075,19 +4178,13 @@ class _MusicCustomizationState extends State<_MusicCustomization> {
     draft = MusicPageCustomizationStore.settingsFor(
       AppController.instance.currentProfile,
     );
-    _artworkSectionDraft = AppSectionCustomizationStore.settingsFor(
-      AppController.instance.currentProfile,
-    );
   }
 
-  Future<void> _save() async {
-    await AppSectionCustomizationStore.save(
-      AppController.instance.currentProfile, _artworkSectionDraft);
+  void _save() {
     MusicPageCustomizationStore.apply(
       AppController.instance.currentProfile,
       draft,
     );
-    if (!mounted) return;
     Navigator.pop(context);
   }
 
@@ -4106,14 +4203,7 @@ class _MusicCustomizationState extends State<_MusicCustomization> {
               'Build a Spotify-inspired Music page without moving your audio files from the account server.',
               style: TextStyle(color: Colors.white60),
             ),
-            const SizedBox(height: 12),
-            ArtworkDisplayModePicker(
-              value: _artworkSectionDraft.artworkDisplayMode,
-              onChanged: (value) => setState(() {
-                _artworkSectionDraft.artworkDisplayMode = value;
-              }),
-            ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 18),
             _dropdown('Card style', draft.cardStyle,
                 ['Comfortable', 'Compact', 'Large'], (v) {
               setState(() => draft.cardStyle = v);

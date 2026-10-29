@@ -108,7 +108,7 @@ class _MediaAvailabilityRadarScreenState extends State<MediaAvailabilityRadarScr
             child: ListTile(
               leading: const CircleAvatar(backgroundColor: Color(0xFF30244F), child: Icon(Icons.music_note_rounded, color: _toolsAccent)),
               title: Text(track.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-              subtitle: Text('${track.artist} • ${track.genreDisplayLabel} • ${(track.audioUrl ?? '').trim().isNotEmpty ? 'Audio URL recorded; server access is not guaranteed.' : 'Metadata only; no audio URL is recorded.'}', style: const TextStyle(color: Colors.white60)),
+              subtitle: Text('${musicTrackSubtitle(track)} • ${track.genreDisplayLabel} • ${(track.audioUrl ?? '').trim().isNotEmpty ? 'Audio URL recorded; server access is not guaranteed.' : 'Metadata only; no audio URL is recorded.'}', style: const TextStyle(color: Colors.white60)),
               trailing: (track.audioUrl ?? '').trim().isNotEmpty ? IconButton(tooltip: 'Play track', icon: const Icon(Icons.play_arrow_rounded), onPressed: () => MusicPlaybackController.instance.play(track)) : const Icon(Icons.info_outline, color: Colors.white38),
               onTap: (track.audioUrl ?? '').trim().isNotEmpty ? () => MusicPlaybackController.instance.play(track) : null,
             ),
@@ -341,7 +341,7 @@ class _NextUpQueueScreenState extends State<NextUpQueueScreen> {
                   return ListTile(
                     leading: const Icon(Icons.music_note_rounded, color: _toolsAccent),
                     title: Text(track.title, style: const TextStyle(color: Colors.white)),
-                    subtitle: Text('${track.artist} • ${track.genreDisplayLabel}', style: const TextStyle(color: Colors.white54)),
+                    subtitle: Text('${musicTrackSubtitle(track)} • ${track.genreDisplayLabel}', style: const TextStyle(color: Colors.white54)),
                     onTap: () => Navigator.pop(sheetContext, track),
                   );
                 })),
@@ -391,7 +391,7 @@ class _NextUpQueueScreenState extends State<NextUpQueueScreen> {
                 contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 leading: const CircleAvatar(backgroundColor: Color(0xFF30244F), child: Icon(Icons.music_note_rounded, color: _toolsAccent)),
                 title: Text(track!.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                subtitle: Text('${track.artist} • ${track.genreDisplayLabel}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60)),
+                subtitle: Text('${musicTrackSubtitle(track)} • ${track.genreDisplayLabel}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60)),
                 trailing: IconButton(
                   tooltip: 'Play song',
                   icon: const Icon(Icons.play_circle_outline_rounded, color: _toolsAccent),
@@ -477,7 +477,7 @@ class _TravelModeScreenState extends State<TravelModeScreen> {
         onChanged: _loading ? null : (value) => _toggle('music:${track.id}', value == true),
         secondary: const Icon(Icons.music_note_rounded, color: _toolsAccent),
         title: Text(track.title),
-        subtitle: Text('${track.artist} • ${track.genreDisplayLabel} • offline download is not performed here'),
+        subtitle: Text('${musicTrackSubtitle(track)} • ${track.genreDisplayLabel} • offline download is not performed here'),
       )),
       OutlinedButton.icon(onPressed: _selected.isEmpty ? null : () async { await MediaFeaturePreferences.clearTravelPrep(); if (mounted) setState(() => _selected.clear()); }, icon: const Icon(Icons.clear_all), label: const Text('Clear travel shortlist'))
     ]);

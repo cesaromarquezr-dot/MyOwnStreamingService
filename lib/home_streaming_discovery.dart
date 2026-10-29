@@ -3,6 +3,7 @@
 
 import 'dart:async';
 import 'dart:math';
+import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import 'package:video_player/video_player.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 import 'app_core.dart';
+import 'widgets/added_by_profile_label.dart';
 import 'cinematic_title.dart';
 import 'artwork_selection_store.dart';
 import 'artwork_gallery_screen.dart';
@@ -31,8 +33,10 @@ import 'player.dart';
 import 'recommendation_ownership.dart';
 import 'core/services/cinematic_title_metadata_service.dart';
 import 'media_artwork_auto_resolver.dart';
+import 'energy_saver.dart';
 import 'page_hero_banner.dart';
 import 'home_hero_hover_preview.dart';
+import 'themed_episode_engine.dart';
 
 export 'home_hero_hover_preview.dart'
     show HomeHoverPreviewStore, HomeHeroHoverPreviewRegion;
@@ -114,6 +118,7 @@ class HomeBrowseNavigation extends StatelessWidget {
   final VoidCallback onPhysicalMedia;
   final VoidCallback onLiveTv;
   final VoidCallback onMyTv;
+  final VoidCallback onComingSoon;
 
   const HomeBrowseNavigation({
     super.key,
@@ -124,6 +129,7 @@ class HomeBrowseNavigation extends StatelessWidget {
     required this.onPhysicalMedia,
     required this.onLiveTv,
     required this.onMyTv,
+    required this.onComingSoon,
   });
 
   @override
@@ -159,14 +165,22 @@ class HomeBrowseNavigation extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              textDirection: direction,
-              children: [
-                _tab('Live TV', onTap: onLiveTv),
-                const SizedBox(width: 6),
-                _tab('My TV', onTap: onMyTv),
-              ],
+            SizedBox(
+              width: math.min(300.0, MediaQuery.sizeOf(context).width * .82),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  textDirection: direction,
+                  children: [
+                    _tab('Live TV', onTap: onLiveTv),
+                    const SizedBox(width: 6),
+                    _tab('My TV', onTap: onMyTv),
+                    const SizedBox(width: 6),
+                    _tab('Coming Soon', onTap: onComingSoon),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
@@ -333,6 +347,10 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     _hoveredMedia = HomeHoverPreviewStore.current.value;
     ArtworkSelectionStore.revision.addListener(_onArtworkSelectionsChanged);
     PageHeroSettingsStore.revision.addListener(_onHeroSettingsChanged);
+    EnergySaverController.instance.addListener(_onEnergySettingsChanged);
+    unawaited(EnergySaverController.instance.ensureLoaded(
+      profileId: AppController.instance.currentProfile?.id,
+    ));
     unawaited(_loadHeroSettings());
     unawaited(_refreshSelectedBackdrops());
     if (_items.isNotEmpty) {
@@ -373,6 +391,51 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     }
   }
 
+  String get _energyPageId => switch (widget.settingsKey) {
+        'movies' => 'movies',
+        'series' || 'shows' => 'series',
+        _ => 'home',
+      };
+
+  void _onEnergySettingsChanged() {
+    if (!mounted) return;
+    final energy = EnergySaverController.instance;
+    final fromHover = _hoveredMedia != null;
+    final allowed = _appIsActive &&
+        energy.canRunBackgroundWork(pageId: _energyPageId) &&
+        energy.allowsHeroPreview(fromHover: fromHover);
+    if (!allowed) {
+      _advanceTimer?.cancel();
+      final pageIsActive = energy.canRunBackgroundWork(pageId: _energyPageId);
+      if (pageIsActive) {
+        _disposeYoutubePreview();
+        unawaited(_disposeDirectPreview());
+      } else {
+        _previewController?.pause();
+        _youtubePreviewController?.pauseVideo();
+      }
+      if (mounted) setState(() {});
+      return;
+    }
+    // Resume an already prepared preview only when this hero becomes active
+    // again. Offscreen page changes never create new preview/network work.
+    final direct = _previewController;
+    if (direct != null && direct.value.isInitialized) {
+      unawaited(direct.play());
+    } else {
+      final youtube = _youtubePreviewController;
+      if (youtube != null) {
+        unawaited(youtube.playVideo());
+      } else if (_items.isNotEmpty &&
+          EnergySaverController.instance.autoPlayHeroPreviews) {
+        final selected =
+            _hoveredMedia ?? _items[_index.clamp(0, _items.length - 1).toInt()];
+        unawaited(_loadPreview(selected, fromHover: _hoveredMedia != null));
+      }
+    }
+    _scheduleNext();
+  }
+
   void _onHomeHoverChanged() {
     if (!mounted) return;
     final next = HomeHoverPreviewStore.current.value;
@@ -386,7 +449,7 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
           _pageController.jumpToPage(matchingIndex);
         }
       }
-      _loadPreview(next);
+      _loadPreview(next, fromHover: true);
       unawaited(_loadOverview(next));
       unawaited(_loadAutomaticArtwork(next));
     } else if (_items.isNotEmpty) {
@@ -496,6 +559,11 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
       next.entries.any((entry) => current[entry.key] != entry.value);
 
   Future<void> _loadAutomaticArtwork(MediaItem media) async {
+    final energy = EnergySaverController.instance;
+    if (!energy.canRunBackgroundWork(pageId: _energyPageId)) {
+      energy.recordBackgroundTaskSkipped();
+      return;
+    }
     if (!CinematicTitleMetadataService.isConfigured ||
         !_automaticArtworkLookupStarted.add(media.id)) {
       return;
@@ -627,6 +695,11 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
       MediaArtworkAutoResolver.isMovieOrShow(media) || _isTvMedia(media);
 
   Future<void> _loadOverview(MediaItem media) async {
+    final energy = EnergySaverController.instance;
+    if (!energy.canRunBackgroundWork(pageId: _energyPageId)) {
+      energy.recordBackgroundTaskSkipped();
+      return;
+    }
     unawaited(_loadAutomaticArtwork(media));
     if (!_isMovieOrShow(media) ||
         !CinematicTitleMetadataService.isConfigured ||
@@ -672,7 +745,8 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
           media.trailerUrl?.trim().isNotEmpty != true &&
           _extractYoutubeVideoId(previewUrl) != null &&
           isSelected) {
-        unawaited(_loadPreview(media));
+        unawaited(
+            _loadPreview(media, fromHover: _hoveredMedia?.id == media.id));
       }
     } catch (_) {
       // Metadata lookups are best-effort; keep local catalog values on error.
@@ -684,19 +758,12 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     _appIsActive = state == AppLifecycleState.resumed;
     if (_appIsActive) {
       _scheduleNext();
-      final controller = _previewController;
-      if (controller != null && controller.value.isInitialized) {
-        controller.setVolume(_previewMuted ? 0 : 1);
-        controller.play();
-      }
-      final youtubeController = _youtubePreviewController;
-      if (youtubeController != null) {
-        if (_previewMuted) {
-          youtubeController.mute();
-        } else {
-          youtubeController.unMute();
-        }
-        youtubeController.playVideo();
+      final selected = _hoveredMedia ??
+          (_items.isEmpty
+              ? null
+              : _items[_index.clamp(0, _items.length - 1).toInt()]);
+      if (selected != null) {
+        unawaited(_loadPreview(selected, fromHover: _hoveredMedia != null));
       }
     } else {
       _advanceTimer?.cancel();
@@ -800,7 +867,7 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     }
 
     if (previewUrl?.trim().isNotEmpty == true) {
-      await _loadPreview(media);
+      await _loadPreview(media, userInitiated: true);
       return;
     }
 
@@ -809,11 +876,11 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     if (_isMusicVideoSearchable(media)) {
       await _findMusicVideoPreview(media);
       if (_effectivePreviewUrl(media)?.trim().isNotEmpty == true) {
-        await _loadPreview(media);
+        await _loadPreview(media, userInitiated: true);
         return;
       }
     } else {
-      await _loadPreview(media);
+      await _loadPreview(media, userInitiated: true);
     }
 
     if (_effectivePreviewUrl(media)?.trim().isNotEmpty != true && mounted) {
@@ -898,13 +965,41 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
           (_items.isNotEmpty &&
               _items[_index.clamp(0, _items.length - 1).toInt()].id ==
                   media.id);
-      if (mounted && stillSelected) await _loadPreview(media);
+      if (mounted && stillSelected) {
+        await _loadPreview(media, fromHover: _hoveredMedia?.id == media.id);
+      }
     } catch (_) {
       // Keep Home usable when the backend or YouTube search is unavailable.
     }
   }
 
-  Future<void> _loadPreview(MediaItem media) async {
+  Future<void> _loadPreview(
+    MediaItem media, {
+    bool fromHover = false,
+    bool userInitiated = false,
+  }) async {
+    final energy = EnergySaverController.instance;
+    if (!_appIsActive ||
+        !energy.canRunBackgroundWork(pageId: _energyPageId) ||
+        !energy.allowsHeroPreview(
+            fromHover: fromHover, userInitiated: userInitiated)) {
+      if (!energy.canRunBackgroundWork(pageId: _energyPageId)) {
+        energy.recordBackgroundTaskSkipped();
+      }
+      _youtubePreviewController?.pauseVideo();
+      _previewController?.pause();
+      return;
+    }
+    if (fromHover && !userInitiated) {
+      await Future<void>.delayed(energy.hoverPreviewDelay);
+      if (!mounted ||
+          !_appIsActive ||
+          _hoveredMedia?.id != media.id ||
+          !energy.canRunBackgroundWork(pageId: _energyPageId) ||
+          !energy.allowsHeroPreview(fromHover: true)) {
+        return;
+      }
+    }
     final url = _effectivePreviewUrl(media);
     if ((url == null || url.isEmpty) && _isMusicVideoSearchable(media)) {
       unawaited(_findMusicVideoPreview(media));
@@ -928,6 +1023,7 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
       _disposeYoutubePreview();
       _youtubePreviewUrl = url;
       _youtubePreviewId = youtubeId;
+      energy.recordHeroPreviewStart();
       final controller = YoutubePlayerController.fromVideoId(
         videoId: youtubeId,
         autoPlay: true,
@@ -981,6 +1077,7 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
       await old.pause();
       await old.dispose();
     }
+    energy.recordHeroPreviewStart();
     final controller = VideoPlayerController.networkUrl(Uri.parse(url));
     _previewController = controller;
     try {
@@ -1008,10 +1105,23 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     _advanceTimer?.cancel();
     // Keep the hovered title stable while the user explores its details.
     // _onHomeHoverChanged restarts rotation when the pointer leaves the card.
-    if (!_appIsActive || _items.length < 2 || _hoveredMedia != null) return;
+    if (!_appIsActive ||
+        !EnergySaverController.instance
+            .canRunBackgroundWork(pageId: _energyPageId) ||
+        EnergySaverController.instance.mode == EnergySaverMode.eco ||
+        _items.length < 2 ||
+        _hoveredMedia != null) {
+      return;
+    }
     _advanceTimer =
         Timer(Duration(seconds: _heroSettings.intervalSeconds), () async {
-      if (!mounted || !_appIsActive || _items.length < 2) return;
+      if (!mounted ||
+          !_appIsActive ||
+          !EnergySaverController.instance
+              .canRunBackgroundWork(pageId: _energyPageId) ||
+          _items.length < 2) {
+        return;
+      }
       if (!_pageController.hasClients) {
         _scheduleNext();
         return;
@@ -1079,6 +1189,7 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     HomeHoverPreviewStore.current.removeListener(_onHomeHoverChanged);
     ArtworkSelectionStore.revision.removeListener(_onArtworkSelectionsChanged);
     PageHeroSettingsStore.revision.removeListener(_onHeroSettingsChanged);
+    EnergySaverController.instance.removeListener(_onEnergySettingsChanged);
     _advanceTimer?.cancel();
     _previewController?.dispose();
     _disposeYoutubePreview();
@@ -1643,30 +1754,33 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
         _isMusicVideoSearchable(media) ||
         _effectivePreviewUrl(media)?.trim().isNotEmpty == true;
     if (!entityOnly && hasPotentialPreview) {
-      controls.add(Positioned(
-        right: compact ? 12 : 20,
-        bottom: compact ? 14 : 28,
-        child: Material(
-          color: Colors.black.withValues(alpha: .46),
-          shape: const CircleBorder(),
-          child: IconButton(
-            tooltip: !_heroSettings.audioEnabled
-                ? 'Hero preview audio disabled in Customize App'
-                : _previewMuted
-                    ? 'Turn hero preview sound on'
-                    : 'Turn hero preview sound off',
-            onPressed: _heroSettings.audioEnabled
-                ? () => unawaited(_toggleHeroPreviewAudio(media))
-                : null,
-            icon: Icon(
+      controls.add(
+        Positioned(
+          right: compact ? 12 : 20,
+          bottom: compact ? 14 : 28,
+          child: Material(
+            color: Colors.black.withValues(alpha: .46),
+            shape: const CircleBorder(),
+            child: IconButton(
+              tooltip: !_heroSettings.audioEnabled
+                  ? 'Hero preview audio disabled in Customize App'
+                  : _previewMuted
+                      ? 'Turn hero preview sound on'
+                      : 'Turn hero preview sound off',
+              onPressed: _heroSettings.audioEnabled
+                  ? () => unawaited(_toggleHeroPreviewAudio(media))
+                  : null,
+              icon: Icon(
                 !_heroSettings.audioEnabled || _previewMuted
                     ? Icons.volume_off_rounded
                     : Icons.volume_up_rounded,
-                color: Colors.white),
-            constraints: const BoxConstraints.tightFor(width: 42, height: 42),
+                color: Colors.white,
+              ),
+              constraints: const BoxConstraints.tightFor(width: 42, height: 42),
+            ),
           ),
         ),
-      ));
+      );
     }
     return controls;
   }
@@ -1740,11 +1854,17 @@ class _ThemedEpisodeEntry {
   final String title;
   final String detail;
   final String? imageUrl;
+  final String themeKey;
+  final int confidence;
+  final int seasonalPriority;
 
   const _ThemedEpisodeEntry({
     required this.parent,
     required this.title,
     required this.detail,
+    required this.themeKey,
+    required this.confidence,
+    required this.seasonalPriority,
     this.episode,
     this.imageUrl,
   });
@@ -1752,8 +1872,10 @@ class _ThemedEpisodeEntry {
   MediaItem get previewMedia {
     final data = episode;
     if (data == null) return parent;
-    final episodeDescription = (data['description'] ?? '').toString().trim();
+    final episodeDescription =
+        (data['description'] ?? data['overview'] ?? '').toString().trim();
     final summary = <String>[
+      parent.title,
       detail,
       if (episodeDescription.isNotEmpty) episodeDescription,
     ].join(' • ');
@@ -1764,118 +1886,279 @@ class _ThemedEpisodeEntry {
       imageUrl: imageUrl,
       description: summary,
       trailerUrl: data['trailerUrl']?.toString(),
-      playbackUrl: (data['playbackUrl'] ?? data['streamingUrl'])?.toString(),
+      playbackUrl: _episodePlaybackSource(data),
+      parentMediaId: parent.id,
     );
   }
 }
 
-/// Surfaces themed specials and episodes only when the library metadata supports them.
+class _HolidaySectionHeader extends StatelessWidget {
+  const _HolidaySectionHeader({
+    required this.title,
+    required this.subtitle,
+    required this.themeKey,
+  });
+
+  final String title;
+  final String subtitle;
+  final String themeKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = Color(ThemedEpisodeEngine.colorArgbFor(themeKey));
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 16, 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: .16),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: accent.withValues(alpha: .42)),
+            ),
+            child: Text(
+              ThemedEpisodeEngine.iconFor(themeKey),
+              style: const TextStyle(fontSize: 21),
+            ),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w900,
+                    color: accent,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String? _episodePlaybackSource(Map<String, dynamic> episode) {
+  for (final key in const <String>[
+    'playbackUrl',
+    'streamingUrl',
+    'streamUrl',
+    'mediaUrl',
+    'fileUrl',
+    'localStreamUrl',
+    'stream_url',
+  ]) {
+    final value = episode[key]?.toString().trim() ?? '';
+    if (value.isNotEmpty) return value;
+  }
+  return null;
+}
+
+/// Surfaces real episode records and season-aware holiday collections. It does
+/// not infer a theme merely from the episode's air date; title, tags, synopsis
+/// or a curated show/episode alias must support the match.
 class HomeThemedEpisodesSection extends StatelessWidget {
   const HomeThemedEpisodesSection({super.key});
 
-  static const List<String> _keywords = [
-    'halloween',
-    'haunted',
-    'scary',
-    'spooky',
-    'horror',
-    'ghost',
-    'monster',
-    'witch',
-    'vampire',
-    'pumpkin',
-    'cursed',
-    'rock bottom',
-    'costume',
-    'nightmare',
-  ];
-
-  List<_ThemedEpisodeEntry> _entries(List<MediaItem> library) {
+  List<_ThemedEpisodeEntry> _entries(
+    List<MediaItem> library, {
+    DateTime? now,
+  }) {
+    final date = now ?? DateTime.now();
     final entries = <_ThemedEpisodeEntry>[];
     for (final media in library) {
-      var foundEpisode = false;
       for (final season in media.seasons) {
         final rawEpisodes = season['episodes'];
         if (rawEpisodes is! List) continue;
         for (final rawEpisode in rawEpisodes) {
           if (rawEpisode is! Map) continue;
           final episode = Map<String, dynamic>.from(rawEpisode);
-          final title =
-              (episode['title'] ?? episode['name'] ?? 'Episode').toString();
-          final searchable =
-              '$title ${episode['description'] ?? ''} ${episode['genres'] ?? ''} ${episode['tags'] ?? ''}'
-                  .toLowerCase();
-          if (!_keywords.any((keyword) => searchable.contains(keyword))) {
-            continue;
-          }
+          final title = (episode['title'] ?? episode['name'] ?? 'Episode')
+              .toString()
+              .trim();
+          final match = ThemedEpisodeEngine.detectEpisode(
+            showTitle: media.title,
+            episode: episode,
+            date: date,
+          );
+          if (match == null) continue;
+          final episodeLabel =
+              ThemedEpisodeEngine.episodeLabel(season, episode);
           entries.add(_ThemedEpisodeEntry(
             parent: media,
             episode: episode,
             title: title,
-            detail: '${media.title} • ${_seasonLabel(season)}',
-            imageUrl:
-                (episode['imageUrl'] ?? episode['posterUrl'] ?? media.imageUrl)
-                    ?.toString(),
+            detail: '${match.label} • $episodeLabel • $title',
+            themeKey: match.key,
+            confidence: match.confidence,
+            seasonalPriority: match.seasonalPriority,
+            imageUrl: (episode['imageUrl'] ??
+                    episode['stillPath'] ??
+                    episode['still_path'] ??
+                    episode['posterUrl'] ??
+                    episode['poster_path'] ??
+                    media.imageUrl)
+                ?.toString(),
           ));
-          foundEpisode = true;
         }
       }
 
-      final fields = <String>[
-        media.title,
-        media.description ?? '',
-        ...media.genres,
-        ...media.tags,
-      ].join(' ').toLowerCase();
-      if (!foundEpisode && _keywords.any(fields.contains)) {
-        entries.add(_ThemedEpisodeEntry(
-          parent: media,
+      // Films and shows have their own themed shelf, independent from their
+      // episode shelf. Crossover titles may deliberately belong to multiple
+      // themes (for example, The Nightmare Before Christmas).
+      final type = media.type.toLowerCase().trim();
+      final isEpisodeMedia = type == 'episode' || type.contains('episode');
+      final isMovieOrShow = media.isSeries ||
+          type.contains('show') ||
+          type.contains('series') ||
+          type.contains('movie') ||
+          type.contains('film') ||
+          type == 'feature';
+      if (!isEpisodeMedia && isMovieOrShow) {
+        final matches = ThemedEpisodeEngine.detectMediaMatches(
           title: media.title,
-          detail: '${media.type} • themed pick',
-          imageUrl: media.imageUrl,
-        ));
+          description: media.description ?? '',
+          genres: media.genres,
+          tags: media.tags,
+          date: date,
+        );
+        for (final match in matches) {
+          entries.add(_ThemedEpisodeEntry(
+            parent: media,
+            title: media.title,
+            detail: '${match.label} • ${media.type}',
+            themeKey: match.key,
+            confidence: match.confidence,
+            seasonalPriority: match.seasonalPriority,
+            imageUrl: media.imageUrl,
+          ));
+        }
       }
     }
+
     final unique = <String, _ThemedEpisodeEntry>{};
     for (final entry in entries) {
-      final key = '${entry.parent.id}:${entry.episode?['id'] ?? entry.title}';
-      unique.putIfAbsent(key, () => entry);
+      final episodeId = entry.episode?['id']?.toString().trim() ?? '';
+      final seasonNumber = entry.episode?['seasonNumber'] ??
+          entry.episode?['season_number'] ??
+          '';
+      final episodeNumber = entry.episode?['episodeNumber'] ??
+          entry.episode?['episode_number'] ??
+          '';
+      final key = episodeId.isNotEmpty
+          ? '${entry.parent.id}:$episodeId'
+          : '${entry.parent.id}:$seasonNumber:$episodeNumber:${ThemedEpisodeEngine.normalize(entry.title)}:${entry.themeKey}';
+      final previous = unique[key];
+      if (previous == null || entry.confidence > previous.confidence) {
+        unique[key] = entry;
+      }
     }
-    return unique.values.take(18).toList(growable: false);
+    final sorted = unique.values.toList()
+      ..sort((a, b) {
+        final seasonal = a.seasonalPriority.compareTo(b.seasonalPriority);
+        if (seasonal != 0) return seasonal;
+        final confidence = b.confidence.compareTo(a.confidence);
+        if (confidence != 0) return confidence;
+        final parent = a.parent.title
+            .toLowerCase()
+            .compareTo(b.parent.title.toLowerCase());
+        return parent != 0
+            ? parent
+            : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+      });
+    return sorted;
   }
 
-  String _seasonLabel(Map<String, dynamic> season) {
-    final number = season['seasonNumber'] ??
-        season['season_number'] ??
-        season['number'] ??
-        season['season'];
-    return number == null ? 'Special episode' : 'Season $number';
+  MediaItem? _findPlayableEpisode(
+    _ThemedEpisodeEntry entry,
+    List<MediaItem> library,
+  ) {
+    final episode = entry.episode;
+    if (episode == null) return null;
+    final rawId = (episode['mediaId'] ?? episode['id'] ?? '').toString().trim();
+    final episodeTitle = ThemedEpisodeEngine.normalize(entry.title);
+    final parentId = entry.parent.id.trim();
+    final candidates = library.where((item) {
+      final type = item.type.toLowerCase();
+      final isEpisode = type == 'episode' || type.contains('episode');
+      if (!isEpisode) return false;
+      if (rawId.isNotEmpty && item.id.trim() == rawId) return true;
+      if (item.parentMediaId?.trim() == parentId &&
+          ThemedEpisodeEngine.normalize(item.title) == episodeTitle) {
+        return true;
+      }
+      return false;
+    });
+    for (final candidate in candidates) {
+      if (candidate.playbackUrl?.trim().isNotEmpty == true) return candidate;
+    }
+    return null;
   }
 
   void _openEntry(BuildContext context, _ThemedEpisodeEntry entry) {
+    final controller = AppController.instance;
     final episode = entry.episode;
-    final episodeId = episode?['id']?.toString();
-    final source = episode?['playbackUrl']?.toString() ??
-        episode?['streamingUrl']?.toString();
-    if (episode != null &&
-        episodeId != null &&
-        episodeId.isNotEmpty &&
-        source != null &&
-        source.trim().isNotEmpty) {
-      final episodeMedia = MediaItem(
-        id: episodeId,
-        title: entry.title,
-        type: 'episode',
-        imageUrl: entry.imageUrl,
-        description: episode['description']?.toString(),
-        playbackUrl: source,
-        trailerUrl: episode['trailerUrl']?.toString(),
-      );
+    final resolvedMedia = _findPlayableEpisode(entry, controller.library);
+    final source =
+        _episodePlaybackSource(episode ?? const <String, dynamic>{}) ??
+            resolvedMedia?.playbackUrl;
+    if (episode != null && source?.trim().isNotEmpty == true) {
+      final episodeId = resolvedMedia?.id ??
+          (episode['mediaId'] ?? episode['id'])?.toString().trim();
+      final seasonNumber =
+          episode['seasonNumber'] ?? episode['season_number'] ?? '';
+      final episodeNumber =
+          episode['episodeNumber'] ?? episode['episode_number'] ?? '';
+      final episodeMedia = resolvedMedia ??
+          MediaItem(
+            id: episodeId?.isNotEmpty == true
+                ? episodeId!
+                : 'themed-episode:${entry.parent.id}:$seasonNumber:$episodeNumber:${ThemedEpisodeEngine.normalize(entry.title)}',
+            title: entry.title,
+            type: 'episode',
+            imageUrl: entry.imageUrl,
+            description: episode['description']?.toString(),
+            playbackUrl: source,
+            trailerUrl: episode['trailerUrl']?.toString(),
+            parentMediaId: entry.parent.id,
+          );
       Navigator.of(context).push(MaterialPageRoute<void>(
         settings: const RouteSettings(name: '/app/player'),
         builder: (_) => PlayerScreen(
-            media: episodeMedia,
-            activityLabel: 'Watching ${entry.parent.title}: ${entry.title}'),
+          media: episodeMedia,
+          activityLabel: 'Watching ${entry.parent.title}: ${entry.title}',
+        ),
+      ));
+      return;
+    }
+
+    // Independently imported specials and movies can start immediately when
+    // the library has a direct playback URL. A non-playable match opens the
+    // parent metadata page rather than pretending playback succeeded.
+    if (entry.episode == null &&
+        entry.parent.playbackUrl?.trim().isNotEmpty == true) {
+      Navigator.of(context).push(MaterialPageRoute<void>(
+        settings: const RouteSettings(name: '/app/player'),
+        builder: (_) => PlayerScreen(
+          media: entry.parent,
+          activityLabel: 'Watching ${entry.parent.title}',
+        ),
       ));
       return;
     }
@@ -1891,42 +2174,172 @@ class HomeThemedEpisodesSection extends StatelessWidget {
     final profile = controller.currentProfile;
     final visibleLibrary = controller.library
         .where((media) => media.isAccessibleTo(profile))
+        .where((media) => media.addedSource != 'demo-preview')
+        .where((media) => !media.tags.any((tag) => const <String>{
+              'demo-preview',
+              'preview-only',
+              'not-playable'
+            }.contains(tag.toLowerCase().trim())))
         .toList(growable: false);
     final entries = _entries(visibleLibrary);
+    final currentThemeKey = ThemedEpisodeEngine.currentThemeKey;
+    final seasonalLabel = ThemedEpisodeEngine.labelFor(currentThemeKey);
+
+    // Episode and film/show shelves are separate so clicking an episode opens
+    // its exact playable episode while movie/show cards open that media item.
+    final groupedEpisodes = <String, List<_ThemedEpisodeEntry>>{};
+    final groupedMedia = <String, List<_ThemedEpisodeEntry>>{};
+    for (final entry in entries) {
+      final target = entry.episode == null ? groupedMedia : groupedEpisodes;
+      target
+          .putIfAbsent(entry.themeKey, () => <_ThemedEpisodeEntry>[])
+          .add(entry);
+    }
+    final episodeThemeKeys = groupedEpisodes.keys.toList()
+      ..sort((a, b) => ThemedEpisodeEngine.seasonalPriority(a)
+          .compareTo(ThemedEpisodeEngine.seasonalPriority(b)));
+    final mediaThemeKeys = groupedMedia.keys.toList()
+      ..sort((a, b) => ThemedEpisodeEngine.seasonalPriority(a)
+          .compareTo(ThemedEpisodeEngine.seasonalPriority(b)));
+
+    if (episodeThemeKeys.isEmpty && mediaThemeKeys.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _HolidaySectionHeader(
+              title: '$seasonalLabel themed episodes',
+              subtitle:
+                  'Holiday episodes, movies and shows update with the season. All holiday collections remain available year-round.',
+              themeKey: currentThemeKey,
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: Text(
+                'No themed matches yet. Add episode details, tags, descriptions, or correctly identified holiday movies and shows. Direct playback requires a playable local item.',
+                style: TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.only(top: 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _DiscoverySectionHeader(
-              title: 'Themed Episodes',
+          _HolidaySectionHeader(
+            title: '$seasonalLabel themed episodes',
+            subtitle:
+                'Closest seasonal holiday first • every recognized holiday remains available year-round',
+            themeKey: currentThemeKey,
+          ),
+          for (final themeKey in episodeThemeKeys)
+            Builder(builder: (context) {
+              final rankedThemeEntries = groupedEpisodes[themeKey]!
+                ..sort((a, b) {
+                  final confidence = b.confidence.compareTo(a.confidence);
+                  if (confidence != 0) return confidence;
+                  final series = a.parent.title
+                      .toLowerCase()
+                      .compareTo(b.parent.title.toLowerCase());
+                  return series != 0
+                      ? series
+                      : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+                });
+              final themedEntries =
+                  rankedThemeEntries.take(12).toList(growable: false);
+              final themeLabel = ThemedEpisodeEngine.labelFor(themeKey);
+              final current =
+                  ThemedEpisodeEngine.seasonalPriority(themeKey) < 3;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _HolidaySectionHeader(
+                    title: '$themeLabel themed episodes',
+                    subtitle: current
+                        ? 'Seasonal picks • tap a show to start the exact episode when it is playable'
+                        : 'From your library • tap a show to start the exact episode when it is playable',
+                    themeKey: themeKey,
+                  ),
+                  HomeArrowRail(
+                    height: 210,
+                    itemCount: themedEntries.length,
+                    separatorExtent: 12,
+                    padding: const EdgeInsets.symmetric(horizontal: 48),
+                    itemBuilder: (context, index) {
+                      final entry = themedEntries[index];
+                      return _DiscoveryMediaCard(
+                        title: entry.episode == null
+                            ? entry.title
+                            : entry.parent.title,
+                        subtitle: entry.episode == null
+                            ? entry.detail
+                            : entry.detail.replaceFirst('$themeLabel • ', ''),
+                        imageUrl: entry.imageUrl,
+                        media: entry.previewMedia,
+                        onTap: () => _openEntry(context, entry),
+                        width: 148,
+                      );
+                    },
+                  ),
+                ],
+              );
+            }),
+          if (mediaThemeKeys.isNotEmpty)
+            _HolidaySectionHeader(
+              title: '$seasonalLabel themed movies & shows',
               subtitle:
-                  'Halloween specials, spooky stories, cult-favorite episodes, and more'),
-          if (entries.isEmpty)
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
-              child: Text(
-                  'Add episode titles, genres, or tags to your library metadata and themed picks will appear here.',
-                  style: TextStyle(color: Colors.white54, fontSize: 12)),
-            )
-          else
-            HomeArrowRail(
-              height: 210,
-              itemCount: entries.length,
-              separatorExtent: 12,
-              padding: const EdgeInsets.symmetric(horizontal: 48),
-              itemBuilder: (context, index) {
-                final entry = entries[index];
-                return _DiscoveryMediaCard(
-                  title: entry.title,
-                  subtitle: entry.detail,
-                  imageUrl: entry.imageUrl,
-                  media: entry.previewMedia,
-                  onTap: () => _openEntry(context, entry),
-                  width: 148,
-                );
-              },
+                  'Holiday films and series from your library, matched by title and metadata',
+              themeKey: currentThemeKey,
             ),
+          for (final themeKey in mediaThemeKeys)
+            Builder(builder: (context) {
+              final rankedThemeEntries = groupedMedia[themeKey]!
+                ..sort((a, b) {
+                  final confidence = b.confidence.compareTo(a.confidence);
+                  if (confidence != 0) return confidence;
+                  return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+                });
+              final themedEntries =
+                  rankedThemeEntries.take(12).toList(growable: false);
+              final themeLabel = ThemedEpisodeEngine.labelFor(themeKey);
+              final current =
+                  ThemedEpisodeEngine.seasonalPriority(themeKey) < 3;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _HolidaySectionHeader(
+                    title: '$themeLabel themed movies & shows',
+                    subtitle: current
+                        ? 'Featured for this season • select a title to play or open details'
+                        : 'From your library • select a title to play or open details',
+                    themeKey: themeKey,
+                  ),
+                  HomeArrowRail(
+                    height: 210,
+                    itemCount: themedEntries.length,
+                    separatorExtent: 12,
+                    padding: const EdgeInsets.symmetric(horizontal: 48),
+                    itemBuilder: (context, index) {
+                      final entry = themedEntries[index];
+                      return _DiscoveryMediaCard(
+                        title: entry.title,
+                        subtitle:
+                            entry.detail.replaceFirst('$themeLabel • ', ''),
+                        imageUrl: entry.imageUrl,
+                        media: entry.parent,
+                        onTap: () => _openEntry(context, entry),
+                        width: 148,
+                      );
+                    },
+                  ),
+                ],
+              );
+            }),
         ],
       ),
     );
@@ -3065,11 +3478,11 @@ class _HomeReasonedTrackCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             fontWeight: FontWeight.w800, fontSize: 12)),
-                    Text(track.artist,
-                        maxLines: 1,
+                    Text(musicTrackSubtitle(track),
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            color: Colors.white60, fontSize: 11)),
+                            color: Colors.white60, fontSize: 10.5)),
                   ]),
             ),
           ),
@@ -3479,8 +3892,21 @@ class _HomeFranchiseProgressDetailsScreenState
       .map(
         (media) => LibraryViewEntry(
           title: media.title,
-          subtitle:
-              '${_homeMediaTypeLabel(media.type)} • ${media.displayYearLabel ?? 'Year unknown'}',
+          subtitle: [
+            _homeMediaTypeLabel(media.type),
+            media.displayYearLabel ?? 'Year unknown',
+            if (media.addedByProfileName?.trim().isNotEmpty == true)
+              'Added by ${media.addedByProfileName!.trim()}',
+            if (media.addedByProfileName?.trim().isNotEmpty != true &&
+                const <String>{
+                  'home-server-scanner',
+                  'import/rip',
+                  'disc_ingestion_center',
+                  'approved-arm-import',
+                  'arm-import'
+                }.contains(media.addedSource.trim().toLowerCase()))
+              'Added by unknown profile',
+          ].join(' • '),
           year: media.releaseYear,
           imageUrl: media.imageUrl,
           fallbackIcon:
@@ -3777,7 +4203,7 @@ class HomeCollectionShelves extends StatelessWidget {
           ),
           if (visible.isNotEmpty)
             HomeArrowRail(
-              height: 112,
+              height: 132,
               itemCount: visible.length,
               separatorExtent: 10,
               padding: const EdgeInsets.symmetric(horizontal: 48),
@@ -4053,7 +4479,7 @@ class SearchDiscoveryLanding extends StatelessWidget {
           ),
         ),
         SizedBox(
-          height: 116,
+          height: 136,
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 18),
             scrollDirection: Axis.horizontal,
@@ -4238,8 +4664,25 @@ class _DiscoveryAllCollectionsScreenState
                                       : posterCandidates.first.imageUrl);
                               return LibraryViewEntry(
                                 title: collection.name,
-                                subtitle:
-                                    '${members.length} title${members.length == 1 ? '' : 's'}${collection.description.trim().isEmpty ? '' : ' · ${collection.description.trim()}'}',
+                                subtitle: [
+                                  '${members.length} title${members.length == 1 ? '' : 's'}',
+                                  if (collection.description.trim().isNotEmpty)
+                                    collection.description.trim(),
+                                  if (!collection.isAutomatic &&
+                                      profileNameForId(
+                                              collection.createdByProfileId) !=
+                                          null)
+                                    'Added by ${profileNameForId(collection.createdByProfileId)}',
+                                  if (!collection.isAutomatic &&
+                                      collection.createdByProfileId
+                                              ?.trim()
+                                              .isNotEmpty ==
+                                          true &&
+                                      profileNameForId(
+                                              collection.createdByProfileId) ==
+                                          null)
+                                    'Added by unknown profile',
+                                ].join(' · '),
                                 imageUrl: imageUrl,
                                 fallbackIcon:
                                     Icons.collections_bookmark_outlined,
@@ -4695,6 +5138,26 @@ class _DiscoveryMediaCardState extends State<_DiscoveryMediaCard> {
                           )
                         else
                           _resolvedArtwork(),
+                        if (widget.media != null &&
+                            (widget.media!.addedByProfileName
+                                        ?.trim()
+                                        .isNotEmpty ==
+                                    true ||
+                                const <String>{
+                                  'home-server-scanner',
+                                  'import/rip',
+                                  'disc_ingestion_center',
+                                  'approved-arm-import',
+                                  'arm-import'
+                                }.contains(widget.media!.addedSource
+                                    .trim()
+                                    .toLowerCase())))
+                          Positioned(
+                            left: 7,
+                            bottom: 7,
+                            child: AddedByProfileLabel.forMedia(widget.media!,
+                                onArtwork: true),
+                          ),
                         if (!widget.posterOnly)
                           const Positioned(
                             right: 8,
@@ -4940,6 +5403,20 @@ class _CollectionSearchCard extends StatelessWidget {
                         Text('${collection.mediaIds.length} titles',
                             style: const TextStyle(
                                 color: Colors.white70, fontSize: 11)),
+                        if (!collection.isAutomatic &&
+                            profileNameForId(collection.createdByProfileId) !=
+                                null)
+                          AddedByProfileLabel(
+                              profileName: profileNameForId(
+                                  collection.createdByProfileId),
+                              onArtwork: true),
+                        if (!collection.isAutomatic &&
+                            collection.createdByProfileId?.trim().isNotEmpty ==
+                                true &&
+                            profileNameForId(collection.createdByProfileId) ==
+                                null)
+                          const AddedByProfileLabel(
+                              showUnknown: true, onArtwork: true),
                       ])),
             ]),
           ),
@@ -5068,6 +5545,18 @@ class _CollectionListTile extends StatelessWidget {
                     Text('$itemCount ${itemCount == 1 ? 'title' : 'titles'}',
                         style: const TextStyle(
                             color: Colors.white54, fontSize: 10)),
+                    if (!collection.isAutomatic &&
+                        collection.createdByProfileId?.trim().isNotEmpty ==
+                            true)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: AddedByProfileLabel(
+                          profileName:
+                              profileNameForId(collection.createdByProfileId),
+                          showUnknown: true,
+                          compact: true,
+                        ),
+                      ),
                   ])),
               IconButton(
                   tooltip: 'Shuffle and play',

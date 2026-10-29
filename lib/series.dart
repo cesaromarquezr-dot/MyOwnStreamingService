@@ -12,6 +12,7 @@ import 'details.dart';
 import 'player.dart';
 import 'localization.dart';
 import 'widgets/like_toggle_button.dart';
+import 'widgets/added_by_profile_label.dart';
 import 'page_customization_button.dart';
 import 'media_metadata_catalog_screen.dart';
 import 'catalog_poster_image.dart';
@@ -46,7 +47,7 @@ class _SeriesScreenState extends State<SeriesScreen>
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
-    HomeHoverPreviewStore.current.value = null;
+    HomeHoverPreviewStore.clearCurrent();
 
     // Seed browseable catalog examples when Movies/TV is opened directly.
     AppController.instance.ensureDemoPreviewMedia(notify: false);
@@ -362,12 +363,15 @@ class _SeriesScreenState extends State<SeriesScreen>
         if (show.genres.isNotEmpty) show.genres.take(2).join(' · '),
         mediaCountryOriginLabel(show),
         show.type,
+        if ((show.addedByProfileName?.trim().isNotEmpty ?? false)) 'Added by ${show.addedByProfileName!.trim()}',
+        if ((show.addedByProfileName?.trim().isNotEmpty != true) && const <String>{'home-server-scanner', 'import/rip', 'disc_ingestion_center', 'approved-arm-import', 'arm-import'}.contains(show.addedSource.trim().toLowerCase())) 'Added by unknown profile',
       ].where((part) => part.trim().isNotEmpty).join(' · '),
       subtitleBuilder: (context) => Wrap(
         spacing: 5, runSpacing: 2, crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           if (show.seriesStartYear != null || show.releaseYear != null) Text((show.seriesStartYear ?? show.releaseYear).toString(), style: const TextStyle(color: Colors.white60, fontSize: 11)),
           CountryOriginInline(media: show, fontSize: 10.5),
+          AddedByProfileLabel.forMedia(show),
         ],
       ),
       year: show.seriesStartYear ?? show.releaseYear,
@@ -1215,6 +1219,8 @@ class _ShowCardState extends State<_ShowCard> {
                         ),
                         const SizedBox(height: 2),
                         CountryOriginInline(media: show, fontSize: 10.5),
+                        const SizedBox(height: 3),
+                        AddedByProfileLabel.forMedia(show, onArtwork: true, compact: true),
                       ],
                     ),
                   ),

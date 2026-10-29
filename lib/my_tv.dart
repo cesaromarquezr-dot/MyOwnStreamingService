@@ -21,6 +21,16 @@ import 'public_live_tv.dart';
 
 const _channelContentTypes = <String>['Movies', 'Shows', 'Music'];
 
+/// Stable across process restarts. Dart's general-purpose hashCode is not a
+/// persisted identifier, so schedule randomization must not seed from it.
+int _stableChannelSeed(String value) {
+  var hash = 0x811c9dc5;
+  for (final unit in value.codeUnits) {
+    hash = ((hash ^ unit) * 0x01000193) & 0x7fffffff;
+  }
+  return hash;
+}
+
 /// Per-profile music placement rules for My TV. My TV is always commercial-free;
 /// these settings only decide when personal music is scheduled around content.
 class _TvMusicBreakSettings {
@@ -228,12 +238,14 @@ class _MyTvScreenState extends State<MyTvScreen> {
   String? _error;
   _TvMusicBreakSettings _musicBreaks = const _TvMusicBreakSettings();
   Map<String, dynamic> _musicBreakSettingsByProfile = <String, dynamic>{};
+  Set<String> _programReminders = <String>{};
   Timer? _clockTimer;
 
   String get _profileId =>
       AppController.instance.currentProfile?.id ?? 'default';
   String get _accountId => AppController.instance.currentAccount?.id ?? 'local';
   String get _preferenceKey => 'my_tv_settings_account_$_accountId';
+  String get _reminderPreferenceKey => 'my_tv_program_reminders_v1_$_profileId';
 
   @override
   void initState() {
@@ -242,6 +254,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
     // Keep the ON AIR progress bar, countdown, and red EPG marker in sync.
     _clockTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (mounted) setState(() {});
+      unawaited(_checkProgramReminders());
     });
   }
 
@@ -289,6 +302,9 @@ class _MyTvScreenState extends State<MyTvScreen> {
             Map<String, dynamic>.from(selectedMusicJson),
           )
         : const _TvMusicBreakSettings();
+    final reminders = (prefs.getStringList(_reminderPreferenceKey) ?? const <String>[])
+        .where((value) => value.trim().isNotEmpty)
+        .toSet();
     final rawChannels = data?['channels'];
     final channels = rawChannels is List
         ? rawChannels
@@ -323,6 +339,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
       _recentlyPlayed = recent;
       _musicBreaks = musicBreaks;
       _musicBreakSettingsByProfile = musicBreakProfiles;
+      _programReminders = reminders;
       _selectedChannelId ??= channels.first.id;
       _loading = false;
     });
@@ -643,8 +660,8 @@ class _MyTvScreenState extends State<MyTvScreen> {
     if (videos.isEmpty && music.isEmpty) return const [];
 
     if (channel.shuffle && TvProgrammingService.activeSeason() == null) {
-      videos.shuffle(Random(channel.id.hashCode));
-      music.shuffle(Random('${channel.id}:music'.hashCode));
+      videos.shuffle(Random(_stableChannelSeed(channel.id)));
+      music.shuffle(Random(_stableChannelSeed('${channel.id}:music')));
     }
 
     // With music breaks disabled, retain the original My TV behavior: music is
@@ -1630,8 +1647,8 @@ class _MyTvScreenState extends State<MyTvScreen> {
                 const SizedBox(height: 6),
                 Text(
                   _showGuide
-                      ? 'Today’s channel schedules · no commercial ads'
-                      : 'Personal programming uses media available to this profile. No commercial ads are inserted.',
+                      ? 'Today’s channel schedules · no commercial ads · reminders alert while My TV is open'
+                      : 'Personal programming uses media available to this profile. No commercial ads are inserted. Program reminders show in-app alerts while My TV is open.',
                   style: const TextStyle(color: Colors.white60),
                 ),
                 if (!_showGuide && _musicBreaks.mode != 'none')
@@ -1862,6 +1879,110 @@ class _MyTvScreenState extends State<MyTvScreen> {
     );
   }
 
+  String _programReminderId(_MyTvChannel channel, _ScheduledProgram program) =>
+      '${channel.id}|${program.entry.id}|${program.start.toUtc().toIso8601String()}';
+
+  Future<void> _toggleProgramReminder(
+    _MyTvChannel channel,
+    _ScheduledProgram program,
+  ) async {
+    final id = _programReminderId(channel, program);
+    final shouldAdd = !_programReminders.contains(id);
+    setState(() {
+      if (shouldAdd) {
+        _programReminders.add(id);
+      } else {
+        _programReminders.remove(id);
+      }
+    });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = _programReminders.toList()..sort();
+      final persisted = await prefs.setStringList(_reminderPreferenceKey, saved);
+      if (!persisted) throw StateError('The reminder could not be written to local storage.');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(shouldAdd
+              ? 'Reminder set for ${program.entry.title}. My TV must remain open to show the in-app alert.'
+              : 'Reminder removed for ${program.entry.title}.'),
+        ));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Could not save the program reminder: $error'),
+        ));
+      }
+    }
+  }
+
+  Future<void> _checkProgramReminders() async {
+    if (_loading || _programReminders.isEmpty || !mounted) return;
+    final now = DateTime.now();
+    final dueIds = <String>{};
+    final expiredIds = <String>{};
+    for (final id in _programReminders) {
+      final parts = id.split('|');
+      final startsUtc = parts.length < 3 ? null : DateTime.tryParse(parts.last);
+      if (startsUtc == null) {
+        expiredIds.add(id);
+        continue;
+      }
+      final secondsAfterStart = now.difference(startsUtc.toLocal()).inSeconds;
+      if (secondsAfterStart >= 0 && secondsAfterStart <= 30) {
+        dueIds.add(id);
+      } else if (secondsAfterStart > 30) {
+        expiredIds.add(id);
+      }
+    }
+    if (expiredIds.isNotEmpty) {
+      _programReminders.removeAll(expiredIds);
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setStringList(
+          _reminderPreferenceKey,
+          _programReminders.toList()..sort(),
+        );
+      } catch (_) {}
+    }
+    // Avoid rebuilding every channel schedule every 15 seconds when the
+    // nearest reminder is hours away; only evaluate a channel when a reminder
+    // has reached its start window.
+    if (dueIds.isEmpty) return;
+    for (final channel in _channels) {
+      final channelPrefix = '${channel.id}|';
+      if (!dueIds.any((id) => id.startsWith(channelPrefix))) continue;
+      final entries = _schedule(channel);
+      if (entries.isEmpty) continue;
+      final timeline = _scheduledTimeline(channel, entries, now, futureHours: 1);
+      for (final program in timeline) {
+        final id = _programReminderId(channel, program);
+        if (!dueIds.contains(id)) continue;
+        _programReminders.remove(id);
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setStringList(
+            _reminderPreferenceKey,
+            _programReminders.toList()..sort(),
+          );
+        } catch (_) {
+          // A reminder is one-shot in memory even if preference storage fails.
+        }
+        if (!mounted) return;
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          duration: const Duration(seconds: 8),
+          content: Text('Now on ${channel.name}: ${program.entry.title}'),
+          action: SnackBarAction(
+            label: 'Watch',
+            onPressed: () => _playScheduledProgram(program, channel, DateTime.now()),
+          ),
+        ));
+        return;
+      }
+    }
+  }
+
   String _musicBreakSummary() {
     if (_musicBreaks.mode == 'per_program') {
       final placement = switch (_musicBreaks.placement) {
@@ -1967,7 +2088,17 @@ class _MyTvScreenState extends State<MyTvScreen> {
         leading: const CircleAvatar(child: Icon(Icons.queue_play_next_rounded)),
         title: Text(program.entry.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text('${_clockTime(context, program.start)}–${_clockTime(context, program.end)} · $startsIn · ${program.entry.subtitle}', maxLines: 2, overflow: TextOverflow.ellipsis),
-        trailing: const Icon(Icons.schedule_rounded),
+        trailing: IconButton(
+          tooltip: _programReminders.contains(_programReminderId(channel, program))
+              ? 'Remove reminder'
+              : 'Remind me when this program starts',
+          icon: Icon(
+            _programReminders.contains(_programReminderId(channel, program))
+                ? Icons.notifications_active_rounded
+                : Icons.notifications_none_rounded,
+          ),
+          onPressed: () => _toggleProgramReminder(channel, program),
+        ),
         onTap: () => _playScheduledProgram(program, channel, DateTime.now()),
       ),
     );

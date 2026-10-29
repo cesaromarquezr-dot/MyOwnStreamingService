@@ -13,19 +13,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Represents one supported application language.
 class AppLanguage {
   final String code;
-  final String flag;
 
   /// Name shown in the language's own language/script.
   final String nativeName;
 
   final String englishName;
 
-  const AppLanguage(
-    this.code,
-    this.flag,
-    this.nativeName,
-    this.englishName,
-  );
+  const AppLanguage(this.code, this.nativeName, this.englishName);
 }
 
 /// Global profile-aware language state used by every screen.
@@ -35,24 +29,25 @@ class LanguageController extends ChangeNotifier {
   static final instance = LanguageController._();
 
   AppLanguage current = languages.first;
+  bool _profileLoadNotificationPending = false;
 
   static const languages = <AppLanguage>[
-    AppLanguage('en', '🇬🇧', 'English', 'English'),
-    AppLanguage('es', '🇪🇸', 'Español', 'Spanish'),
-    AppLanguage('fr', '🇫🇷', 'Français', 'French'),
-    AppLanguage('de', '🇩🇪', 'Deutsch', 'German'),
-    AppLanguage('pt', '🇵🇹', 'Português', 'Portuguese'),
-    AppLanguage('it', '🇮🇹', 'Italiano', 'Italian'),
-    AppLanguage('nl', '🇳🇱', 'Nederlands', 'Dutch'),
-    AppLanguage('pl', '🇵🇱', 'Polski', 'Polish'),
-    AppLanguage('tr', '🇹🇷', 'Türkçe', 'Turkish'),
-    AppLanguage('ru', '🇷🇺', 'Русский', 'Russian'),
-    AppLanguage('uk', '🇺🇦', 'Українська', 'Ukrainian'),
-    AppLanguage('ar', '🇸🇦', 'العربية', 'Arabic'),
-    AppLanguage('hi', '🇮🇳', 'हिन्दी', 'Hindi'),
-    AppLanguage('zh', '🇨🇳', '中文', 'Chinese'),
-    AppLanguage('ja', '🇯🇵', '日本語', 'Japanese'),
-    AppLanguage('ko', '🇰🇷', '한국어', 'Korean'),
+    AppLanguage('en', 'English', 'English'),
+    AppLanguage('es', 'Español', 'Spanish'),
+    AppLanguage('fr', 'Français', 'French'),
+    AppLanguage('de', 'Deutsch', 'German'),
+    AppLanguage('pt', 'Português', 'Portuguese'),
+    AppLanguage('it', 'Italiano', 'Italian'),
+    AppLanguage('nl', 'Nederlands', 'Dutch'),
+    AppLanguage('pl', 'Polski', 'Polish'),
+    AppLanguage('tr', 'Türkçe', 'Turkish'),
+    AppLanguage('ru', 'Русский', 'Russian'),
+    AppLanguage('uk', 'Українська', 'Ukrainian'),
+    AppLanguage('ar', 'العربية', 'Arabic'),
+    AppLanguage('hi', 'हिन्दी', 'Hindi'),
+    AppLanguage('zh', '中文', 'Chinese'),
+    AppLanguage('ja', '日本語', 'Japanese'),
+    AppLanguage('ko', '한국어', 'Korean'),
   ];
 
   /// Changes the active language and persists it for the current profile.
@@ -87,8 +82,50 @@ class LanguageController extends ChangeNotifier {
 
     if (match.isEmpty) return;
 
-    current = match.first;
-    notifyListeners();
+    final loadedLanguage = match.first;
+    if (loadedLanguage.code == current.code) return;
+
+    current = loadedLanguage;
+    // Profile loading can be triggered as a route is being built. Notify the
+    // root MaterialApp after the current frame rather than dirtying an ancestor
+    // while Navigator is still constructing the destination route.
+    if (_profileLoadNotificationPending) return;
+    _profileLoadNotificationPending = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _profileLoadNotificationPending = false;
+      notifyListeners();
+    });
+    // addPostFrameCallback alone does not request a frame if the preference
+    // future completes while the app is otherwise idle.
+    WidgetsBinding.instance.scheduleFrame();
+  }
+}
+
+class _LanguageCodeBadge extends StatelessWidget {
+  const _LanguageCodeBadge({required this.code});
+
+  final String code;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 34,
+      height: 24,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Text(
+        code.toUpperCase(),
+        style: const TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+          letterSpacing: .35,
+        ),
+      ),
+    );
   }
 }
 
@@ -205,7 +242,7 @@ class _LanguagePickerState extends State<LanguagePicker> {
                           ),
                           child: Row(
                             children: [
-                              Text(item.flag, style: const TextStyle(fontSize: 20)),
+                              _LanguageCodeBadge(code: item.code),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
@@ -316,7 +353,7 @@ class _LanguagePickerState extends State<LanguagePicker> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(language.flag),
+                    _LanguageCodeBadge(code: language.code),
                     const SizedBox(width: 6),
                     Text(
                       language.nativeName,

@@ -6,6 +6,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
+import 'widgets/added_by_profile_label.dart';
 import 'details.dart';
 import 'player.dart';
 import 'localization.dart';
@@ -409,6 +410,16 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
             fontWeight: FontWeight.w600,
           ),
         ),
+        if (!collection.isAutomatic &&
+            collection.createdByProfileId?.trim().isNotEmpty == true) ...[
+          const SizedBox(height: 5),
+          AddedByProfileLabel(
+            profileName: profileNameForId(collection.createdByProfileId),
+            showUnknown: true,
+            onArtwork: true,
+            compact: false,
+          ),
+        ],
       ],
     );
   }
@@ -684,12 +695,17 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
                 10,
                 9,
               ),
-              child: UniversalText(
-                '${media.releaseYear ?? ''} • ${media.type}',
-                style: const TextStyle(
-                  color: Colors.white54,
-                  fontSize: 12,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  UniversalText(
+                    '${media.releaseYear ?? ''} • ${media.type}',
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                  const SizedBox(height: 3),
+                  AddedByProfileLabel.forMedia(media),
+                ],
               ),
             ),
           ],
@@ -1016,8 +1032,13 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
                                   overflow:
                                       TextOverflow.ellipsis,
                                 ),
-                                subtitle: Text(
-                                  '${media.releaseYear ?? ''} • ${media.type}',
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text('${media.releaseYear ?? ''} • ${media.type}'),
+                                    AddedByProfileLabel.forMedia(media),
+                                  ],
                                 ),
                                 trailing: const Icon(
                                   Icons.add_rounded,

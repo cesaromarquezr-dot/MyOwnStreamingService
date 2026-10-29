@@ -146,7 +146,7 @@ class SeasonalCollectionsScreen extends StatelessWidget {
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.music_note_rounded),
               title: LocalizedMediaText(track.title),
-              subtitle: Text(track.artist),
+              subtitle: Text(musicTrackSubtitle(track), maxLines: 2, overflow: TextOverflow.ellipsis),
             ),
         ],
       ),
