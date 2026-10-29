@@ -14,6 +14,7 @@ import 'player.dart';
 import 'profiles.dart';
 import 'smart_search.dart';
 import 'jellyfin_plugins_hub.dart';
+import 'streaming_intelligence_hub.dart';
 
 /// Entry point for the streaming features that are useful across the app.
 /// Existing Home customization, playback progress, music details and profiles
@@ -40,6 +41,12 @@ class StreamingUpgradeCenterScreen extends StatelessWidget {
         children: [
           const _UpgradeIntro(),
           const SizedBox(height: 14),
+          _UpgradeTile(
+            icon: Icons.auto_awesome_rounded,
+            title: 'Streaming Intelligence Hub',
+            subtitle: 'One place for all nine platform upgrades, library-quality review, X-Ray, franchise browsing, Live TV and operations.',
+            onTap: () => _open(context, const StreamingIntelligenceHubScreen()),
+          ),
           _UpgradeTile(
             icon: Icons.bookmark_add_outlined,
             title: 'Personal Watchlist',

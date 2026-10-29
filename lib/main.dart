@@ -592,6 +592,8 @@ class _AppPageSurface extends StatelessWidget {
         });
         final appearance = _PageAppearanceStore.forPage(_appPageState.pageId);
         final accessibility = AppAccessibilitySettings.instance;
+        final energy = EnergySaverController.instance;
+        final oledBlack = energy.oledBlackTheme;
         final density = switch (appearance.density) {
           'Compact' => VisualDensity.compact,
           'Spacious' => const VisualDensity(horizontal: 1, vertical: 1),
@@ -609,16 +611,46 @@ class _AppPageSurface extends StatelessWidget {
           surface: Colors.black,
           onSurface: Colors.white,
         );
+        final standardScheme = ColorScheme.fromSeed(
+          seedColor: Color(appearance.accentColor),
+          brightness: baseTheme.brightness,
+        );
+        final oledBlackScheme = standardScheme.copyWith(
+          surface: Colors.black,
+          onSurface: Colors.white,
+          surfaceContainerLowest: Colors.black,
+          surfaceContainerLow: Colors.black,
+          surfaceContainer: Colors.black,
+          surfaceContainerHigh: const Color(0xFF030303),
+          surfaceContainerHighest: const Color(0xFF060606),
+        );
         final theme = baseTheme.copyWith(
-          scaffoldBackgroundColor: accessibility.highContrast
+          scaffoldBackgroundColor: accessibility.highContrast || oledBlack
               ? Colors.black
               : Color(appearance.backgroundColor),
+          canvasColor: oledBlack ? Colors.black : baseTheme.canvasColor,
           colorScheme: accessibility.highContrast
               ? highContrastScheme
-              : ColorScheme.fromSeed(
-                  seedColor: Color(appearance.accentColor),
-                  brightness: baseTheme.brightness,
-                ),
+              : (oledBlack ? oledBlackScheme : standardScheme),
+          appBarTheme: baseTheme.appBarTheme.copyWith(
+            backgroundColor: oledBlack ? Colors.black : baseTheme.appBarTheme.backgroundColor,
+            surfaceTintColor: Colors.transparent,
+          ),
+          cardTheme: baseTheme.cardTheme.copyWith(
+            color: oledBlack ? Colors.black : baseTheme.cardTheme.color,
+            surfaceTintColor: Colors.transparent,
+          ),
+          dialogTheme: baseTheme.dialogTheme.copyWith(
+            backgroundColor: oledBlack ? Colors.black : baseTheme.dialogTheme.backgroundColor,
+            surfaceTintColor: Colors.transparent,
+          ),
+          inputDecorationTheme: baseTheme.inputDecorationTheme.copyWith(
+            fillColor: oledBlack ? const Color(0xFF030303) : baseTheme.inputDecorationTheme.fillColor,
+          ),
+          navigationBarTheme: baseTheme.navigationBarTheme.copyWith(
+            backgroundColor: oledBlack ? Colors.black : baseTheme.navigationBarTheme.backgroundColor,
+            surfaceTintColor: Colors.transparent,
+          ),
           textTheme: accessibility.highContrast
               ? baseTheme.textTheme
                   .apply(bodyColor: Colors.white, displayColor: Colors.white)

@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'app_accessibility.dart';
 import 'app_core.dart';
 import 'energy_saver.dart';
+import 'streaming_experience.dart';
 
 /// Settings and transparent, session-level activity diagnostics. Energy values
 /// are estimates based on user-entered wattage/rate, not meter readings.
@@ -20,6 +22,9 @@ class _PowerPerformanceScreenState extends State<PowerPerformanceScreen> {
   late final TextEditingController _hoursController;
   late final TextEditingController _rateController;
   bool _savingEstimate = false;
+  bool _lowBandwidthPlayback = false;
+
+  String? get _profileId => AppController.instance.currentProfile?.id;
 
   @override
   void initState() {
@@ -31,8 +36,11 @@ class _PowerPerformanceScreenState extends State<PowerPerformanceScreen> {
   }
 
   Future<void> _initialize() async {
-    await _energy.ensureLoaded(profileId: AppController.instance.currentProfile?.id);
+    await _energy.ensureLoaded(profileId: _profileId);
+    final playback =
+        await StreamingExperiencePreferences.load(profileId: _profileId);
     if (!mounted) return;
+    setState(() => _lowBandwidthPlayback = playback.dataSaver);
     _updateEstimateFields();
   }
 
@@ -66,6 +74,50 @@ class _PowerPerformanceScreenState extends State<PowerPerformanceScreen> {
 
   Future<void> _setMode(EnergySaverMode mode) async {
     await _energy.setMode(mode);
+    await _syncMotionPreference(_energy.reduceAnimations);
+  }
+
+  Future<void> _syncMotionPreference(bool reduceMotion) async {
+    final playback =
+        await StreamingExperiencePreferences.load(profileId: _profileId);
+    playback.reduceMotion = reduceMotion;
+    await playback.save(profileId: _profileId);
+    await AppAccessibilitySettings.instance.reload(profileId: _profileId);
+  }
+
+  Future<void> _setReduceMotion(bool value) async {
+    await _energy.setOptions(reduceAnimations: value);
+    await _syncMotionPreference(value);
+  }
+
+  Future<void> _openStreamingSettings() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const StreamingExperienceSettingsScreen(),
+      ),
+    );
+    final playback =
+        await StreamingExperiencePreferences.load(profileId: _profileId);
+    if (!mounted) return;
+    setState(() => _lowBandwidthPlayback = playback.dataSaver);
+  }
+
+  Future<void> _setLowBandwidthPlayback(bool enabled) async {
+    final playback =
+        await StreamingExperiencePreferences.load(profileId: _profileId);
+    if (enabled) {
+      playback.enableDataSaver();
+    } else {
+      playback.disableDataSaver();
+    }
+    await playback.save(profileId: _profileId);
+    if (!mounted) return;
+    setState(() => _lowBandwidthPlayback = enabled);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(enabled
+          ? 'Data Saver enabled; 480p maximum requested where the playback service supports it.'
+          : 'Data Saver disabled; your previous resolution preference was restored where available.'),
+    ));
   }
 
   @override
@@ -99,7 +151,7 @@ class _PowerPerformanceScreenState extends State<PowerPerformanceScreen> {
               LayoutBuilder(builder: (context, constraints) {
                 final wide = constraints.maxWidth >= 640;
                 final modes = <(EnergySaverMode, IconData, String, String)>[
-                  (EnergySaverMode.eco, Icons.eco_outlined, 'Eco', 'Recommended default: no automatic or hover videos, reduced motion, slower background lookups and longer refresh intervals.'),
+                  (EnergySaverMode.eco, Icons.eco_outlined, 'Eco', 'Recommended default: no automatic or hover videos, reduced motion, throttled artwork and longer playback/background update intervals.'),
                   (EnergySaverMode.balanced, Icons.balance_rounded, 'Balanced', 'Hover previews enabled; background updates run less often than Cinema.'),
                   (EnergySaverMode.cinema, Icons.local_movies_outlined, 'Cinema', 'Automatic hero previews and richer motion while active.'),
                 ];
@@ -142,6 +194,67 @@ class _PowerPerformanceScreenState extends State<PowerPerformanceScreen> {
                 );
               }),
               const SizedBox(height: 24),
+              _sectionTitle('Playback and network savings', 'These controls reduce the app’s avoidable rendering, network traffic and playback quality when you choose them. Resolution caps only affect streams whose authorized playback service honors them.'),
+              const SizedBox(height: 8),
+              _switchTile(
+                title: 'Low-bandwidth playback',
+                subtitle: 'Enable Data Saver and request a 480p maximum. Your previous resolution preference is remembered and restored when you turn this off.',
+                value: _lowBandwidthPlayback,
+                icon: Icons.data_saver_on_outlined,
+                onChanged: _setLowBandwidthPlayback,
+              ),
+              const SizedBox(height: 8),
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(14),
+                  child: Text('Eco also batches playback session updates, saves local watch progress less often, reduces player UI redraws, skips nonessential background heartbeats while the app is hidden, disables automatic video previews, and throttles artwork lookups. Pause, seek, completion, and final progress updates remain immediate.', style: TextStyle(color: Colors.white60, fontSize: 12, height: 1.4)),
+                ),
+              ),
+              const SizedBox(height: 24),
+              _sectionTitle('Display power', 'OLED-black mode uses black shared surfaces throughout the app. It can reduce display power on OLED/AMOLED panels; LCD screens usually see little or no benefit because their backlight remains on.'),
+              const SizedBox(height: 8),
+              _switchTile(
+                title: 'OLED-black theme',
+                subtitle: 'Use pure-black app, card, dialog and navigation surfaces. Your choice is saved for this profile on this device.',
+                value: _energy.oledBlackTheme,
+                icon: Icons.brightness_2_outlined,
+                onChanged: (value) => _energy.setOptions(oledBlackTheme: value),
+              ),
+              const SizedBox(height: 10),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.tips_and_updates_outlined),
+                          SizedBox(width: 8),
+                          Text('More ways to save energy', style: TextStyle(fontWeight: FontWeight.w900)),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      const Text('''• Lower your device screen brightness and enable adaptive brightness.
+• Turn on Battery Saver / Low Power Mode in your device settings.
+• Keep Eco selected to avoid autoplay previews, reduce motion and defer nonessential refreshes.
+• Lower streaming resolution to reduce bandwidth when your playback service supports the selected cap.'''),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _openStreamingSettings,
+                          icon: const Icon(Icons.high_quality_rounded),
+                          label: const Text('Open streaming quality settings'),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text('The app cannot directly change your operating system’s brightness or native battery-saver switch. Dark-theme energy savings depend on the screen: OLED/AMOLED pixels can turn off for black, while LCD backlights remain on. Actual savings vary by device and brightness.', style: TextStyle(color: Colors.white60, fontSize: 12, height: 1.4)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
               _sectionTitle('Fine-tune behavior', 'Your choices are saved for this profile.'),
               const SizedBox(height: 8),
               _switchTile(
@@ -184,7 +297,7 @@ class _PowerPerformanceScreenState extends State<PowerPerformanceScreen> {
                 subtitle: 'Reduce nonessential animations and transitions.',
                 value: _energy.reduceAnimations,
                 icon: Icons.motion_photos_off_outlined,
-                onChanged: (value) => _energy.setOptions(reduceAnimations: value),
+                onChanged: _setReduceMotion,
               ),
               _switchTile(
                 title: 'Prefer direct play when supported',
@@ -217,7 +330,7 @@ class _PowerPerformanceScreenState extends State<PowerPerformanceScreen> {
                         children: [
                           SizedBox(width: fieldWidth, child: _numberField(_wattsController, 'Average watts', '100')),
                           SizedBox(width: fieldWidth, child: _numberField(_hoursController, 'Hours per day', '6')),
-                          SizedBox(width: fieldWidth, child: _numberField(_rateController, r'Rate ($/kWh)', '0.15')),
+                          SizedBox(width: fieldWidth, child: _numberField(_rateController, 'Rate per kWh (your currency)', '0.15')),
                         ],
                       );
                     }),
@@ -232,7 +345,7 @@ class _PowerPerformanceScreenState extends State<PowerPerformanceScreen> {
                     ),
                     const SizedBox(height: 14),
                     Text('${_energy.estimatedMonthlyKwh.toStringAsFixed(1)} kWh / month', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
-                    Text('\$${_energy.estimatedMonthlyCost.toStringAsFixed(2)} / month at the entered rate', style: TextStyle(color: colorScheme.primary, fontSize: 16, fontWeight: FontWeight.w800)),
+                    Text('${_energy.estimatedMonthlyCost.toStringAsFixed(2)} per month in your entered currency', style: TextStyle(color: colorScheme.primary, fontSize: 16, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 7),
                     const Text('This is a calculator, not a live power measurement or a guaranteed saving. App optimizations reduce avoidable work; your electricity meter or a wall power meter is needed to confirm real usage.', style: TextStyle(color: Colors.white60, fontSize: 12, height: 1.4)),
                   ]),

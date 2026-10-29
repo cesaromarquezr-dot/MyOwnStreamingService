@@ -181,6 +181,75 @@ class CinematicTitleMetadataService {
     });
   }
 
+  /// Fetches the known official YouTube trailers/teasers for a TMDB movie or
+  /// show by provider ID. This is used for opt-in follow alerts and is capped by
+  /// the caller so routine calendar refreshes do not fan out across the catalog.
+  static final Map<String, DateTime> _trailerSnapshotCacheUntil =
+      <String, DateTime>{};
+  static final Map<String, Map<String, dynamic>> _trailerSnapshotCache =
+      <String, Map<String, dynamic>>{};
+
+  static Future<Map<String, dynamic>> lookupTrailerSnapshot({
+    required int providerId,
+    required bool isTv,
+    bool forceRefresh = false,
+  }) async {
+    if (providerId <= 0 || !isConfigured) {
+      return <String, dynamic>{
+        'success': false,
+        'videos': <Map<String, dynamic>>[]
+      };
+    }
+    final cacheKey = '${isTv ? 'tv' : 'movie'}:$providerId';
+    final until = _trailerSnapshotCacheUntil[cacheKey];
+    final cached = _trailerSnapshotCache[cacheKey];
+    if (!forceRefresh &&
+        cached != null &&
+        until != null &&
+        DateTime.now().isBefore(until)) {
+      return cached;
+    }
+    final details = await _get(
+        isTv ? '/tv/$providerId' : '/movie/$providerId', <String, String>{
+      'append_to_response': 'videos',
+      'language': 'en-US',
+    });
+    final videoPayload = _asMap(details['videos']);
+    final videos = _listOfMaps(videoPayload['results'])
+        .map(CinematicTitleVideo.fromJson)
+        .where((video) =>
+            video.official &&
+            video.site.toLowerCase() == 'youtube' &&
+            RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(video.key.trim()) &&
+            <String>{'trailer', 'teaser'}.contains(video.type.toLowerCase()))
+        .toList()
+      ..sort((a, b) {
+        if (a.official != b.official) return a.official ? -1 : 1;
+        return (b.publishedAt ?? '').compareTo(a.publishedAt ?? '');
+      });
+    final result = <String, dynamic>{
+      'success': true,
+      'providerId': providerId,
+      'isTv': isTv,
+      'title': (details['title'] ?? details['name'] ?? '').toString(),
+      'videos': videos
+          .map((video) => <String, dynamic>{
+                'id': video.key,
+                'key': video.key,
+                'name': video.name,
+                'type': video.type,
+                'official': video.official,
+                'publishedAt': video.publishedAt,
+                'url': video.url,
+              })
+          .toList(growable: false),
+    };
+    _trailerSnapshotCache[cacheKey] = result;
+    _trailerSnapshotCacheUntil[cacheKey] =
+        DateTime.now().add(const Duration(minutes: 20));
+    return result;
+  }
+
   static Future<Map<String, dynamic>?> _lookupHomeMetadataUncached({
     required String title,
     required bool isTv,
@@ -248,6 +317,7 @@ class CinematicTitleMetadataService {
     final previewVideos = _listOfMaps(videoPayload['results'])
         .map(CinematicTitleVideo.fromJson)
         .where((video) =>
+            video.official &&
             video.site.toLowerCase() == 'youtube' &&
             RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(video.key.trim()) &&
             <String>{'trailer', 'teaser', 'clip', 'featurette'}
@@ -816,14 +886,14 @@ class CinematicTitleMetadataService {
   /// backend proxy. The calendar labels catalog dates as date-only whenever a
   /// reliable local air time is not supplied; it never fabricates an exact time.
   static Future<List<Map<String, dynamic>>> lookupUpcomingCalendarEvents({
-    int movieLimit = 24,
-    int tvLimit = 10,
+    int movieLimit = 60,
+    int tvLimit = 48,
     String? regionCode,
   }) async {
     if (!isConfigured) return const <Map<String, dynamic>>[];
     final now = DateTime.now();
     final cacheKey =
-        '${(regionCode ?? '').trim().toUpperCase()}|$movieLimit|$tvLimit';
+        'calendar-v3|${(regionCode ?? '').trim().toUpperCase()}|$movieLimit|$tvLimit';
     final cached = _upcomingCalendarCache[cacheKey];
     final expiresAt = _upcomingCalendarCacheUntil[cacheKey];
     if (cached != null && expiresAt != null && now.isBefore(expiresAt)) {
@@ -882,38 +952,98 @@ class CinematicTitleMetadataService {
     final results = <Map<String, dynamic>>[];
     final seenIds = <String>{};
 
-    Map<String, dynamic>? moviePayload;
-    Map<String, dynamic>? premierePayload;
-    Map<String, dynamic>? onAirPayload;
-    Map<String, dynamic>? nowPlayingPayload;
-    final payloads = await Future.wait<
-        Map<String, dynamic>?>(<Future<Map<String, dynamic>?>>[
-      _get('/movie/upcoming', <String, String>{'page': '1'})
-          .then((v) => v)
-          .catchError((_) => <String, dynamic>{}),
-      _get('/discover/tv', <String, String>{
-        'page': '1',
-        'sort_by': 'first_air_date.asc',
-        'include_null_first_air_dates': 'false',
-        'first_air_date.gte':
-            '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}',
-        'first_air_date.lte':
-            '${horizon.year.toString().padLeft(4, '0')}-${horizon.month.toString().padLeft(2, '0')}-${horizon.day.toString().padLeft(2, '0')}',
-      }).then((v) => v).catchError((_) => <String, dynamic>{}),
-      _get('/tv/on_the_air', <String, String>{'page': '1'})
-          .then((v) => v)
-          .catchError((_) => <String, dynamic>{}),
-      _get('/movie/now_playing', <String, String>{'page': '1'})
-          .then((v) => v)
-          .catchError((_) => <String, dynamic>{}),
-    ]);
-    moviePayload = payloads[0];
-    premierePayload = payloads[1];
-    onAirPayload = payloads[2];
-    nowPlayingPayload = payloads[3];
+    final todayText =
+        '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    final horizonText =
+        '${horizon.year.toString().padLeft(4, '0')}-${horizon.month.toString().padLeft(2, '0')}-${horizon.day.toString().padLeft(2, '0')}';
+    final region = (regionCode ?? '').trim().toUpperCase();
 
-    for (final row in _listOfMaps(moviePayload?['results'])
-        .take(movieLimit.clamp(1, 40).toInt())) {
+    // TMDB's upcoming feed is relevance-ranked and its first page can omit
+    // major announced titles. Combine several pages with date-filtered discovery
+    // so titles like Avengers: Doomsday are not lost behind popular releases.
+    Future<List<Map<String, dynamic>>> pages(
+      String path,
+      Map<String, String> query, {
+      int count = 4,
+    }) async {
+      final responses = await Future.wait<List<Map<String, dynamic>>>(
+        List<Future<List<Map<String, dynamic>>>>.generate(count, (index) async {
+          try {
+            final payload = await _get(
+                path, <String, String>{...query, 'page': '${index + 1}'});
+            return _listOfMaps(payload['results']);
+          } catch (_) {
+            return <Map<String, dynamic>>[];
+          }
+        }),
+      );
+      final unique = <String, Map<String, dynamic>>{};
+      for (final pageRows in responses) {
+        for (final row in pageRows) {
+          final id = _toInt(row['id']);
+          if (id != null) unique['$id'] = row;
+        }
+      }
+      return unique.values.toList(growable: false);
+    }
+
+    final payloads = await Future.wait<
+        List<Map<String, dynamic>>>(<Future<List<Map<String, dynamic>>>>[
+      pages('/movie/upcoming',
+          <String, String>{if (region.isNotEmpty) 'region': region}),
+      pages('/discover/movie', <String, String>{
+        // Date-filtered, popularity-ranked discovery prevents a long tail of
+        // obscure near-term releases from displacing high-interest titles.
+        'sort_by': 'popularity.desc',
+        'include_adult': 'false',
+        'include_video': 'false',
+        'primary_release_date.gte': todayText,
+        'primary_release_date.lte': horizonText,
+        if (region.isNotEmpty) 'region': region,
+      }),
+      pages('/discover/tv', <String, String>{
+        // Rank announced premieres by popularity, then sort the calendar by date.
+        'sort_by': 'popularity.desc',
+        'include_null_first_air_dates': 'false',
+        'first_air_date.gte': todayText,
+        'first_air_date.lte': horizonText,
+      }),
+      pages('/tv/on_the_air', const <String, String>{}),
+      pages('/discover/tv', <String, String>{
+        'sort_by': 'popularity.desc',
+        'include_null_first_air_dates': 'false',
+        'air_date.gte': todayText,
+        'air_date.lte': horizonText,
+      }),
+      pages('/movie/now_playing',
+          <String, String>{if (region.isNotEmpty) 'region': region},
+          count: 2),
+    ]);
+    final movieRows = <Map<String, dynamic>>[];
+    final seenMovieIds = <int>{};
+    for (final row in <Map<String, dynamic>>[...payloads[0], ...payloads[1]]) {
+      final id = _toInt(row['id']);
+      if (id != null && seenMovieIds.add(id)) movieRows.add(row);
+    }
+    movieRows.sort((a, b) {
+      final popularity = (_doubleOrNull(b['popularity']) ?? 0)
+          .compareTo(_doubleOrNull(a['popularity']) ?? 0);
+      if (popularity != 0) return popularity;
+      return (a['release_date']?.toString() ?? '')
+          .compareTo(b['release_date']?.toString() ?? '');
+    });
+    final premiereRows = payloads[2];
+    final onAirRows = <Map<String, dynamic>>[];
+    final seenShowIds = <int>{};
+    for (final row in <Map<String, dynamic>>[...payloads[3], ...payloads[4]]) {
+      final id = _toInt(row['id']);
+      if (id != null && seenShowIds.add(id)) onAirRows.add(row);
+    }
+    onAirRows.sort((a, b) => (_doubleOrNull(b['popularity']) ?? 0)
+        .compareTo(_doubleOrNull(a['popularity']) ?? 0));
+    final nowPlayingRows = payloads[5];
+
+    for (final row in movieRows.take(movieLimit.clamp(1, 60).toInt())) {
       final releaseDate = dateText(row['release_date']);
       final target = localNoonForDate(releaseDate);
       final id = _toInt(row['id']);
@@ -924,6 +1054,7 @@ class CinematicTitleMetadataService {
         'id': eventId,
         'title': (row['title'] ?? row['original_title'] ?? 'Untitled movie')
             .toString(),
+        'publicPopularity': _doubleOrNull(row['popularity']) ?? 0,
         'category': 'Movie',
         'milestone': 'Theatrical release',
         'scheduledAt': target!.toUtc().toIso8601String(),
@@ -936,8 +1067,7 @@ class CinematicTitleMetadataService {
       });
     }
 
-    for (final row in _listOfMaps(premierePayload?['results'])
-        .take(tvLimit.clamp(1, 20).toInt())) {
+    for (final row in premiereRows.take(tvLimit.clamp(1, 60).toInt())) {
       final releaseDate = dateText(row['first_air_date']);
       final target = localNoonForDate(releaseDate);
       final id = _toInt(row['id']);
@@ -948,6 +1078,7 @@ class CinematicTitleMetadataService {
         'id': eventId,
         'title': (row['name'] ?? row['original_name'] ?? 'Untitled series')
             .toString(),
+        'publicPopularity': _doubleOrNull(row['popularity']) ?? 0,
         'category': 'Show',
         'milestone': 'Series premiere',
         'scheduledAt': target!.toUtc().toIso8601String(),
@@ -962,11 +1093,11 @@ class CinematicTitleMetadataService {
 
     final physicalCandidates = <Map<String, dynamic>>[];
     final candidateIds = <int>{};
-    for (final raw in _listOfMaps(moviePayload?['results']).take(8)) {
+    for (final raw in movieRows.take(8)) {
       final id = _toInt(raw['id']);
       if (id != null && candidateIds.add(id)) physicalCandidates.add(raw);
     }
-    for (final raw in _listOfMaps(nowPlayingPayload?['results']).take(10)) {
+    for (final raw in nowPlayingRows.take(10)) {
       final id = _toInt(raw['id']);
       final releasedAt = localNoonForDate(raw['release_date']);
       if (id == null || !candidateIds.add(id) || releasedAt == null) continue;
@@ -1025,6 +1156,7 @@ class CinematicTitleMetadataService {
             'title':
                 (movie['title'] ?? movie['original_title'] ?? 'Untitled movie')
                     .toString(),
+            'publicPopularity': _doubleOrNull(movie['popularity']) ?? 0,
             'category': 'Movie',
             'milestone': 'Physical media release (format unspecified)',
             'scheduledAt': date.toUtc().toIso8601String(),
@@ -1049,31 +1181,32 @@ class CinematicTitleMetadataService {
       }
     }
 
-    final airingRows = _listOfMaps(onAirPayload?['results'])
-        .take(tvLimit.clamp(1, 16).toInt())
-        .toList(growable: false);
+    // The air-date discover feed includes currently running series with future
+    // episodes, not only shows ranked in /tv/on_the_air's first page. Cap detail
+    // lookups to keep this refresh bounded while covering multiple pages.
+    final airingRows =
+        onAirRows.take(tvLimit.clamp(1, 60).toInt()).toList(growable: false);
     final episodeFutures = airingRows.map((row) async {
       final id = _toInt(row['id']);
       if (id == null) return <Map<String, dynamic>>[];
       try {
         final details = await _get('/tv/$id');
-        final episode = _asMap(details['next_episode_to_air']);
-        if (episode.isEmpty) return <Map<String, dynamic>>[];
-        final releaseDate = dateText(episode['air_date']);
-        final target = localNoonForDate(releaseDate);
-        if (!inWindow(target, allowRecentlyAired: true) ||
-            releaseDate == null) {
+        final nextEpisode = _asMap(details['next_episode_to_air']);
+        if (nextEpisode.isEmpty) return <Map<String, dynamic>>[];
+        final nextDate = localNoonForDate(nextEpisode['air_date']);
+        if (!inWindow(nextDate, allowRecentlyAired: true)) {
           return <Map<String, dynamic>>[];
         }
-        final seasonNumber =
-            _toInt(episode['season_number'] ?? episode['seasonNumber']);
-        final episodeNumber =
-            _toInt(episode['episode_number'] ?? episode['episodeNumber']);
-        final episodeName =
-            _cleanNullable(episode['name']?.toString()) ?? 'New episode';
-        final code = seasonNumber != null && episodeNumber != null
-            ? 'S${seasonNumber.toString().padLeft(2, '0')}E${episodeNumber.toString().padLeft(2, '0')}'
-            : null;
+        final nextSeason =
+            _toInt(nextEpisode['season_number'] ?? nextEpisode['seasonNumber']);
+        final seasonPayload = nextSeason == null
+            ? <String, dynamic>{}
+            : await _get('/tv/$id/season/$nextSeason')
+                .catchError((_) => <String, dynamic>{});
+        final seasonEpisodes = _listOfMaps(seasonPayload['episodes']);
+        final episodes = seasonEpisodes.isEmpty
+            ? <Map<String, dynamic>>[nextEpisode]
+            : seasonEpisodes;
         final title = (details['name'] ??
                 details['original_name'] ??
                 row['name'] ??
@@ -1084,17 +1217,37 @@ class CinematicTitleMetadataService {
             .whereType<String>()
             .toSet()
             .toList(growable: false);
-        final eventId =
-            'tmdb-tv-$id-next-${episode['id'] ?? '${seasonNumber ?? 0}-${episodeNumber ?? 0}'}';
-        final poster = imageUrl(
-          episode['still_path']?.toString() ?? row['poster_path']?.toString(),
-          size: 'w342',
-        );
-        return <Map<String, dynamic>>[
-          <String, dynamic>{
-            'id': eventId,
+        final output = <Map<String, dynamic>>[];
+        for (final episode in episodes) {
+          final releaseDate = dateText(episode['air_date']);
+          final target = localNoonForDate(releaseDate);
+          if (!inWindow(target, allowRecentlyAired: true) ||
+              releaseDate == null) {
+            continue;
+          }
+          final seasonNumber = _toInt(episode['season_number'] ??
+              episode['seasonNumber'] ??
+              nextSeason);
+          final episodeNumber =
+              _toInt(episode['episode_number'] ?? episode['episodeNumber']);
+          final episodeName =
+              _cleanNullable(episode['name']?.toString()) ?? 'New episode';
+          final code = seasonNumber != null && episodeNumber != null
+              ? 'S${seasonNumber.toString().padLeft(2, '0')}E${episodeNumber.toString().padLeft(2, '0')}'
+              : null;
+          final episodeId =
+              episode['id'] ?? '${seasonNumber ?? 0}-${episodeNumber ?? 0}';
+          final poster = imageUrl(
+            episode['still_path']?.toString() ?? row['poster_path']?.toString(),
+            size: 'w342',
+          );
+          output.add(<String, dynamic>{
+            'id': 'tmdb-tv-$id-episode-$episodeId',
             'title': '$title · ${code == null ? '' : '$code · '}$episodeName',
             'parentTitle': title,
+            'publicPopularity': _doubleOrNull(details['popularity']) ??
+                _doubleOrNull(row['popularity']) ??
+                0,
             'category': 'Episode',
             'milestone': 'New episode · scheduled air date',
             'scheduledAt': target!.toUtc().toIso8601String(),
@@ -1105,8 +1258,9 @@ class CinematicTitleMetadataService {
             'note': networks.isEmpty
                 ? 'TMDB supplies the episode date but not an authoritative local airtime or streaming-ready time.'
                 : 'Network: ${networks.join(', ')}. TMDB supplies the date, not an authoritative local airtime or streaming-ready time.',
-          },
-        ];
+          });
+        }
+        return output;
       } catch (_) {
         return <Map<String, dynamic>>[];
       }
@@ -1124,7 +1278,10 @@ class CinematicTitleMetadataService {
           DateTime(2100);
       final bd = DateTime.tryParse(b['scheduledAt']?.toString() ?? '') ??
           DateTime(2100);
-      return ad.compareTo(bd);
+      final byDate = ad.compareTo(bd);
+      if (byDate != 0) return byDate;
+      return (a['title']?.toString() ?? '')
+          .compareTo(b['title']?.toString() ?? '');
     });
     return results;
   }

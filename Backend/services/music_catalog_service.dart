@@ -206,7 +206,7 @@ class MusicCatalogService {
     };
   }
 
-  /// Lists MusicBrainz album release groups with known dates in the next year.
+  /// Lists MusicBrainz album, EP and single release groups with known dates in the next year.
   /// Results are cached in this backend process to avoid unnecessary requests
   /// against MusicBrainz' rate-limited public search API.
   Future<Map<String, dynamic>> upcomingAlbums({int limit = 60}) async {
@@ -227,16 +227,21 @@ class MusicCatalogService {
         '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
     final from = dateString(start);
     final to = dateString(end);
-    final uri = Uri.https('musicbrainz.org', '/ws/2/release-group/', <String, String>{
-      'query': 'firstreleasedate:[$from TO $to] AND primarytype:album',
-      'fmt': 'json',
-      'limit': '100',
-      'offset': '0',
-    });
-    final payload = await _musicBrainzGet(uri);
-    final raw = payload['release-groups'];
     final items = <Map<String, dynamic>>[];
-    if (raw is List) {
+    // MusicBrainz search is capped at 100 rows per request. Paginate only when
+    // a page is full, up to 300 rows, and use the shared request queue to respect
+    // MusicBrainz' one-request-per-second policy. This avoids silently showing
+    // only the first batch of future album releases.
+    for (var offset = 0; offset < 300; offset += 100) {
+      final uri = Uri.https('musicbrainz.org', '/ws/2/release-group/', <String, String>{
+        'query': 'firstreleasedate:[$from TO $to] AND (primarytype:album OR primarytype:ep OR primarytype:single)',
+        'fmt': 'json',
+        'limit': '100',
+        'offset': '$offset',
+      });
+      final payload = await _musicBrainzGet(uri);
+      final raw = payload['release-groups'];
+      if (raw is! List) break;
       for (final rawItem in raw.whereType<Map>()) {
         final item = Map<String, dynamic>.from(rawItem);
         final mbid = item['id']?.toString().trim() ?? '';
@@ -260,10 +265,21 @@ class MusicCatalogService {
           'imageUrl': _coverArtFrontUrl(mbid, entity: 'release-group'),
           'releaseUrl': 'https://musicbrainz.org/release-group/$mbid',
           'source': 'MusicBrainz',
-          'type': 'album',
+          'type': (item['primary-type']?.toString() ?? 'Album').toLowerCase(),
         });
       }
+      if (raw.length < 100) break;
     }
+    // A release group can appear in multiple search pages if catalog data changes
+    // while paging. Keep one canonical row per MusicBrainz ID.
+    final uniqueItems = <String, Map<String, dynamic>>{};
+    for (final item in items) {
+      final id = item['id']?.toString() ?? '';
+      if (id.isNotEmpty) uniqueItems[id] = item;
+    }
+    items
+      ..clear()
+      ..addAll(uniqueItems.values);
     items.sort((a, b) =>
         (a['releaseDate']?.toString() ?? '').compareTo(b['releaseDate']?.toString() ?? ''));
     final result = <String, dynamic>{
@@ -273,7 +289,7 @@ class MusicCatalogService {
       'to': to,
       'items': items,
       'count': items.length,
-      'note': 'These are known first-release dates. Announced dates may change and country-specific availability can differ.',
+      'note': 'These are known first-release dates from MusicBrainz (up to 300 matching albums, EPs and singles). Public catalogs may not include newly announced releases yet; announced dates can change and country-specific availability can differ.',
     };
     _upcomingAlbumsCache = result;
     _upcomingAlbumsCacheUntil = now.add(const Duration(hours: 6));

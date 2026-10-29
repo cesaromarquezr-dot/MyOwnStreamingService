@@ -31,6 +31,9 @@ class StreamingExperiencePreferences {
 
   bool dataSaver;
   int maxResolution;
+  /// Remembers the user's previous cap so Data Saver can be turned off
+  /// without permanently overwriting their preferred streaming quality.
+  int dataSaverPreviousResolution;
   bool autoplayNext;
   bool subtitlesEnabled;
   bool preferOriginalLanguageTracks;
@@ -48,6 +51,7 @@ class StreamingExperiencePreferences {
   StreamingExperiencePreferences({
     this.dataSaver = false,
     this.maxResolution = automaticResolution,
+    this.dataSaverPreviousResolution = automaticResolution,
     this.autoplayNext = true,
     this.subtitlesEnabled = true,
     this.preferOriginalLanguageTracks = true,
@@ -66,6 +70,26 @@ class StreamingExperiencePreferences {
   String get resolutionLabel => maxResolution == automaticResolution
       ? 'Automatic'
       : '${maxResolution}p maximum';
+
+  /// Select a conservative playback profile while remembering the user's
+  /// previous maximum. The backend must honor the requested cap for it to
+  /// affect actual bitrate or transcoding.
+  void enableDataSaver() {
+    if (!dataSaver) dataSaverPreviousResolution = maxResolution;
+    dataSaver = true;
+    if (maxResolution == automaticResolution || maxResolution > 480) {
+      maxResolution = 480;
+    }
+  }
+
+  /// Restore the prior quality cap where the current cap is still the one
+  /// that Data Saver selected. Manual quality choices are left untouched.
+  void disableDataSaver() {
+    dataSaver = false;
+    if (maxResolution == 480) {
+      maxResolution = dataSaverPreviousResolution;
+    }
+  }
 
   static String _key(String profileId) =>
       'mos_streaming_experience_${profileId.trim().isEmpty ? 'default' : profileId.trim()}';
@@ -90,11 +114,23 @@ class StreamingExperiencePreferences {
     try {
       final map = Map<String, dynamic>.from(jsonDecode(raw) as Map);
       final resolution = (map['maxResolution'] as num?)?.toInt() ?? 0;
+      final savedResolution =
+          supportedResolutionCaps.contains(resolution) ? resolution : automaticResolution;
+      final dataSaverEnabled = map['dataSaver'] == true;
+      final rawPreviousResolution =
+          (map['dataSaverPreviousResolution'] as num?)?.toInt();
+      final previousResolution = supportedResolutionCaps.contains(rawPreviousResolution)
+          ? rawPreviousResolution!
+          : (dataSaverEnabled ? savedResolution : automaticResolution);
+      final effectiveResolution = dataSaverEnabled &&
+              (savedResolution == automaticResolution || savedResolution > 480)
+          ? 480
+          : savedResolution;
       final scale = (map['subtitleScale'] as num?)?.toDouble() ?? 1.0;
       return StreamingExperiencePreferences(
-        dataSaver: map['dataSaver'] == true,
-        maxResolution:
-            supportedResolutionCaps.contains(resolution) ? resolution : 0,
+        dataSaver: dataSaverEnabled,
+        maxResolution: effectiveResolution,
+        dataSaverPreviousResolution: previousResolution,
         autoplayNext: map['autoplayNext'] != false,
         subtitlesEnabled: map['subtitlesEnabled'] != false,
         preferOriginalLanguageTracks: map['preferOriginalLanguageTracks'] != false,
@@ -123,6 +159,7 @@ class StreamingExperiencePreferences {
       jsonEncode(<String, dynamic>{
         'dataSaver': dataSaver,
         'maxResolution': maxResolution,
+        'dataSaverPreviousResolution': dataSaverPreviousResolution,
         'autoplayNext': autoplayNext,
         'subtitlesEnabled': subtitlesEnabled,
         'preferOriginalLanguageTracks': preferOriginalLanguageTracks,
@@ -341,6 +378,19 @@ class _StreamingExperienceSettingsScreenState
     if (mounted) setState(() => saving = false);
   }
 
+  Future<void> _setDataSaver(bool enabled) async {
+    await _update(() {
+      if (enabled) {
+        // A local preference alone cannot re-encode media. Request a modest
+        // 480p ceiling and let the authorized playback gateway enforce it
+        // where the selected playback path supports resolution negotiation.
+        settings.enableDataSaver();
+      } else {
+        settings.disableDataSaver();
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final summary = PlaybackQoeTelemetry.summarize(events);
@@ -382,9 +432,8 @@ class _StreamingExperienceSettingsScreenState
                       value: settings.dataSaver,
                       title: const UniversalText('Data saver'),
                       subtitle: const UniversalText(
-                          'Preference for lower-bandwidth streams where server negotiation supports it.'),
-                      onChanged: (value) =>
-                          _update(() => settings.dataSaver = value),
+                          'Requests a 480p ceiling and lower-bandwidth negotiation; the playback service must honor the cap.'),
+                      onChanged: _setDataSaver,
                     ),
                     ListTile(
                       title:
@@ -401,7 +450,12 @@ class _StreamingExperienceSettingsScreenState
                         ],
                         onChanged: (value) {
                           if (value != null) {
-                            _update(() => settings.maxResolution = value);
+                            _update(() {
+                              settings.maxResolution = value;
+                              if (settings.dataSaver && value != 480) {
+                                settings.dataSaver = false;
+                              }
+                            });
                           }
                         },
                       ),
@@ -702,6 +756,7 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
   DateTime? _bufferStartedAt;
   DateTime? _lastProgressSync;
   DateTime? _lastUiUpdate;
+  DateTime? _lastSegmentScanAt;
   late final String _sessionId;
   DateTime? _startedAt;
   bool _readyLogged = false;
@@ -729,6 +784,7 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
   }
 
   Future<void> _initialize() async {
+    await EnergySaverController.instance.ensureLoaded(profileId: _profileId);
     _preferences =
         await StreamingExperiencePreferences.load(profileId: _profileId);
     if (!mounted) return;
@@ -813,13 +869,23 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
       setState(() => _loading = false);
       unawaited(player.play());
       await _createBackendSession();
-      final syncInterval = switch (EnergySaverController.instance.mode) {
-        EnergySaverMode.eco => const Duration(seconds: 45),
-        EnergySaverMode.balanced => const Duration(seconds: 25),
-        EnergySaverMode.cinema => const Duration(seconds: 15),
-      };
-      _syncTimer = Timer.periodic(
-          syncInterval, (_) => unawaited(_syncBackendSession()));
+      if (!mounted) return;
+      final energy = EnergySaverController.instance;
+      _syncTimer = Timer.periodic(energy.playbackSessionSyncInterval, (_) {
+        // Playback controls still send immediate state changes. Periodic
+        // heartbeats are unnecessary while paused, buffering, or hidden.
+        final activePlayer = _controller;
+        if (activePlayer == null ||
+            !activePlayer.value.isPlaying ||
+            activePlayer.value.isBuffering) {
+          return;
+        }
+        if (energy.pauseWhenAppHidden && !energy.appIsForeground) {
+          energy.recordBackgroundTaskSkipped();
+          return;
+        }
+        unawaited(_syncBackendSession());
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -925,7 +991,8 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
     final elapsed = now.difference(last).inMilliseconds;
     // Avoid counting long UI stalls as real viewing time.
     if (elapsed > 0 && elapsed <= 2500) _unreportedWatchMs += elapsed;
-    if (_unreportedWatchMs >= 30000) {
+    if (_unreportedWatchMs >=
+        EnergySaverController.instance.watchTimeBatchInterval.inMilliseconds) {
       final report = _unreportedWatchMs;
       _unreportedWatchMs = 0;
       unawaited(_record('watch_time', valueMs: report));
@@ -944,7 +1011,15 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
     if (player == null || !player.value.isInitialized) return;
     final value = player.value;
     _trackWatchTime(value);
-    if (value.isPlaying && !value.isBuffering) unawaited(_maybeSkipKnownSegments(player));
+    if (value.isPlaying && !value.isBuffering) {
+      final now = DateTime.now();
+      if (_lastSegmentScanAt == null ||
+          now.difference(_lastSegmentScanAt!) >=
+              EnergySaverController.instance.playbackMarkerScanInterval) {
+        _lastSegmentScanAt = now;
+        unawaited(_maybeSkipKnownSegments(player));
+      }
+    }
     if (!_readyLogged) {
       _readyLogged = true;
       final elapsed = DateTime.now()
@@ -984,18 +1059,20 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
               .toDouble();
       final now = DateTime.now();
       if (_lastProgressSync == null ||
-          now.difference(_lastProgressSync!) >= const Duration(seconds: 10)) {
+          now.difference(_lastProgressSync!) >=
+              EnergySaverController.instance.playbackProgressSaveInterval) {
         _lastProgressSync = now;
+        // Keep Continue Watching progress locally, while the separate heartbeat
+        // sends backend updates at the selected Eco/Balanced/Cinema cadence.
         AppController.instance
             .updatePlaybackProgress(widget.media.id, normalized);
-        unawaited(_syncBackendSession());
       }
     }
     final now = DateTime.now();
     if (mounted &&
         (_lastUiUpdate == null ||
             now.difference(_lastUiUpdate!) >=
-                const Duration(milliseconds: 300))) {
+                EnergySaverController.instance.playbackUiRefreshInterval)) {
       _lastUiUpdate = now;
       setState(() {});
     }

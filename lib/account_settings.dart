@@ -9,6 +9,7 @@ import 'localization.dart';
 import 'backend_api.dart';
 import 'device_features.dart';
 import 'streaming_experience.dart';
+import 'power_performance_screen.dart';
 import 'perfect_streaming_experience.dart';
 import 'customer_support.dart';
 import 'tv_controller.dart';
@@ -301,6 +302,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                 const SizedBox(height: 8),
                 ListTile(leading: const Icon(Icons.devices_rounded), title: const UniversalText('Device Center'), subtitle: const UniversalText('Devices, downloads and connected screens'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DeviceCenterScreen()))),
                 ListTile(leading: const Icon(Icons.high_quality_rounded), title: const UniversalText('Streaming Experience'), subtitle: const UniversalText('Playback quality, accessibility and player diagnostics'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StreamingExperienceSettingsScreen()))),
+                ListTile(leading: const Icon(Icons.energy_savings_leaf_rounded), title: const UniversalText('Power & Performance'), subtitle: const UniversalText('Eco mode, OLED-black surfaces and background activity controls'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PowerPerformanceScreen()))),
                 ListTile(leading: const Icon(Icons.tune_rounded), title: const UniversalText('Perfect Streaming'), subtitle: const UniversalText('Autoplay, discovery and watch-party preferences'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PerfectStreamingExperienceScreen()))),
                 ListTile(leading: const Icon(Icons.settings_remote_rounded), title: const UniversalText('TV Controller'), subtitle: const UniversalText('Pair and control a supported TV'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TvControllerScreen()))),
                 ListTile(leading: const Icon(Icons.tv_rounded), title: const UniversalText('TV Host'), subtitle: const UniversalText('Display a pairing code on this TV'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TvHostScreen()))),

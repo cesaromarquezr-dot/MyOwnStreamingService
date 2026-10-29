@@ -10,6 +10,7 @@ class MusicFavoritesBridge {
   static final Set<String> _likedAlbums = <String>{};
   static final Set<String> _likedPlaylists = <String>{};
   static final Set<String> _followedArtists = <String>{};
+  static final Set<String> _excludedTracks = <String>{};
   static SharedPreferences? _preferences;
   static String _profileKey = 'default';
 
@@ -28,6 +29,9 @@ class MusicFavoritesBridge {
     _followedArtists
       ..clear()
       ..addAll(_preferences!.getStringList('music_followed_artists_$_profileKey') ?? const []);
+    _excludedTracks
+      ..clear()
+      ..addAll(_preferences!.getStringList('music_excluded_tracks_$_profileKey') ?? const []);
     changes.value++;
   }
 
@@ -35,6 +39,14 @@ class MusicFavoritesBridge {
   static List<String> likedAlbums() => _likedAlbums.toList()..sort();
   static List<String> likedPlaylists() => _likedPlaylists.toList()..sort();
   static List<String> followedArtists() => _followedArtists.toList()..sort();
+  static List<String> excludedTracks() => _excludedTracks.toList()..sort();
+  static bool isTrackExcluded(String id) => _excludedTracks.contains(id);
+  static void toggleExcludedTrack(String id) {
+    final key = id.trim();
+    if (key.isEmpty) return;
+    _excludedTracks.contains(key) ? _excludedTracks.remove(key) : _excludedTracks.add(key);
+    unawaited(_persist('music_excluded_tracks_$_profileKey', _excludedTracks));
+  }
   static void toggleArtist(String artist) {
     final key = artist.trim();
     if (key.isEmpty) return;

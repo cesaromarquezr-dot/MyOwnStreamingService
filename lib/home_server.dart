@@ -16,6 +16,19 @@ import 'localization.dart';
 import 'entertainment_studio.dart';
 import 'personal_media_server.dart';
 
+List<String> _musicStringList(dynamic value) {
+  if (value is List) {
+    return value.map((entry) => entry.toString().trim())
+        .where((entry) => entry.isNotEmpty).toList(growable: false);
+  }
+  if (value is String && value.trim().isNotEmpty) {
+    return value.split(RegExp(r'\s*[;,]\s*'))
+        .map((entry) => entry.trim()).where((entry) => entry.isNotEmpty)
+        .toList(growable: false);
+  }
+  return const <String>[];
+}
+
 /// Displays the authenticated account's home server and its members.
 class HomeServerScreen extends StatefulWidget {
   final VoidCallback? onImportRip;
@@ -157,6 +170,13 @@ class _HomeServerScreenState extends State<HomeServerScreen> {
                 musicVideoUrl:
                     (m['musicVideoUrl'] ?? m['music_video_url'])?.toString(),
                 lyrics: m['lyrics']?.toString() ?? '',
+                soundtrackForTitles: _musicStringList(
+                    m['soundtrackForTitles'] ?? m['soundtrack_for_titles'] ?? m['soundtrackFor']),
+                relatedMediaTitles: _musicStringList(
+                    m['relatedMediaTitles'] ?? m['related_media_titles'] ?? m['relatedMedia']),
+                credits: _musicStringList(m['credits'] ?? m['trackCredits'] ?? m['track_credits']),
+                soundtrackSourceName: (m['soundtrackSourceName'] ?? m['soundtrack_source_name'])?.toString(),
+                soundtrackSourceUrl: (m['soundtrackSourceUrl'] ?? m['soundtrack_source_url'])?.toString(),
               ))
           .toList();
       MusicLibraryStore.instance.tracks

@@ -31,6 +31,9 @@ class EnergySaverController extends ChangeNotifier with WidgetsBindingObserver {
   bool _reduceAnimations = false;
   bool _preferDirectPlay = true;
   bool _cacheArtwork = true;
+  // OLED/AMOLED panels can use less display power with genuinely black pixels.
+  // This is a visual preference; it does not control device hardware.
+  bool _oledBlackTheme = true;
   double _estimatedDeviceWatts = 100;
   double _hoursPerDay = 6;
   double _electricityRate = 0.15;
@@ -55,6 +58,7 @@ class EnergySaverController extends ChangeNotifier with WidgetsBindingObserver {
   bool get reduceAnimations => _reduceAnimations;
   bool get preferDirectPlay => _preferDirectPlay;
   bool get cacheArtwork => _cacheArtwork;
+  bool get oledBlackTheme => _oledBlackTheme;
   bool get appIsForeground => _appIsForeground;
   String get activePage => _activePage;
   bool get isLoaded => _loaded;
@@ -85,6 +89,44 @@ class EnergySaverController extends ChangeNotifier with WidgetsBindingObserver {
         EnergySaverMode.cinema => 'Cinema',
       };
 
+  /// Backend heartbeat cadence while video playback is active. Eco avoids
+  /// redundant progress writes; pause/seek/completion still sync immediately.
+  Duration get playbackSessionSyncInterval => switch (_mode) {
+        EnergySaverMode.eco => const Duration(seconds: 60),
+        EnergySaverMode.balanced => const Duration(seconds: 30),
+        EnergySaverMode.cinema => const Duration(seconds: 15),
+      };
+
+  /// Throttle player-driven UI rebuilds in low-work mode without affecting
+  /// direct user interactions such as seeking or pressing pause.
+  Duration get playbackUiRefreshInterval => switch (_mode) {
+        EnergySaverMode.eco => const Duration(milliseconds: 900),
+        EnergySaverMode.balanced => const Duration(milliseconds: 500),
+        EnergySaverMode.cinema => const Duration(milliseconds: 300),
+      };
+
+  /// Local continue-watching progress is saved less often in Eco mode; the
+  /// player's final position is still saved when playback closes.
+  Duration get playbackProgressSaveInterval => switch (_mode) {
+        EnergySaverMode.eco => const Duration(seconds: 15),
+        EnergySaverMode.balanced => const Duration(seconds: 10),
+        EnergySaverMode.cinema => const Duration(seconds: 10),
+      };
+
+  /// Scan optional intro/credit markers less frequently in low-work mode.
+  Duration get playbackMarkerScanInterval => switch (_mode) {
+        EnergySaverMode.eco => const Duration(milliseconds: 900),
+        EnergySaverMode.balanced => const Duration(milliseconds: 400),
+        EnergySaverMode.cinema => const Duration(milliseconds: 150),
+      };
+
+  /// Batch watch-time telemetry less frequently in Eco to reduce writes.
+  Duration get watchTimeBatchInterval => switch (_mode) {
+        EnergySaverMode.eco => const Duration(seconds: 60),
+        EnergySaverMode.balanced => const Duration(seconds: 45),
+        EnergySaverMode.cinema => const Duration(seconds: 30),
+      };
+
   Future<void> ensureLoaded({String? profileId}) async {
     final scope = _scopeFor(profileId ?? (_profileScope.isEmpty ? AppController.instance.currentProfile?.id : _profileScope));
     if (_loaded && _profileScope == scope) return;
@@ -112,6 +154,7 @@ class EnergySaverController extends ChangeNotifier with WidgetsBindingObserver {
     final raw = prefs.getString('$_storagePrefix$scope');
     _profileScope = scope;
     _mode = EnergySaverMode.eco;
+    _oledBlackTheme = true;
     _applyModeDefaults(EnergySaverMode.eco);
     if (raw != null && raw.isNotEmpty) {
       try {
@@ -129,6 +172,7 @@ class EnergySaverController extends ChangeNotifier with WidgetsBindingObserver {
         _reduceAnimations = data['reduceAnimations'] as bool? ?? _reduceAnimations;
         _preferDirectPlay = data['preferDirectPlay'] as bool? ?? _preferDirectPlay;
         _cacheArtwork = data['cacheArtwork'] as bool? ?? _cacheArtwork;
+        _oledBlackTheme = data['oledBlackTheme'] as bool? ?? _oledBlackTheme;
         _estimatedDeviceWatts = _number(data['estimatedDeviceWatts'], 100).clamp(1, 3000).toDouble();
         _hoursPerDay = _number(data['hoursPerDay'], 6).clamp(0, 24).toDouble();
         _electricityRate = _number(data['electricityRate'], 0.15).clamp(0, 10).toDouble();
@@ -206,6 +250,7 @@ class EnergySaverController extends ChangeNotifier with WidgetsBindingObserver {
     bool? reduceAnimations,
     bool? preferDirectPlay,
     bool? cacheArtwork,
+    bool? oledBlackTheme,
   }) async {
     await ensureLoaded();
     _autoPlayHeroPreviews = autoPlayHeroPreviews ?? _autoPlayHeroPreviews;
@@ -216,6 +261,7 @@ class EnergySaverController extends ChangeNotifier with WidgetsBindingObserver {
     _reduceAnimations = reduceAnimations ?? _reduceAnimations;
     _preferDirectPlay = preferDirectPlay ?? _preferDirectPlay;
     _cacheArtwork = cacheArtwork ?? _cacheArtwork;
+    _oledBlackTheme = oledBlackTheme ?? _oledBlackTheme;
     await _save();
     notifyListeners();
   }
@@ -246,6 +292,7 @@ class EnergySaverController extends ChangeNotifier with WidgetsBindingObserver {
       'reduceAnimations': _reduceAnimations,
       'preferDirectPlay': _preferDirectPlay,
       'cacheArtwork': _cacheArtwork,
+      'oledBlackTheme': _oledBlackTheme,
       'estimatedDeviceWatts': _estimatedDeviceWatts,
       'hoursPerDay': _hoursPerDay,
       'electricityRate': _electricityRate,

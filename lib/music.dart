@@ -56,6 +56,21 @@ class MusicTrack {
   final bool matureTheme;
   final String lyrics;
 
+  /// Explicit, indexed relationships between this song and films/shows.
+  /// These values must come from imported metadata or a verified catalog link;
+  /// search never guesses soundtrack membership from a title alone.
+  final List<String> soundtrackForTitles;
+  final List<String> relatedMediaTitles;
+  final List<String> credits;
+  final String? soundtrackSourceName;
+  final String? soundtrackSourceUrl;
+
+  /// External catalog identity/link. Catalog-only tracks have no local audio URL.
+  final String? providerUrl;
+  final String? providerName;
+  final String? providerId;
+  final bool catalogOnly;
+
   /// Filesystem modification time supplied by the home-server scanner. This
   /// is a freshness signal, not the official album release date.
   final DateTime? modifiedAt;
@@ -78,6 +93,15 @@ class MusicTrack {
     this.explicit = false,
     this.matureTheme = false,
     this.lyrics = '',
+    this.soundtrackForTitles = const <String>[],
+    this.relatedMediaTitles = const <String>[],
+    this.credits = const <String>[],
+    this.soundtrackSourceName,
+    this.soundtrackSourceUrl,
+    this.providerUrl,
+    this.providerName,
+    this.providerId,
+    this.catalogOnly = false,
     this.modifiedAt,
     this.addedByProfileId,
     this.addedByProfileName,
@@ -110,6 +134,88 @@ class MusicTrack {
         genres,
         subgenres: subgenres,
       );
+
+  /// Searches every indexed track field without inferring soundtrack links.
+  bool matchesSearchQuery(String query) {
+    final needle = query.trim().toLowerCase();
+    if (needle.isEmpty) return false;
+    String compact(String value) => value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
+    final compactNeedle = compact(needle);
+    final fields = <String>[
+      title, artist, album, lyrics,
+      ...genres, ...featuredArtists, ...subgenres,
+      ...soundtrackForTitles, ...relatedMediaTitles, ...credits,
+    ];
+    return fields.any((value) {
+      final normalized = value.trim().toLowerCase();
+      if (normalized.isEmpty) return false;
+      if (normalized.contains(needle)) return true;
+      final compactValue = compact(normalized);
+      return compactNeedle.length >= 2 && compactValue.contains(compactNeedle);
+    });
+  }
+
+  /// Compact persistence representation for profile-scoped catalog metadata.
+  /// Audio URLs are deliberately omitted: external results aren't imported files.
+  Map<String, dynamic> toCatalogJson() => <String, dynamic>{
+        'id': id,
+        'title': title,
+        'artist': artist,
+        'album': album,
+        'artworkUrl': artworkUrl,
+        'durationMs': duration.inMilliseconds,
+        'genres': genres,
+        'featuredArtists': featuredArtists,
+        'subgenres': subgenres,
+        'explicit': explicit,
+        'matureTheme': matureTheme,
+        'lyrics': lyrics,
+        'soundtrackForTitles': soundtrackForTitles,
+        'relatedMediaTitles': relatedMediaTitles,
+        'credits': credits,
+        'soundtrackSourceName': soundtrackSourceName,
+        'soundtrackSourceUrl': soundtrackSourceUrl,
+        'providerUrl': providerUrl,
+        'providerName': providerName,
+        'providerId': providerId,
+        'catalogOnly': true,
+      };
+
+  factory MusicTrack.fromCatalogJson(Map<String, dynamic> json) {
+    List<String> strings(dynamic value) => value is List
+        ? value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList()
+        : <String>[];
+    final id = (json['id'] ?? '').toString().trim();
+    final title = (json['title'] ?? '').toString().trim();
+    if (id.isEmpty || title.isEmpty) {
+      throw const FormatException('Catalog track requires an id and title.');
+    }
+    final durationMs = json['durationMs'] ?? json['lengthMs'] ?? json['duration_ms'];
+    return MusicTrack(
+      id: id,
+      title: title,
+      artist: (json['artist'] ?? 'Unknown artist').toString(),
+      album: (json['album'] ?? '').toString(),
+      artworkUrl: (json['artworkUrl'] ?? json['imageUrl'])?.toString(),
+      duration: Duration(milliseconds: durationMs is num ? durationMs.toInt().clamp(0, 86400000).toInt() : 0),
+      genres: strings(json['genres']),
+      featuredArtists: strings(json['featuredArtists']),
+      subgenres: strings(json['subgenres']),
+      explicit: json['explicit'] == true,
+      matureTheme: json['matureTheme'] == true,
+      lyrics: (json['lyrics'] ?? '').toString(),
+      soundtrackForTitles: strings(json['soundtrackForTitles']),
+      relatedMediaTitles: strings(json['relatedMediaTitles']),
+      credits: strings(json['credits']),
+      soundtrackSourceName: (json['soundtrackSourceName'] ?? json['soundtrack_source_name'])?.toString(),
+      soundtrackSourceUrl: (json['soundtrackSourceUrl'] ?? json['soundtrack_source_url'])?.toString(),
+      providerUrl: (json['providerUrl'] ?? json['spotifyUrl'])?.toString(),
+      providerName: (json['providerName'] ?? json['source'])?.toString(),
+      providerId: json['providerId']?.toString(),
+      catalogOnly: true,
+      addedSource: 'external-catalog',
+    );
+  }
 }
 
 String? _musicTrackAttribution(MusicTrack track) {
@@ -363,6 +469,8 @@ class MusicLibraryStore extends ChangeNotifier {
   static final MusicLibraryStore instance = MusicLibraryStore._();
 
   final List<MusicTrack> tracks = <MusicTrack>[];
+  /// Search-discovered external records, kept separate from the owned library.
+  final Map<String, MusicTrack> catalogTracks = <String, MusicTrack>{};
   final Map<String, List<String>> playlists = <String, List<String>>{};
   final Map<String, String> playlistAddedByProfileNames = <String, String>{};
   final Map<String, String> playlistAddedByProfileIds = <String, String>{};
@@ -389,8 +497,9 @@ class MusicLibraryStore extends ChangeNotifier {
   /// listening history can update them without overwriting user curation.
   Map<String, List<String>> get smartPlaylists {
     final availableIds = tracks.map((track) => track.id).toSet();
+    final knownIds = <String>{...availableIds, ...catalogTracks.keys};
     final liked = MusicFavoritesBridge.likedTracks()
-        .where(availableIds.contains)
+        .where(knownIds.contains)
         .toList(growable: false);
     final recentlyAdded = tracks.toList()
       ..sort((a, b) {
@@ -479,6 +588,26 @@ class MusicLibraryStore extends ChangeNotifier {
     _playlistPreferences ??= await SharedPreferences.getInstance();
     _playlistProfileKey =
         profileId?.trim().isNotEmpty == true ? profileId!.trim() : 'default';
+    catalogTracks.clear();
+    final cachedCatalog = _playlistPreferences!
+        .getString('music_catalog_track_cache_$_playlistProfileKey');
+    if (cachedCatalog != null && cachedCatalog.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(cachedCatalog);
+        if (decoded is List) {
+          for (final value in decoded.whereType<Map>().take(300)) {
+            try {
+              final track = MusicTrack.fromCatalogJson(Map<String, dynamic>.from(value));
+              catalogTracks[track.id] = track;
+            } catch (_) {
+              // Ignore an obsolete or malformed metadata-cache entry.
+            }
+          }
+        }
+      } catch (_) {
+        // A corrupt optional catalog cache must not block the local library.
+      }
+    }
     playlists
       ..clear()
       ..addAll(_decodePlaylists(
@@ -793,6 +922,41 @@ class MusicLibraryStore extends ChangeNotifier {
       if (track.id == currentTrackId) return track;
     }
     return null;
+  }
+
+  /// Cache external search metadata without adding it to the owned/playable list.
+  Future<void> cacheCatalogTracks(Iterable<MusicTrack> entries) async {
+    for (final track in entries) {
+      if (track.id.trim().isEmpty || track.title.trim().isEmpty || !track.catalogOnly) continue;
+      // Do not let an external duplicate shadow an imported local file.
+      if (tracks.any((local) => local.id == track.id)) continue;
+      catalogTracks[track.id] = track;
+    }
+    if (catalogTracks.length > 300) {
+      final liked = MusicFavoritesBridge.likedTracks().toSet();
+      final retained = catalogTracks.values.toList()
+        ..sort((a, b) {
+          final aLiked = liked.contains(a.id) ? 1 : 0;
+          final bLiked = liked.contains(b.id) ? 1 : 0;
+          return bLiked.compareTo(aLiked);
+        });
+      catalogTracks
+        ..clear()
+        ..addEntries(retained.take(300).map((track) => MapEntry(track.id, track)));
+    }
+    final preferences = _playlistPreferences ??= await SharedPreferences.getInstance();
+    await preferences.setString(
+      'music_catalog_track_cache_$_playlistProfileKey',
+      jsonEncode(catalogTracks.values.map((track) => track.toCatalogJson()).toList()),
+    );
+    notifyListeners();
+  }
+
+  MusicTrack? trackById(String id) {
+    for (final track in tracks) {
+      if (track.id == id) return track;
+    }
+    return catalogTracks[id];
   }
 
   /// Creates a user playlist without changing source music.
@@ -1142,6 +1306,359 @@ class MusicPlaybackController extends ChangeNotifier {
         );
       },
     );
+  }
+}
+
+/// Opens a local audio source when available; otherwise opens the catalog's
+/// official provider page without pretending the catalog record is playable.
+Future<void> openMusicSearchTrack(BuildContext context, MusicTrack track) async {
+  final audio = track.audioUrl?.trim() ?? '';
+  if (!track.catalogOnly && audio.isNotEmpty) {
+    await MusicPlaybackController.instance.play(track);
+    return;
+  }
+  final rawUrl = track.providerUrl?.trim() ?? '';
+  final uri = Uri.tryParse(rawUrl);
+  if (uri != null && (uri.scheme == 'https' || uri.scheme == 'http')) {
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    return;
+  }
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('This result is catalog metadata. Import the audio file to play it locally.'),
+    ));
+  }
+}
+
+/// Spotify-like context menu shared by universal search and music pages.
+Future<void> showMusicTrackOptions(BuildContext context, MusicTrack track) async {
+  final store = MusicLibraryStore.instance;
+  final playable = !track.catalogOnly && (track.audioUrl?.trim().isNotEmpty ?? false);
+  final isLiked = MusicFavoritesBridge.likedTracks().contains(track.id);
+  final inQueue = store.queue.contains(track.id);
+  final action = await showModalBottomSheet<String>(
+    context: context,
+    backgroundColor: const Color(0xFF17171B),
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (sheetContext) => SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(10, 0, 10, 14),
+        children: <Widget>[
+          ListTile(
+            leading: CircleAvatar(
+              backgroundImage: (track.artworkUrl?.startsWith('http') ?? false)
+                  ? NetworkImage(track.artworkUrl!)
+                  : null,
+              child: const Icon(Icons.music_note_rounded),
+            ),
+            title: Text(track.title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w800)),
+            subtitle: Text('${track.artist}${track.album.trim().isEmpty ? '' : ' · ${track.album}'}'),
+          ),
+          const Divider(),
+          ListTile(leading: const Icon(Icons.play_arrow_rounded), title: Text(playable ? 'Play' : 'Open music provider'),
+            subtitle: Text(playable ? 'Play this imported file' : 'Catalog result · not imported'),
+            onTap: () => Navigator.pop(sheetContext, 'play')),
+          ListTile(leading: Icon(isLiked ? Icons.favorite : Icons.favorite_border),
+            title: Text(isLiked ? 'Remove from Liked Songs' : 'Add to Liked Songs'),
+            onTap: () => Navigator.pop(sheetContext, 'like')),
+          ListTile(
+            leading: Icon(MusicFavoritesBridge.isTrackExcluded(track.id) ? Icons.auto_awesome_rounded : Icons.do_not_disturb_on_outlined),
+            title: Text(MusicFavoritesBridge.isTrackExcluded(track.id) ? 'Include in taste profile' : 'Exclude from taste profile'),
+            subtitle: const Text('Changes local recommendations, not search results or your files'),
+            onTap: () => Navigator.pop(sheetContext, 'exclude'),
+          ),
+          ListTile(leading: const Icon(Icons.playlist_add_rounded), title: const Text('Add to playlist'),
+            onTap: () => Navigator.pop(sheetContext, 'playlist')),
+          ListTile(leading: const Icon(Icons.queue_music_rounded), title: const Text('Add to Queue'),
+            enabled: playable,
+            subtitle: playable ? null : const Text('Import the audio to queue it'),
+            onTap: playable ? () => Navigator.pop(sheetContext, 'queue') : null),
+          if (inQueue)
+            ListTile(leading: const Icon(Icons.remove_circle_outline_rounded), title: const Text('Remove from Queue'),
+              onTap: () => Navigator.pop(sheetContext, 'unqueue')),
+          ListTile(leading: const Icon(Icons.queue_play_next_rounded), title: const Text('Go to Queue'),
+            onTap: () => Navigator.pop(sheetContext, 'view-queue')),
+          ListTile(leading: const Icon(Icons.radio_rounded), title: const Text('Go to song radio'),
+            subtitle: playable ? null : const Text('Builds a station from related tracks in your local library'),
+            onTap: () => Navigator.pop(sheetContext, 'radio')),
+          ListTile(leading: const Icon(Icons.headphones_rounded), title: const Text('Start a Jam'),
+            enabled: playable,
+            subtitle: playable ? const Text('Starts a related local listening queue on this device') : const Text('Requires an imported playable track'),
+            onTap: playable ? () => Navigator.pop(sheetContext, 'jam') : null),
+          ListTile(leading: const Icon(Icons.person_outline_rounded), title: const Text('Go to Artist'),
+            onTap: () => Navigator.pop(sheetContext, 'artist')),
+          if (track.album.trim().isNotEmpty)
+            ListTile(leading: const Icon(Icons.album_outlined), title: const Text('Go to Album'),
+              onTap: () => Navigator.pop(sheetContext, 'album')),
+          ListTile(leading: const Icon(Icons.receipt_long_outlined), title: const Text('View song credits'),
+            onTap: () => Navigator.pop(sheetContext, 'credits')),
+          ListTile(leading: const Icon(Icons.hub_outlined), title: const Text('Explore SongDNA'),
+            onTap: () => Navigator.pop(sheetContext, 'dna')),
+          ListTile(leading: const Icon(Icons.share_outlined), title: const Text('Share'),
+            onTap: () => Navigator.pop(sheetContext, 'share')),
+          if ((track.soundtrackSourceUrl?.trim().isNotEmpty ?? false))
+            ListTile(leading: const Icon(Icons.fact_check_outlined), title: Text('View soundtrack source${track.soundtrackSourceName == null ? '' : ' · ${track.soundtrackSourceName}'}'),
+              onTap: () => Navigator.pop(sheetContext, 'soundtrack-source')),
+          if ((track.providerUrl?.trim().isNotEmpty ?? false))
+            ListTile(leading: const Icon(Icons.open_in_new_rounded), title: Text('Open ${track.providerName ?? 'music'}'),
+              onTap: () => Navigator.pop(sheetContext, 'provider')),
+        ],
+      ),
+    ),
+  );
+  if (!context.mounted || action == null) return;
+
+  switch (action) {
+    case 'play':
+      await openMusicSearchTrack(context, track);
+      break;
+    case 'like':
+      await store.cacheCatalogTracks(<MusicTrack>[track]);
+      MusicFavoritesBridge.toggleTrack(track.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(isLiked ? 'Removed from Liked Songs.' : 'Added to Liked Songs.'),
+        ));
+      }
+      break;
+    case 'exclude':
+      MusicFavoritesBridge.toggleExcludedTrack(track.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(MusicFavoritesBridge.isTrackExcluded(track.id)
+              ? 'Excluded from your taste profile.'
+              : 'Included in your taste profile.'),
+        ));
+      }
+      break;
+    case 'playlist':
+      await store.cacheCatalogTracks(<MusicTrack>[track]);
+      if (!context.mounted) return;
+      await _addMusicTrackToPlaylist(context, track);
+      break;
+    case 'queue':
+      store.addToQueue(track);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Added to Queue.')));
+      break;
+    case 'unqueue':
+      store.removeFromQueue(track.id);
+      break;
+    case 'view-queue':
+      await Navigator.push<void>(context, MaterialPageRoute<void>(builder: (_) => const MusicQueueOverviewScreen()));
+      break;
+    case 'radio':
+      await Navigator.push<void>(context, MaterialPageRoute<void>(builder: (_) => MusicSongRadioScreen(seed: track)));
+      break;
+    case 'jam':
+      final related = _relatedPlayableTracks(track, store.tracks, limit: 24);
+      store.setQueue(<MusicTrack>[track, ...related], aiDj: true);
+      await MusicPlaybackController.instance.play(track);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Jam started on this device. Multi-device live Jam sync is not connected yet.'),
+        ));
+      }
+      break;
+    case 'artist':
+      await Navigator.push<void>(context, MaterialPageRoute<void>(builder: (_) => MusicArtistProfileScreen(artistName: track.artist)));
+      break;
+    case 'album':
+      final albumTracks = store.tracks.where((entry) => entry.album.trim().toLowerCase() == track.album.trim().toLowerCase() && entry.artist.trim().toLowerCase() == track.artist.trim().toLowerCase()).toList();
+      final localRows = albumTracks.asMap().entries.map((entry) => <String, dynamic>{
+        'title': entry.value.title,
+        'artist': entry.value.artist,
+        'durationMs': entry.value.duration.inMilliseconds,
+        'trackNumber': entry.key + 1,
+        'artworkUrl': entry.value.artworkUrl,
+      }).toList();
+      // A track's providerId is its track ID, not its album ID. Resolve the
+      // album by its actual title/artist unless a future schema provides a
+      // dedicated albumProviderId. Never pass a track ID to the album endpoint.
+      await Navigator.push<void>(context, MaterialPageRoute<void>(builder: (_) => OwnedAlbumDetailsScreen(albumTitle: track.album, artistName: track.artist, artworkUrl: track.artworkUrl, localTracks: localRows, isOwned: albumTracks.isNotEmpty, resolveSpotifyMetadata: true)));
+      break;
+    case 'credits':
+      await _showMusicTrackCredits(context, track);
+      break;
+    case 'dna':
+      await Navigator.push<void>(context, MaterialPageRoute<void>(builder: (_) => MusicSongDnaScreen(track: track)));
+      break;
+    case 'share':
+      await showSocialShareDialog(context, title: 'Share song', message: '${track.title} — ${track.artist}${track.providerUrl == null ? '' : '\n${track.providerUrl}'}', mediaReference: <String, dynamic>{'type': 'music_track', 'id': track.id, 'title': track.title, 'artist': track.artist, 'album': track.album, if (track.providerUrl != null) 'url': track.providerUrl});
+      break;
+    case 'provider':
+      final raw = track.providerUrl?.trim() ?? '';
+      final uri = Uri.tryParse(raw);
+      if (uri != null && (uri.scheme == 'https' || uri.scheme == 'http')) await launchUrl(uri, mode: LaunchMode.externalApplication);
+      break;
+    case 'soundtrack-source':
+      final uri = Uri.tryParse(track.soundtrackSourceUrl?.trim() ?? '');
+      if (uri != null && (uri.scheme == 'https' || uri.scheme == 'http')) await launchUrl(uri, mode: LaunchMode.externalApplication);
+      break;
+  }
+}
+
+List<MusicTrack> _relatedPlayableTracks(MusicTrack seed, Iterable<MusicTrack> tracks, {int limit = 20}) {
+  final seedArtists = <String>{seed.artist, ...seed.featuredArtists}.map((value) => value.trim().toLowerCase()).where((value) => value.isNotEmpty).toSet();
+  final seedGenres = seed.allGenreTags.map((value) => value.toLowerCase()).toSet();
+  final excluded = MusicFavoritesBridge.excludedTracks().toSet();
+  final candidates = tracks.where((candidate) => candidate.id != seed.id && !excluded.contains(candidate.id) && !candidate.catalogOnly && (candidate.audioUrl?.trim().isNotEmpty ?? false)).map((candidate) {
+    final artists = <String>{candidate.artist, ...candidate.featuredArtists}.map((value) => value.trim().toLowerCase()).where((value) => value.isNotEmpty).toSet();
+    final sharedArtists = seedArtists.intersection(artists).length;
+    final sharedGenres = seedGenres.intersection(candidate.allGenreTags.map((value) => value.toLowerCase()).toSet()).length;
+    final sameAlbum = seed.album.trim().isNotEmpty && seed.album.trim().toLowerCase() == candidate.album.trim().toLowerCase();
+    return MapEntry(candidate, sharedArtists * 8 + sharedGenres * 2 + (sameAlbum ? 5 : 0));
+  }).where((entry) => entry.value > 0).toList()
+    ..sort((a, b) {
+      final score = b.value.compareTo(a.value);
+      return score != 0 ? score : a.key.title.toLowerCase().compareTo(b.key.title.toLowerCase());
+    });
+  return candidates.take(limit).map((entry) => entry.key).toList(growable: false);
+}
+
+Future<void> _addMusicTrackToPlaylist(BuildContext context, MusicTrack track) async {
+  final store = MusicLibraryStore.instance;
+  final chosen = await showModalBottomSheet<String>(
+    context: context,
+    backgroundColor: const Color(0xFF17171B),
+    showDragHandle: true,
+    builder: (sheetContext) => SafeArea(child: ListView(
+      shrinkWrap: true,
+      children: <Widget>[
+        const ListTile(title: Text('Add to playlist', style: TextStyle(fontWeight: FontWeight.w800))),
+        for (final name in store.playlists.keys.toList()..sort())
+          ListTile(leading: const Icon(Icons.queue_music_rounded), title: Text(name),
+            trailing: (store.playlists[name] ?? const <String>[]).contains(track.id) ? const Icon(Icons.check_rounded) : null,
+            onTap: () => Navigator.pop(sheetContext, name)),
+        ListTile(leading: const Icon(Icons.add_rounded), title: const Text('Create playlist'),
+          onTap: () => Navigator.pop(sheetContext, '__create__')),
+      ],
+    )),
+  );
+  if (!context.mounted || chosen == null) return;
+  var target = chosen;
+  if (chosen == '__create__') {
+    final textController = TextEditingController();
+    target = (await showDialog<String>(context: context, builder: (dialogContext) => AlertDialog(
+      title: const Text('New playlist'),
+      content: TextField(controller: textController, autofocus: true, decoration: const InputDecoration(labelText: 'Playlist name')),
+      actions: <Widget>[
+        TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(dialogContext, textController.text.trim()), child: const Text('Create')),
+      ],
+    )) ?? '').trim();
+    textController.dispose();
+    if (!context.mounted || target.isEmpty || store.playlists.containsKey(target)) return;
+    store.createPlaylist(target);
+  }
+  if (!store.playlists.containsKey(target)) return;
+  if (!(store.playlists[target] ?? const <String>[]).contains(track.id)) store.toggleTrackInPlaylist(target, track.id);
+  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Added to $target.')));
+}
+
+Future<void> _showMusicTrackCredits(BuildContext context, MusicTrack track) async {
+  await showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: const Color(0xFF17171B),
+    showDragHandle: true,
+    builder: (sheetContext) => SafeArea(child: ListView(
+      shrinkWrap: true,
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+      children: <Widget>[
+        Text(track.title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+        Text(track.artist, style: const TextStyle(color: Colors.white70)),
+        const SizedBox(height: 16),
+        _creditRow('Artist', track.artist),
+        if (track.featuredArtists.isNotEmpty) _creditRow('Featured artists', track.featuredArtists.join(', ')),
+        if (track.album.trim().isNotEmpty) _creditRow('Album', track.album),
+        if (track.allGenreTags.isNotEmpty) _creditRow('Genres', track.allGenreTags.join(', ')),
+        for (final credit in track.credits) _creditRow('Indexed credit', credit),
+        if (track.credits.isEmpty) const Padding(padding: EdgeInsets.only(top: 8), child: Text('No additional writer, producer, or engineering credits are indexed for this track yet.', style: TextStyle(color: Colors.white60))),
+        if (track.providerName?.trim().isNotEmpty == true) _creditRow('Metadata source', track.providerName!),
+        if (track.soundtrackSourceName?.trim().isNotEmpty == true) _creditRow('Soundtrack source', track.soundtrackSourceName!),
+        if (track.soundtrackSourceUrl?.trim().isNotEmpty == true) _creditRow('Source link', track.soundtrackSourceUrl!),
+      ],
+    )),
+  );
+}
+
+Widget _creditRow(String label, String value) => Padding(
+  padding: const EdgeInsets.symmetric(vertical: 7),
+  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+    SizedBox(width: 112, child: Text(label, style: const TextStyle(color: Colors.white60))),
+    Expanded(child: Text(value)),
+  ]),
+);
+
+class MusicSongDnaScreen extends StatelessWidget {
+  const MusicSongDnaScreen({super.key, required this.track});
+  final MusicTrack track;
+
+  @override
+  Widget build(BuildContext context) {
+    final store = MusicLibraryStore.instance;
+    final related = _relatedPlayableTracks(track, store.tracks, limit: 14);
+    final media = <String>{...track.soundtrackForTitles, ...track.relatedMediaTitles}.toList(growable: false);
+    return Scaffold(
+      backgroundColor: const Color(0xFF101010),
+      appBar: AppBar(title: const Text('Explore SongDNA'), backgroundColor: const Color(0xFF101010)),
+      body: ListView(padding: const EdgeInsets.all(20), children: <Widget>[
+        ListTile(leading: CircleAvatar(backgroundImage: (track.artworkUrl?.startsWith('http') ?? false) ? NetworkImage(track.artworkUrl!) : null, child: const Icon(Icons.music_note_rounded)), title: Text(track.title, style: const TextStyle(fontWeight: FontWeight.w900)), subtitle: Text('${track.artist}${track.album.isEmpty ? '' : ' · ${track.album}'}')),
+        const SizedBox(height: 18),
+        _dnaSection('Artists & collaborators', <String>{track.artist, ...track.featuredArtists}.where((value) => value.trim().isNotEmpty).toList()),
+        _dnaSection('Genres & styles', track.allGenreTags),
+        _dnaSection('Soundtrack connections', media, emptyHint: 'No verified film/show links are indexed for this song yet.'),
+        if (track.soundtrackSourceName?.trim().isNotEmpty == true) _creditRow('Relationship source', track.soundtrackSourceName!),
+        if (track.soundtrackSourceUrl?.trim().isNotEmpty == true)
+          ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.open_in_new_rounded), title: const Text('Open soundtrack reference'), subtitle: Text(track.soundtrackSourceUrl!), onTap: () { final uri = Uri.tryParse(track.soundtrackSourceUrl!); if (uri != null && (uri.scheme == 'https' || uri.scheme == 'http')) launchUrl(uri, mode: LaunchMode.externalApplication); }),
+        _dnaSection('Track credits', track.credits, emptyHint: 'Additional credits have not been imported for this track.'),
+        const Padding(padding: EdgeInsets.only(top: 20, bottom: 8), child: Text('Related songs in your playable library', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900))),
+        if (related.isEmpty) const Text('Import more tracks with artist, feature, and genre metadata to build this graph.', style: TextStyle(color: Colors.white60)),
+        for (final candidate in related) ListTile(leading: const Icon(Icons.music_note_rounded), title: Text(candidate.title), subtitle: Text('${candidate.artist} · ${candidate.album}'), onTap: () => MusicPlaybackController.instance.play(candidate), trailing: IconButton(icon: const Icon(Icons.more_vert_rounded), onPressed: () => showMusicTrackOptions(context, candidate))),
+        const Padding(padding: EdgeInsets.only(top: 12), child: Text('Connections are based on indexed credits, explicit soundtrack metadata, and shared artist/genre data. The app does not infer soundtrack membership from a title match alone.', style: TextStyle(color: Colors.white54, fontSize: 12))),
+      ]),
+    );
+  }
+
+  Widget _dnaSection(String title, List<String> values, {String? emptyHint}) => Padding(
+    padding: const EdgeInsets.only(top: 12),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+      Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+      const SizedBox(height: 7),
+      if (values.isEmpty) Text(emptyHint ?? 'No metadata available yet.', style: const TextStyle(color: Colors.white54))
+      else Wrap(spacing: 8, runSpacing: 8, children: values.map((value) => Chip(label: Text(value))).toList()),
+    ]),
+  );
+}
+
+class MusicSongRadioScreen extends StatelessWidget {
+  const MusicSongRadioScreen({super.key, required this.seed});
+  final MusicTrack seed;
+
+  @override
+  Widget build(BuildContext context) {
+    final related = _relatedPlayableTracks(seed, MusicLibraryStore.instance.tracks, limit: 50);
+    return Scaffold(
+      backgroundColor: const Color(0xFF101010),
+      appBar: AppBar(title: const Text('Song Radio'), backgroundColor: const Color(0xFF101010)),
+      body: ListView(children: <Widget>[
+        ListTile(leading: const CircleAvatar(child: Icon(Icons.radio_rounded)), title: Text('Radio based on ${seed.title}', style: const TextStyle(fontWeight: FontWeight.w900)), subtitle: Text('Related tracks from your local library · ${related.length} songs')),
+        if (related.isEmpty) const Padding(padding: EdgeInsets.all(24), child: Text('There are not enough related playable songs yet. Import more tracks with artist and genre metadata.')),
+        for (final track in related) ListTile(leading: const Icon(Icons.music_note_rounded), title: Text(track.title), subtitle: Text('${track.artist} · ${track.album}'), onTap: () => MusicPlaybackController.instance.play(track), trailing: IconButton(tooltip: 'Add to Queue', icon: const Icon(Icons.queue_music_rounded), onPressed: () { MusicLibraryStore.instance.addToQueue(track); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Added to Queue.'))); })),
+      ]),
+    );
+  }
+}
+
+class MusicQueueOverviewScreen extends StatelessWidget {
+  const MusicQueueOverviewScreen({super.key});
+  @override
+  Widget build(BuildContext context) {
+    final store = MusicLibraryStore.instance;
+    final queueTracks = store.queue.map(store.trackById).whereType<MusicTrack>().toList(growable: false);
+    return Scaffold(backgroundColor: const Color(0xFF101010), appBar: AppBar(title: const Text('Queue'), backgroundColor: const Color(0xFF101010)), body: queueTracks.isEmpty ? const Center(child: Text('Your queue is empty.')) : ListView(children: <Widget>[for (final track in queueTracks) ListTile(leading: const Icon(Icons.music_note_rounded), title: Text(track.title), subtitle: Text(track.artist), onTap: () => openMusicSearchTrack(context, track), trailing: IconButton(tooltip: 'Remove from Queue', icon: const Icon(Icons.remove_circle_outline_rounded), onPressed: () => store.removeFromQueue(track.id))) ]));
   }
 }
 
@@ -1495,7 +2012,8 @@ class _MusicScreenState extends State<MusicScreen> {
   }
 
   List<MusicTrack> _weeklyDiscovery() {
-    final tracks = library.tracks.where(_isAllowedForCurrentProfile).toList();
+    final excluded = MusicFavoritesBridge.excludedTracks().toSet();
+    final tracks = library.tracks.where((track) => _isAllowedForCurrentProfile(track) && !excluded.contains(track.id)).toList();
     if (tracks.isEmpty) return const <MusicTrack>[];
 
     // Discover Weekly follows artist relationships, including featured
@@ -1796,7 +2314,8 @@ class _MusicScreenState extends State<MusicScreen> {
 
   List<MusicTrack> _tracksForSmartPlaylist(String name) {
     final byId = <String, MusicTrack>{
-      for (final track in library.tracks) track.id: track
+      for (final track in library.tracks) track.id: track,
+      ...library.catalogTracks,
     };
     return (library.smartPlaylists[name] ?? const <String>[])
         .map((id) => byId[id])
@@ -1806,8 +2325,11 @@ class _MusicScreenState extends State<MusicScreen> {
 
   Widget _likedSongsSection() {
     final liked = MusicFavoritesBridge.likedTracks();
-    final tracks =
-        library.tracks.where((track) => liked.contains(track.id)).toList();
+    final byId = <String, MusicTrack>{
+      for (final track in library.tracks) track.id: track,
+      ...library.catalogTracks,
+    };
+    final tracks = liked.map((id) => byId[id]).whereType<MusicTrack>().toList();
     return SliverToBoxAdapter(
       child: _trackSectionBody(
         'Liked Songs',
@@ -1895,7 +2417,7 @@ class _MusicScreenState extends State<MusicScreen> {
                     child: Card(
                       child: InkWell(
                         borderRadius: BorderRadius.circular(20),
-                        onTap: () => playback.play(track),
+                        onTap: () => openMusicSearchTrack(context, track),
                         child: Padding(
                           padding: const EdgeInsets.all(10),
                           child: Row(
@@ -1952,22 +2474,10 @@ class _MusicScreenState extends State<MusicScreen> {
                                 ),
                               ),
                               IconButton(
-                                tooltip: 'Add to queue',
+                                tooltip: 'More song options',
                                 visualDensity: VisualDensity.compact,
-                                onPressed: () {
-                                  library.addToQueue(track);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                          content: Text(
-                                              'Added ${track.title} to the queue.')));
-                                },
-                                icon: const Icon(Icons.queue_music_rounded),
-                              ),
-                              IconButton(
-                                tooltip: 'Add to playlist',
-                                visualDensity: VisualDensity.compact,
-                                onPressed: () => _selectPlaylistForTrack(track),
-                                icon: const Icon(Icons.playlist_add_rounded),
+                                onPressed: () => showMusicTrackOptions(context, track),
+                                icon: const Icon(Icons.more_vert_rounded),
                               ),
                             ],
                           ),
@@ -2177,7 +2687,8 @@ class _MusicScreenState extends State<MusicScreen> {
 
   void _showSmartPlaylist(String name, List<String> trackIds) {
     final byId = <String, MusicTrack>{
-      for (final track in library.tracks) track.id: track
+      for (final track in library.tracks) track.id: track,
+      ...library.catalogTracks,
     };
     final tracks = trackIds
         .map((id) => byId[id])
@@ -2272,8 +2783,11 @@ class _MusicScreenState extends State<MusicScreen> {
                                   tooltip: 'Play',
                                   icon: const Icon(Icons.play_arrow_rounded),
                                   onPressed: () => unawaited(
-                                      MusicPlaybackController.instance
-                                          .play(track))),
+                                      openMusicSearchTrack(sheetContext, track))),
+                              IconButton(
+                                  tooltip: 'More song options',
+                                  icon: const Icon(Icons.more_vert_rounded),
+                                  onPressed: () => showMusicTrackOptions(sheetContext, track)),
                             ]),
                             onTap: () => unawaited(
                                 MusicPlaybackController.instance.play(track)),
@@ -2499,7 +3013,10 @@ class _MusicScreenState extends State<MusicScreen> {
   void _showSearch() {
     showSearch<MusicTrack?>(
       context: context,
-      delegate: _MusicSearchDelegate(library.tracks),
+      delegate: _MusicSearchDelegate(<MusicTrack>{
+        ...library.tracks,
+        ...library.catalogTracks.values,
+      }.toList(growable: false)),
     );
   }
 
@@ -2655,62 +3172,6 @@ class _MusicScreenState extends State<MusicScreen> {
     );
   }
 
-  Future<void> _selectPlaylistForTrack(MusicTrack track) async {
-    if (library.playlists.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: UniversalText('Create a playlist first.'),
-      ));
-      return;
-    }
-    final playlistName = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          padding: const EdgeInsets.all(16),
-          children: [
-            UniversalText('Add “${track.title}” to playlist',
-                style:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 8),
-            for (final entry in library.playlists.entries)
-              ListTile(
-                leading: Icon(entry.value.contains(track.id)
-                    ? Icons.check_circle_rounded
-                    : Icons.queue_music_rounded),
-                title: Text(entry.key),
-                subtitle: Text(entry.value.contains(track.id)
-                    ? 'Already added'
-                    : '${entry.value.length} songs'),
-                enabled: !entry.value.contains(track.id),
-                onTap: () => Navigator.pop(sheetContext, entry.key),
-              ),
-          ],
-        ),
-      ),
-    );
-    if (playlistName == null) return;
-    final profileId =
-        AppController.instance.currentProfile?.id ?? 'local-profile';
-    final result = await UniversalMediaActions.perform(
-      context: UniversalMediaActionContext(
-        contentType: 'music_track',
-        contentId: track.id,
-        profileId: profileId,
-        availableActions: const {UniversalMediaAction.addToPlaylist},
-      ),
-      action: UniversalMediaAction.addToPlaylist,
-      targetId: playlistName,
-      apply: () => library.toggleTrackInPlaylist(playlistName, track.id),
-    );
-    if (!result.applied || !mounted) return;
-    library.registerShopEntities();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Added ${track.title} to $playlistName.')),
-    );
-  }
-
   Future<void> _createPlaylist() async {
     final controller = TextEditingController();
     final selectedTrackIds = <String>{};
@@ -2796,6 +3257,10 @@ class _MusicScreenState extends State<MusicScreen> {
     final playlist = library.playlists[playlistName];
     if (playlist == null) return;
     final selected = Set<String>.from(playlist);
+    final selectableTracks = <MusicTrack>{
+      ...library.tracks,
+      ...library.catalogTracks.values,
+    }.toList(growable: false);
     final result = await showDialog<List<String>>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -2804,14 +3269,14 @@ class _MusicScreenState extends State<MusicScreen> {
           content: SizedBox(
             width: 420,
             height: 420,
-            child: library.tracks.isEmpty
+            child: selectableTracks.isEmpty
                 ? const Center(
                     child: UniversalText('No songs in your music library yet.'),
                   )
                 : ListView.builder(
-                    itemCount: library.tracks.length,
+                    itemCount: selectableTracks.length,
                     itemBuilder: (context, index) {
-                      final track = library.tracks[index];
+                      final track = selectableTracks[index];
                       final isSelected = selected.contains(track.id);
                       return CheckboxListTile(
                         value: isSelected,
@@ -2920,6 +3385,11 @@ class _MusicTrackDisplayScreenState extends State<MusicTrackDisplayScreen> {
         backgroundColor: const Color(0xFF080808),
         title: LocalizedMediaText(widget.track.title),
         actions: [
+          IconButton(
+            tooltip: 'More song options',
+            icon: const Icon(Icons.more_vert_rounded),
+            onPressed: () => showMusicTrackOptions(context, widget.track),
+          ),
           IconButton(
             tooltip: isVideo ? 'Share music video' : 'Share song to messages',
             icon: const Icon(Icons.share_outlined),
@@ -4125,29 +4595,30 @@ class _MusicSearchDelegate extends SearchDelegate<MusicTrack?> {
     final q = query.toLowerCase();
     return ListView(
       children: [
-        for (final track in tracks.where((track) {
-          final searchable = <String>[
-            track.title,
-            track.artist,
-            track.album,
-            ...track.genreSearchTerms,
-          ].join(' ').toLowerCase();
-          return searchable.contains(q);
-        }))
+        for (final track in tracks.where((track) => track.matchesSearchQuery(q)))
           ListTile(
+            leading: const Icon(Icons.music_note_rounded),
             title: LocalizedMediaText(track.title),
             subtitle: UniversalText(
               '${track.artist} • ${track.album}'
+              '${track.soundtrackForTitles.isEmpty && track.relatedMediaTitles.isEmpty ? '' : ' • Soundtrack: ${<String>{...track.soundtrackForTitles, ...track.relatedMediaTitles}.join(', ')}'}'
+              '${track.catalogOnly ? ' • Catalog metadata' : ''}'
               '${track.allGenreTags.isEmpty ? '' : ' • ${track.genreDisplayLabel}'}',
             ),
+            trailing: IconButton(
+              tooltip: 'More song options',
+              icon: const Icon(Icons.more_vert_rounded),
+              onPressed: () => showMusicTrackOptions(context, track),
+            ),
             onTap: () {
-              MusicPlaybackController.instance.play(track);
               close(context, track);
+              unawaited(openMusicSearchTrack(context, track));
             },
           ),
       ],
     );
   }
+
 }
 
 Future<void> showMusicCustomization(BuildContext context) =>

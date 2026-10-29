@@ -45,6 +45,8 @@ class MediaMetadataService {
     'primary_release_date.lte',
     'first_air_date.gte',
     'first_air_date.lte',
+    'air_date.gte',
+    'air_date.lte',
     'sort_by',
     'vote_count.gte',
     'vote_count.lte',
@@ -220,9 +222,11 @@ class MediaMetadataService {
     if (path.isEmpty || path.length > 180 || path.contains('..')) {
       throw const FormatException('Invalid TMDB resource path.');
     }
-    final allowed = RegExp(r'^search/(movie|tv|person|multi|keyword)$').hasMatch(path) ||
+    final allowed = RegExp(r'^search/(movie|tv|person|keyword)$').hasMatch(path) ||
         RegExp(r'^trending/(movie|tv|person)/week$').hasMatch(path) ||
         RegExp(r'^discover/(movie|tv)$').hasMatch(path) ||
+        RegExp(r'^(movie/upcoming|movie/now_playing|tv/on_the_air|tv/airing_today)$').hasMatch(path) ||
+        RegExp(r'^movie/[1-9][0-9]*/release_dates$').hasMatch(path) ||
         RegExp(
           r'^(movie|tv)/[1-9][0-9]*(/(recommendations|images|credits|videos|keywords|reviews))?$',
         ).hasMatch(path) ||
