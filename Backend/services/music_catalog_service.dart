@@ -45,11 +45,16 @@ class MusicCatalogService {
   DateTime? _spotifyTokenExpiresAt;
   Map<String, dynamic>? _upcomingAlbumsCache;
   DateTime? _upcomingAlbumsCacheUntil;
+  Map<String, dynamic>? _globalChartsCache;
+  DateTime? _globalChartsCacheUntil;
 
   // MusicBrainz asks clients to stay at or below one request per second.
   // This queue serializes calls across concurrent app users on this backend.
   static Future<void> _musicBrainzQueue = Future<void>.value();
   static DateTime _lastMusicBrainzRequestAt =
+      DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+  static Future<void> _listenBrainzQueue = Future<void>.value();
+  static DateTime _lastListenBrainzRequestAt =
       DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
 
   bool get spotifyConfigured =>
@@ -70,12 +75,14 @@ class MusicCatalogService {
         },
         'musicBrainz': <String, dynamic>{
           'configured': true,
-          'purpose': 'Artist identities, recordings, releases, and discographies',
+          'purpose':
+              'Artist identities, recordings, releases, and discographies',
           'apiKeyRequired': false,
         },
         'tmdb': <String, dynamic>{
           'configured': tmdbConfigured,
-          'purpose': 'Supplementary biographies and person portraits for matching artists',
+          'purpose':
+              'Supplementary biographies and person portraits for matching artists',
         },
         'coverArtArchive': <String, dynamic>{
           'configured': true,
@@ -84,12 +91,14 @@ class MusicCatalogService {
         },
         'youtubeMusicVideos': <String, dynamic>{
           'configured': youtubeVideosConfigured,
-          'purpose': 'Search embeddable music-video matches for a song and artist',
+          'purpose':
+              'Search embeddable music-video matches for a song and artist',
           'apiKeyRequired': true,
         },
         'lyricsSearch': <String, dynamic>{
           'configured': lyricsSearchConfigured,
-          'purpose': 'Search licensed track metadata by a remembered lyric phrase',
+          'purpose':
+              'Search licensed track metadata by a remembered lyric phrase',
           'provider': 'Musixmatch',
           'apiKeyRequired': true,
         },
@@ -111,7 +120,8 @@ class MusicCatalogService {
       throw const FormatException('A search query is required.');
     }
     if (cleanQuery.length > 120) {
-      throw const FormatException('Search query must be 120 characters or fewer.');
+      throw const FormatException(
+          'Search query must be 120 characters or fewer.');
     }
 
     final cleanType = _normalizeType(type);
@@ -139,11 +149,13 @@ class MusicCatalogService {
           );
           spotify.addAll(response);
         } catch (_) {
-          warnings.add('Spotify search is temporarily unavailable. Check the server credentials and Spotify developer-app access.');
+          warnings.add(
+              'Spotify search is temporarily unavailable. Check the server credentials and Spotify developer-app access.');
         }
       }());
     } else {
-      warnings.add('Spotify is not configured yet. Add SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET to Backend/.env.');
+      warnings.add(
+          'Spotify is not configured yet. Add SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET to Backend/.env.');
     }
 
     if (cleanType == 'all' || cleanType == 'artist') {
@@ -178,7 +190,9 @@ class MusicCatalogService {
       }());
     }
 
-    if (cleanType == 'all' || cleanType == 'track' || cleanType == 'recording') {
+    if (cleanType == 'all' ||
+        cleanType == 'track' ||
+        cleanType == 'recording') {
       tasks.add(() async {
         try {
           musicBrainz['recordings'] = await _searchMusicBrainzEntity(
@@ -189,7 +203,8 @@ class MusicCatalogService {
             resultKey: 'recordings',
           );
         } catch (_) {
-          warnings.add('MusicBrainz recording search is temporarily unavailable.');
+          warnings
+              .add('MusicBrainz recording search is temporarily unavailable.');
         }
       }());
     }
@@ -218,7 +233,8 @@ class MusicCatalogService {
       final items = cachedItems is List ? cachedItems : const <dynamic>[];
       return <String, dynamic>{
         ..._upcomingAlbumsCache!,
-        'items': items.take(limit.clamp(1, 100).toInt()).toList(growable: false),
+        'items':
+            items.take(limit.clamp(1, 100).toInt()).toList(growable: false),
       };
     }
     final start = DateTime.utc(now.year, now.month, now.day);
@@ -233,8 +249,10 @@ class MusicCatalogService {
     // MusicBrainz' one-request-per-second policy. This avoids silently showing
     // only the first batch of future album releases.
     for (var offset = 0; offset < 300; offset += 100) {
-      final uri = Uri.https('musicbrainz.org', '/ws/2/release-group/', <String, String>{
-        'query': 'firstreleasedate:[$from TO $to] AND (primarytype:album OR primarytype:ep OR primarytype:single)',
+      final uri =
+          Uri.https('musicbrainz.org', '/ws/2/release-group/', <String, String>{
+        'query':
+            'firstreleasedate:[$from TO $to] AND (primarytype:album OR primarytype:ep OR primarytype:single)',
         'fmt': 'json',
         'limit': '100',
         'offset': '$offset',
@@ -260,7 +278,9 @@ class MusicCatalogService {
           'firstReleaseDate': date.substring(0, 10),
           'primaryType': item['primary-type']?.toString() ?? 'Album',
           'secondaryTypes': item['secondary-types'] is List
-              ? (item['secondary-types'] as List).map((value) => value.toString()).toList(growable: false)
+              ? (item['secondary-types'] as List)
+                  .map((value) => value.toString())
+                  .toList(growable: false)
               : const <String>[],
           'imageUrl': _coverArtFrontUrl(mbid, entity: 'release-group'),
           'releaseUrl': 'https://musicbrainz.org/release-group/$mbid',
@@ -280,8 +300,8 @@ class MusicCatalogService {
     items
       ..clear()
       ..addAll(uniqueItems.values);
-    items.sort((a, b) =>
-        (a['releaseDate']?.toString() ?? '').compareTo(b['releaseDate']?.toString() ?? ''));
+    items.sort((a, b) => (a['releaseDate']?.toString() ?? '')
+        .compareTo(b['releaseDate']?.toString() ?? ''));
     final result = <String, dynamic>{
       'success': true,
       'source': 'MusicBrainz',
@@ -289,7 +309,8 @@ class MusicCatalogService {
       'to': to,
       'items': items,
       'count': items.length,
-      'note': 'These are known first-release dates from MusicBrainz (up to 300 matching albums, EPs and singles). Public catalogs may not include newly announced releases yet; announced dates can change and country-specific availability can differ.',
+      'note':
+          'These are known first-release dates from MusicBrainz (up to 300 matching albums, EPs and singles). Public catalogs may not include newly announced releases yet; announced dates can change and country-specific availability can differ.',
     };
     _upcomingAlbumsCache = result;
     _upcomingAlbumsCacheUntil = now.add(const Duration(hours: 6));
@@ -297,6 +318,150 @@ class MusicCatalogService {
       ...result,
       'items': items.take(limit.clamp(1, 100).toInt()).toList(growable: false),
     };
+  }
+
+  /// Returns ListenBrainz sitewide artists, albums, and recordings for the
+  /// public Global Top 10 shelves. Credentials are not required. Results are
+  /// cached to respect ListenBrainz' one-request-per-second client guidance.
+  Future<Map<String, dynamic>> globalMusicCharts() async {
+    final now = DateTime.now().toUtc();
+    if (_globalChartsCache != null &&
+        _globalChartsCacheUntil != null &&
+        now.isBefore(_globalChartsCacheUntil!)) {
+      return <String, dynamic>{..._globalChartsCache!};
+    }
+
+    final previous = _globalChartsCache;
+    try {
+      final artists = await _listenBrainzChart('artists', 'artists');
+      final releaseGroups = await _listenBrainzChart(
+        'release-groups',
+        'release_groups',
+      );
+      final recordings = await _listenBrainzChart('recordings', 'recordings');
+      final result = <String, dynamic>{
+        'success': true,
+        'source': 'ListenBrainz sitewide listening statistics',
+        'range': 'all_time',
+        'artists': artists,
+        'releaseGroups': releaseGroups,
+        'recordings': recordings,
+      };
+      _globalChartsCache = result;
+      _globalChartsCacheUntil =
+          DateTime.now().toUtc().add(const Duration(minutes: 30));
+      return <String, dynamic>{...result};
+    } catch (_) {
+      if (previous != null) {
+        return <String, dynamic>{...previous, 'stale': true};
+      }
+      rethrow;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _listenBrainzChart(
+    String endpoint,
+    String resultKey,
+  ) {
+    final request = _listenBrainzQueue.then(
+      (_) => _fetchListenBrainzChart(endpoint, resultKey),
+    );
+    _listenBrainzQueue = request.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return request;
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchListenBrainzChart(
+    String endpoint,
+    String resultKey,
+  ) async {
+    final elapsed =
+        DateTime.now().toUtc().difference(_lastListenBrainzRequestAt);
+    if (elapsed < const Duration(seconds: 1)) {
+      await Future<void>.delayed(const Duration(seconds: 1) - elapsed);
+    }
+    final uri = Uri.https(
+      'api.listenbrainz.org',
+      '/1/stats/sitewide/$endpoint',
+      <String, String>{
+        'range': 'all_time',
+        'count': resultKey == 'artists' ? '100' : '10',
+        'offset': '0',
+      },
+    );
+    final request =
+        await _client.getUrl(uri).timeout(const Duration(seconds: 10));
+    request.headers
+      ..set(HttpHeaders.acceptHeader, 'application/json')
+      ..set(
+          HttpHeaders.userAgentHeader,
+          userAgent.trim().isNotEmpty
+              ? userAgent.trim()
+              : 'MyOwnStreamingService/1.0 (self-hosted)');
+    final response = await request.close().timeout(const Duration(seconds: 15));
+    _lastListenBrainzRequestAt = DateTime.now().toUtc();
+    if (response.statusCode == HttpStatus.noContent)
+      return <Map<String, dynamic>>[];
+    final body = await response
+        .transform(utf8.decoder)
+        .join()
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw MusicCatalogUpstreamException(
+        response.statusCode,
+        'ListenBrainz sitewide chart request failed.',
+      );
+    }
+    final decoded = jsonDecode(body);
+    if (decoded is! Map || decoded['payload'] is! Map) {
+      throw const FormatException(
+          'ListenBrainz returned an unexpected chart response.');
+    }
+    final rows = (decoded['payload'] as Map)[resultKey];
+    if (rows is! List) return <Map<String, dynamic>>[];
+    return rows
+        .whereType<Map>()
+        .take(resultKey == 'artists' ? 100 : 10)
+        .map((row) {
+          final item = Map<String, dynamic>.from(row);
+          final mbid = resultKey == 'artists'
+              ? item['artist_mbid']
+              : resultKey == 'release_groups'
+                  ? item['release_group_mbid']
+                  : item['recording_mbid'];
+          final title = resultKey == 'artists'
+              ? item['artist_name']
+              : resultKey == 'release_groups'
+                  ? item['release_group_name']
+                  : item['track_name'];
+          final albumMbid = resultKey == 'release_groups'
+              ? (item['caa_release_mbid']?.toString().isNotEmpty == true
+                  ? item['caa_release_mbid']
+                  : mbid)
+              : resultKey == 'recordings'
+                  ? item['release_mbid']
+                  : null;
+          final artworkEntity = resultKey == 'release_groups' &&
+                  item['caa_release_mbid']?.toString().isNotEmpty != true
+              ? 'release-group'
+              : 'release';
+          return <String, dynamic>{
+            'title': title?.toString() ?? '',
+            'artist': item['artist_name']?.toString() ?? '',
+            'listenCount': item['listen_count'] is num
+                ? (item['listen_count'] as num).toInt()
+                : 0,
+            if (mbid?.toString().isNotEmpty == true)
+              'musicBrainzId': mbid.toString(),
+            if (albumMbid?.toString().isNotEmpty == true)
+              'artworkUrl': _coverArtFrontUrl(albumMbid.toString(),
+                  entity: artworkEntity),
+          };
+        })
+        .where((item) => (item['title'] as String).trim().isNotEmpty)
+        .toList(growable: false);
   }
 
   /// Searches YouTube for embeddable music-video matches for a song.
@@ -311,7 +476,8 @@ class MusicCatalogService {
       throw const FormatException('A music-video search query is required.');
     }
     if (cleanQuery.length > 180 || cleanQuery.contains('\u0000')) {
-      throw const FormatException('Music-video search query must be between 1 and 180 characters.');
+      throw const FormatException(
+          'Music-video search query must be between 1 and 180 characters.');
     }
 
     final searchUrl = Uri.https('www.youtube.com', '/results', <String, String>{
@@ -326,12 +492,14 @@ class MusicCatalogService {
         'items': <Map<String, dynamic>>[],
         'count': 0,
         'searchUrl': searchUrl,
-        'message': 'Add YOUTUBE_API_KEY to Backend/.env to show video results inside MyOwnStreamingService. You can still search YouTube directly.',
+        'message':
+            'Add YOUTUBE_API_KEY to Backend/.env to show video results inside MyOwnStreamingService. You can still search YouTube directly.',
       };
     }
 
     final boundedLimit = limit.clamp(1, 10).toInt();
-    final uri = Uri.https('www.googleapis.com', '/youtube/v3/search', <String, String>{
+    final uri =
+        Uri.https('www.googleapis.com', '/youtube/v3/search', <String, String>{
       'part': 'snippet',
       'type': 'video',
       'videoEmbeddable': 'true',
@@ -343,42 +511,49 @@ class MusicCatalogService {
     final payload = await _getJson(uri);
     final rawItems = payload['items'];
     final items = rawItems is List
-        ? rawItems.whereType<Map>().map((raw) {
-            final item = Map<String, dynamic>.from(raw);
-            final idPayload = item['id'] is Map
-                ? Map<String, dynamic>.from(item['id'] as Map)
-                : <String, dynamic>{};
-            final snippet = item['snippet'] is Map
-                ? Map<String, dynamic>.from(item['snippet'] as Map)
-                : <String, dynamic>{};
-            final videoId = idPayload['videoId']?.toString() ?? '';
-            final thumbnails = snippet['thumbnails'] is Map
-                ? Map<String, dynamic>.from(snippet['thumbnails'] as Map)
-                : <String, dynamic>{};
-            String thumbnailFor(String key) {
-              final value = thumbnails[key];
-              if (value is Map) return _secureImageUrl(value['url']?.toString());
-              return '';
-            }
-            final thumbnail = <String>[
-              thumbnailFor('high'),
-              thumbnailFor('medium'),
-              thumbnailFor('default'),
-            ].firstWhere((value) => value.isNotEmpty, orElse: () => '');
-            if (!RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(videoId)) return null;
-            return <String, dynamic>{
-              'id': videoId,
-              'videoId': videoId,
-              'title': snippet['title']?.toString() ?? 'Untitled video',
-              'description': snippet['description']?.toString() ?? '',
-              'channelTitle': snippet['channelTitle']?.toString() ?? '',
-              'publishedAt': snippet['publishedAt']?.toString() ?? '',
-              'thumbnailUrl': thumbnail,
-              'watchUrl': 'https://www.youtube.com/watch?v=$videoId',
-              'embedUrl': 'https://www.youtube.com/embed/$videoId',
-              'source': 'YouTube',
-            };
-          }).whereType<Map<String, dynamic>>().toList(growable: false)
+        ? rawItems
+            .whereType<Map>()
+            .map((raw) {
+              final item = Map<String, dynamic>.from(raw);
+              final idPayload = item['id'] is Map
+                  ? Map<String, dynamic>.from(item['id'] as Map)
+                  : <String, dynamic>{};
+              final snippet = item['snippet'] is Map
+                  ? Map<String, dynamic>.from(item['snippet'] as Map)
+                  : <String, dynamic>{};
+              final videoId = idPayload['videoId']?.toString() ?? '';
+              final thumbnails = snippet['thumbnails'] is Map
+                  ? Map<String, dynamic>.from(snippet['thumbnails'] as Map)
+                  : <String, dynamic>{};
+              String thumbnailFor(String key) {
+                final value = thumbnails[key];
+                if (value is Map)
+                  return _secureImageUrl(value['url']?.toString());
+                return '';
+              }
+
+              final thumbnail = <String>[
+                thumbnailFor('high'),
+                thumbnailFor('medium'),
+                thumbnailFor('default'),
+              ].firstWhere((value) => value.isNotEmpty, orElse: () => '');
+              if (!RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(videoId))
+                return null;
+              return <String, dynamic>{
+                'id': videoId,
+                'videoId': videoId,
+                'title': snippet['title']?.toString() ?? 'Untitled video',
+                'description': snippet['description']?.toString() ?? '',
+                'channelTitle': snippet['channelTitle']?.toString() ?? '',
+                'publishedAt': snippet['publishedAt']?.toString() ?? '',
+                'thumbnailUrl': thumbnail,
+                'watchUrl': 'https://www.youtube.com/watch?v=$videoId',
+                'embedUrl': 'https://www.youtube.com/embed/$videoId',
+                'source': 'YouTube',
+              };
+            })
+            .whereType<Map<String, dynamic>>()
+            .toList(growable: false)
         : <Map<String, dynamic>>[];
 
     return <String, dynamic>{
@@ -389,14 +564,17 @@ class MusicCatalogService {
       'items': items,
       'count': items.length,
       'searchUrl': searchUrl,
-      'message': items.isEmpty ? 'YouTube returned no embeddable video matches for this query.' : '',
+      'message': items.isEmpty
+          ? 'YouTube returned no embeddable video matches for this query.'
+          : '',
     };
   }
 
   /// Detailed artist profile from Spotify. Spotify does not expose a biography
   /// field; when TMDB has an exact matching person entry, its biography is added
   /// as an explicitly attributed supplementary field.
-  Future<Map<String, dynamic>> artistDetails({required String spotifyId}) async {
+  Future<Map<String, dynamic>> artistDetails(
+      {required String spotifyId}) async {
     final id = _validateSpotifyId(spotifyId);
     final item = await _spotifyGet('/v1/artists/$id');
     final name = item['name']?.toString() ?? 'Unknown artist';
@@ -409,9 +587,8 @@ class MusicCatalogService {
       }
     }
     final images = _spotifyImages(item['images']);
-    final followers = item['followers'] is Map
-        ? (item['followers'] as Map)['total']
-        : null;
+    final followers =
+        item['followers'] is Map ? (item['followers'] as Map)['total'] : null;
     return <String, dynamic>{
       'success': true,
       'source': 'Spotify',
@@ -426,15 +603,18 @@ class MusicCatalogService {
       'images': images,
       'spotifyUrl': _spotifyExternalUrl(item),
       'biography': tmdbPerson?['biography']?.toString() ?? '',
-      'biographySource': (tmdbPerson?['biography']?.toString().trim().isNotEmpty ?? false)
-          ? 'TMDB'
-          : '',
+      'biographySource':
+          (tmdbPerson?['biography']?.toString().trim().isNotEmpty ?? false)
+              ? 'TMDB'
+              : '',
       'tmdbPersonId': tmdbPerson?['id'],
-      'tmdbPersonProfileUrl': _tmdbProfileUrl(tmdbPerson?['profile_path']?.toString()),
+      'tmdbPersonProfileUrl':
+          _tmdbProfileUrl(tmdbPerson?['profile_path']?.toString()),
       'biographyNote': tmdbPerson == null
           ? 'Spotify does not provide artist biographies through the Web API. No exact matching TMDB person biography was found.'
           : '',
-      'attribution': 'Artist metadata and images provided by Spotify; open the artist in Spotify for the original source.',
+      'attribution':
+          'Artist metadata and images provided by Spotify; open the artist in Spotify for the original source.',
     };
   }
 
@@ -446,33 +626,69 @@ class MusicCatalogService {
     int limit = 12,
   }) async {
     final cleanName = artistName.trim();
-    if (cleanName.isEmpty) throw const FormatException('An artist name is required.');
+    if (cleanName.isEmpty)
+      throw const FormatException('An artist name is required.');
     if (!spotifyConfigured) {
-      return <String, dynamic>{'success': true, 'configured': false, 'items': <Map<String, dynamic>>[], 'message': 'Spotify is not configured.'};
+      return <String, dynamic>{
+        'success': true,
+        'configured': false,
+        'items': <Map<String, dynamic>>[],
+        'message': 'Spotify is not configured.'
+      };
     }
-    final seedSearch = await _searchSpotify(cleanName, type: 'artist', limit: 5);
-    final rawArtists = seedSearch['artists'] is List ? (seedSearch['artists'] as List).whereType<Map>().map((row) => Map<String, dynamic>.from(row)).toList() : <Map<String, dynamic>>[];
-    String norm(String value) => value.toLowerCase().trim().replaceAll(RegExp(r'[\s._\-&,/()]+' ), '');
+    final seedSearch =
+        await _searchSpotify(cleanName, type: 'artist', limit: 5);
+    final rawArtists = seedSearch['artists'] is List
+        ? (seedSearch['artists'] as List)
+            .whereType<Map>()
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList()
+        : <Map<String, dynamic>>[];
+    String norm(String value) =>
+        value.toLowerCase().trim().replaceAll(RegExp(r'[\s._\-&,/()]+'), '');
     final targetNorm = norm(cleanName);
     Map<String, dynamic>? seed;
     for (final row in rawArtists) {
-      if (norm(row['name']?.toString() ?? '') == targetNorm) { seed = row; break; }
+      if (norm(row['name']?.toString() ?? '') == targetNorm) {
+        seed = row;
+        break;
+      }
     }
     seed ??= rawArtists.isEmpty ? null : rawArtists.first;
     if (seed == null || (seed['id']?.toString() ?? '').isEmpty) {
-      return <String, dynamic>{'success': true, 'configured': true, 'items': <Map<String, dynamic>>[], 'message': 'No exact Spotify artist match was found.'};
+      return <String, dynamic>{
+        'success': true,
+        'configured': true,
+        'items': <Map<String, dynamic>>[],
+        'message': 'No exact Spotify artist match was found.'
+      };
     }
-    final seedGenres = seed['genres'] is List ? (seed['genres'] as List).map((value) => value.toString().trim()).where((value) => value.isNotEmpty).toList() : <String>[];
+    final seedGenres = seed['genres'] is List
+        ? (seed['genres'] as List)
+            .map((value) => value.toString().trim())
+            .where((value) => value.isNotEmpty)
+            .toList()
+        : <String>[];
     if (seedGenres.isEmpty) {
-      return <String, dynamic>{'success': true, 'configured': true, 'seedArtist': seed, 'items': <Map<String, dynamic>>[], 'message': 'Spotify has no genre tags for this artist yet.'};
+      return <String, dynamic>{
+        'success': true,
+        'configured': true,
+        'seedArtist': seed,
+        'items': <Map<String, dynamic>>[],
+        'message': 'Spotify has no genre tags for this artist yet.'
+      };
     }
     final candidateRows = <Map<String, dynamic>>[];
     for (final genre in seedGenres.take(4)) {
       try {
         final escapedGenre = genre.replaceAll('"', '');
-        final results = await _searchSpotify('genre:"$escapedGenre"', type: 'artist', limit: 10);
+        final results = await _searchSpotify('genre:"$escapedGenre"',
+            type: 'artist', limit: 10);
         final rows = results['artists'];
-        if (rows is List) candidateRows.addAll(rows.whereType<Map>().map((row) => Map<String, dynamic>.from(row)));
+        if (rows is List)
+          candidateRows.addAll(rows
+              .whereType<Map>()
+              .map((row) => Map<String, dynamic>.from(row)));
       } catch (_) {
         // Keep useful matches from other genre queries if one provider query fails.
       }
@@ -482,18 +698,32 @@ class MusicCatalogService {
     for (final candidate in candidateRows) {
       final id = candidate['id']?.toString() ?? '';
       if (id.isEmpty || id == seedId) continue;
-      final candidateGenres = candidate['genres'] is List ? (candidate['genres'] as List).map((value) => value.toString()).toList() : <String>[];
-      final shared = candidateGenres.where((genre) => seedGenres.any((seedGenre) => seedGenre.toLowerCase() == genre.toLowerCase())).toSet().toList();
+      final candidateGenres = candidate['genres'] is List
+          ? (candidate['genres'] as List)
+              .map((value) => value.toString())
+              .toList()
+          : <String>[];
+      final shared = candidateGenres
+          .where((genre) => seedGenres.any(
+              (seedGenre) => seedGenre.toLowerCase() == genre.toLowerCase()))
+          .toSet()
+          .toList();
       if (shared.isEmpty) continue;
       final existing = byId[id];
       final score = shared.length * 100;
-      final previousScore = (existing?['similarityScore'] as num?)?.toInt() ?? -1;
+      final previousScore =
+          (existing?['similarityScore'] as num?)?.toInt() ?? -1;
       if (score > previousScore) {
-        byId[id] = <String, dynamic>{...candidate, 'similarityScore': score, 'similarityReason': 'Shares ${shared.take(3).join(', ')}'};
+        byId[id] = <String, dynamic>{
+          ...candidate,
+          'similarityScore': score,
+          'similarityReason': 'Shares ${shared.take(3).join(', ')}'
+        };
       }
     }
     final items = byId.values.toList()
-      ..sort((a, b) => ((b['similarityScore'] as num?)?.toInt() ?? 0).compareTo((a['similarityScore'] as num?)?.toInt() ?? 0));
+      ..sort((a, b) => ((b['similarityScore'] as num?)?.toInt() ?? 0)
+          .compareTo((a['similarityScore'] as num?)?.toInt() ?? 0));
     return <String, dynamic>{
       'success': true,
       'configured': true,
@@ -501,33 +731,70 @@ class MusicCatalogService {
       'seedGenres': seedGenres,
       'items': items.take(limit.clamp(1, 20).toInt()).toList(growable: false),
       'source': 'Spotify artist genre metadata',
-      'message': 'Similar-sounding artists are ranked from shared Spotify genre tags. This is not an official Spotify Fans Also Like ranking.',
+      'message':
+          'Similar-sounding artists are ranked from shared Spotify genre tags. This is not an official Spotify Fans Also Like ranking.',
     };
   }
 
   /// Returns Spotify Search's best-ranked tracks for an artist. Spotify removed
   /// the old artist top-tracks endpoint for Development Mode; this is catalog
   /// search-ranked data and never claims to be an official chart.
-  Future<Map<String, dynamic>> popularArtistTracks({required String artistName, int limit = 10}) async {
+  Future<Map<String, dynamic>> popularArtistTracks(
+      {required String artistName, int limit = 10}) async {
     final cleanName = artistName.trim();
-    if (cleanName.isEmpty) throw const FormatException('An artist name is required.');
-    if (!spotifyConfigured) return <String, dynamic>{'success': true, 'configured': false, 'items': <Map<String, dynamic>>[], 'message': 'Spotify is not configured.'};
-    final result = await _searchSpotify('artist:"${cleanName.replaceAll('"', '')}"', type: 'track', limit: limit.clamp(1, 10).toInt());
+    if (cleanName.isEmpty)
+      throw const FormatException('An artist name is required.');
+    if (!spotifyConfigured)
+      return <String, dynamic>{
+        'success': true,
+        'configured': false,
+        'items': <Map<String, dynamic>>[],
+        'message': 'Spotify is not configured.'
+      };
+    final result = await _searchSpotify(
+        'artist:"${cleanName.replaceAll('"', '')}"',
+        type: 'track',
+        limit: limit.clamp(1, 10).toInt());
     final raw = result['tracks'];
-    final items = raw is List ? raw.whereType<Map>().map((row) => Map<String, dynamic>.from(row)).toList() : <Map<String, dynamic>>[];
-    return <String, dynamic>{'success': true, 'configured': true, 'source': 'Spotify Search', 'items': items, 'count': items.length, 'message': 'Tracks are ordered by Spotify Search relevance. Spotify no longer returns track popularity in the current Development Mode API responses.'};
+    final items = raw is List
+        ? raw
+            .whereType<Map>()
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList()
+        : <Map<String, dynamic>>[];
+    return <String, dynamic>{
+      'success': true,
+      'configured': true,
+      'source': 'Spotify Search',
+      'items': items,
+      'count': items.length,
+      'message':
+          'Tracks are ordered by Spotify Search relevance. Spotify no longer returns track popularity in the current Development Mode API responses.'
+    };
   }
 
   /// Searches licensed track metadata using a remembered phrase. Only song
   /// metadata and a provider link are returned; full copyrighted lyrics are not copied.
-  Future<Map<String, dynamic>> searchByLyrics({required String query, int limit = 10}) async {
+  Future<Map<String, dynamic>> searchByLyrics(
+      {required String query, int limit = 10}) async {
     final phrase = query.trim().replaceAll(RegExp(r'\s+'), ' ');
-    if (phrase.length < 3) throw const FormatException('Enter at least 3 characters from the lyric.');
-    if (phrase.length > 180 || phrase.contains('\u0000')) throw const FormatException('Lyric search must be 3 to 180 characters.');
+    if (phrase.length < 3)
+      throw const FormatException(
+          'Enter at least 3 characters from the lyric.');
+    if (phrase.length > 180 || phrase.contains('\u0000'))
+      throw const FormatException('Lyric search must be 3 to 180 characters.');
     if (!lyricsSearchConfigured) {
-      return <String, dynamic>{'success': true, 'configured': false, 'provider': 'Musixmatch', 'items': <Map<String, dynamic>>[], 'message': 'Add MUSIXMATCH_API_KEY to Backend/.env to search licensed track metadata by lyric phrase.'};
+      return <String, dynamic>{
+        'success': true,
+        'configured': false,
+        'provider': 'Musixmatch',
+        'items': <Map<String, dynamic>>[],
+        'message':
+            'Add MUSIXMATCH_API_KEY to Backend/.env to search licensed track metadata by lyric phrase.'
+      };
     }
-    final uri = Uri.https('api.musixmatch.com', '/ws/1.1/track.search', <String, String>{
+    final uri = Uri.https(
+        'api.musixmatch.com', '/ws/1.1/track.search', <String, String>{
       'apikey': musixmatchApiKey,
       'q_lyrics': phrase,
       'page': '1',
@@ -535,57 +802,115 @@ class MusicCatalogService {
       's_track_rating': 'desc',
     });
     final payload = await _getJson(uri);
-    final message = payload['message'] is Map ? Map<String, dynamic>.from(payload['message'] as Map) : <String, dynamic>{};
-    final status = message['header'] is Map ? Map<String, dynamic>.from(message['header'] as Map) : <String, dynamic>{};
-    if ((status['status_code'] as num?)?.toInt() != 200) throw const FormatException('Musixmatch could not complete this lyric search. Check your API access and terms.');
-    final body = message['body'] is Map ? Map<String, dynamic>.from(message['body'] as Map) : <String, dynamic>{};
+    final message = payload['message'] is Map
+        ? Map<String, dynamic>.from(payload['message'] as Map)
+        : <String, dynamic>{};
+    final status = message['header'] is Map
+        ? Map<String, dynamic>.from(message['header'] as Map)
+        : <String, dynamic>{};
+    if ((status['status_code'] as num?)?.toInt() != 200)
+      throw const FormatException(
+          'Musixmatch could not complete this lyric search. Check your API access and terms.');
+    final body = message['body'] is Map
+        ? Map<String, dynamic>.from(message['body'] as Map)
+        : <String, dynamic>{};
     final raw = body['track_list'];
-    final items = raw is List ? raw.whereType<Map>().map((entry) {
-      final item = Map<String, dynamic>.from(entry);
-      final track = item['track'] is Map ? Map<String, dynamic>.from(item['track'] as Map) : item;
-      return <String, dynamic>{
-        'id': track['track_id']?.toString() ?? '',
-        'title': track['track_name']?.toString() ?? 'Unknown title',
-        'artist': track['artist_name']?.toString() ?? 'Unknown artist',
-        'album': track['album_name']?.toString() ?? '',
-        'rating': track['track_rating'],
-        'explicit': (track['explicit'] as num?)?.toInt() == 1,
-        'providerUrl': track['track_share_url']?.toString() ?? '',
-        'source': 'Musixmatch',
-      };
-    }).toList(growable: false) : <Map<String, dynamic>>[];
-    return <String, dynamic>{'success': true, 'configured': true, 'provider': 'Musixmatch', 'query': phrase, 'items': items, 'count': items.length, 'message': items.isEmpty ? 'No matching songs were found for that lyric phrase.' : 'Matches use licensed provider metadata; full lyric text is not copied into results.'};
+    final items = raw is List
+        ? raw.whereType<Map>().map((entry) {
+            final item = Map<String, dynamic>.from(entry);
+            final track = item['track'] is Map
+                ? Map<String, dynamic>.from(item['track'] as Map)
+                : item;
+            return <String, dynamic>{
+              'id': track['track_id']?.toString() ?? '',
+              'title': track['track_name']?.toString() ?? 'Unknown title',
+              'artist': track['artist_name']?.toString() ?? 'Unknown artist',
+              'album': track['album_name']?.toString() ?? '',
+              'rating': track['track_rating'],
+              'explicit': (track['explicit'] as num?)?.toInt() == 1,
+              'providerUrl': track['track_share_url']?.toString() ?? '',
+              'source': 'Musixmatch',
+            };
+          }).toList(growable: false)
+        : <Map<String, dynamic>>[];
+    return <String, dynamic>{
+      'success': true,
+      'configured': true,
+      'provider': 'Musixmatch',
+      'query': phrase,
+      'items': items,
+      'count': items.length,
+      'message': items.isEmpty
+          ? 'No matching songs were found for that lyric phrase.'
+          : 'Matches use licensed provider metadata; full lyric text is not copied into results.'
+    };
   }
 
   /// Identifies a short microphone sample using AudD. Audio is processed only
   /// for the user-requested identification and is not written to app logs.
-  Future<Map<String, dynamic>> recognizeSong({required List<int> audioBytes, required String mimeType}) async {
+  Future<Map<String, dynamic>> recognizeSong(
+      {required List<int> audioBytes, required String mimeType}) async {
     if (!songRecognitionConfigured) {
-      return <String, dynamic>{'success': false, 'configured': false, 'provider': 'AudD', 'message': 'Add AUDD_API_TOKEN to Backend/.env to enable song recognition.'};
+      return <String, dynamic>{
+        'success': false,
+        'configured': false,
+        'provider': 'AudD',
+        'message':
+            'Add AUDD_API_TOKEN to Backend/.env to enable song recognition.'
+      };
     }
-    if (audioBytes.isEmpty || audioBytes.length > 5 * 1024 * 1024) throw const FormatException('Audio sample must be non-empty and no larger than 5 MB.');
+    if (audioBytes.isEmpty || audioBytes.length > 5 * 1024 * 1024)
+      throw const FormatException(
+          'Audio sample must be non-empty and no larger than 5 MB.');
     final boundary = 'moss-${DateTime.now().microsecondsSinceEpoch}';
-    final request = await _client.postUrl(Uri.https('api.audd.io', '/')).timeout(const Duration(seconds: 8));
-    request.headers.set(HttpHeaders.contentTypeHeader, 'multipart/form-data; boundary=$boundary');
+    final request = await _client
+        .postUrl(Uri.https('api.audd.io', '/'))
+        .timeout(const Duration(seconds: 8));
+    request.headers.set(HttpHeaders.contentTypeHeader,
+        'multipart/form-data; boundary=$boundary');
     request.headers.set(HttpHeaders.acceptHeader, 'application/json');
     void writeField(String name, String value) {
-      request.add(utf8.encode('--$boundary\r\nContent-Disposition: form-data; name="$name"\r\n\r\n$value\r\n'));
+      request.add(utf8.encode(
+          '--$boundary\r\nContent-Disposition: form-data; name="$name"\r\n\r\n$value\r\n'));
     }
+
     writeField('api_token', auddApiToken);
     writeField('return', 'spotify,apple_music,deezer');
-    final safeMime = mimeType.toLowerCase().contains('wav') ? 'audio/wav' : (mimeType.toLowerCase().contains('mpeg') ? 'audio/mpeg' : 'audio/mp4');
-    request.add(utf8.encode('--$boundary\r\nContent-Disposition: form-data; name="file"; filename="sample.${safeMime == 'audio/wav' ? 'wav' : (safeMime == 'audio/mpeg' ? 'mp3' : 'm4a')}"\r\nContent-Type: $safeMime\r\n\r\n'));
+    final safeMime = mimeType.toLowerCase().contains('wav')
+        ? 'audio/wav'
+        : (mimeType.toLowerCase().contains('mpeg')
+            ? 'audio/mpeg'
+            : 'audio/mp4');
+    request.add(utf8.encode(
+        '--$boundary\r\nContent-Disposition: form-data; name="file"; filename="sample.${safeMime == 'audio/wav' ? 'wav' : (safeMime == 'audio/mpeg' ? 'mp3' : 'm4a')}"\r\nContent-Type: $safeMime\r\n\r\n'));
     request.add(audioBytes);
     request.add(utf8.encode('\r\n--$boundary--\r\n'));
     final response = await request.close().timeout(const Duration(seconds: 25));
-    final bodyText = await response.transform(utf8.decoder).join().timeout(const Duration(seconds: 10));
-    if (response.statusCode < 200 || response.statusCode >= 300) throw MusicCatalogUpstreamException(response.statusCode, 'Song recognition provider returned HTTP ${response.statusCode}.');
+    final bodyText = await response
+        .transform(utf8.decoder)
+        .join()
+        .timeout(const Duration(seconds: 10));
+    if (response.statusCode < 200 || response.statusCode >= 300)
+      throw MusicCatalogUpstreamException(response.statusCode,
+          'Song recognition provider returned HTTP ${response.statusCode}.');
     final payload = _decodeJsonMap(bodyText);
-    if (payload['status']?.toString() != 'success' || payload['result'] is! Map) {
-      return <String, dynamic>{'success': true, 'configured': true, 'matched': false, 'provider': 'AudD', 'message': payload['error'] is Map ? ((payload['error'] as Map)['error_message']?.toString() ?? 'No song match was found.') : 'No song match was found in this sample.'};
+    if (payload['status']?.toString() != 'success' ||
+        payload['result'] is! Map) {
+      return <String, dynamic>{
+        'success': true,
+        'configured': true,
+        'matched': false,
+        'provider': 'AudD',
+        'message': payload['error'] is Map
+            ? ((payload['error'] as Map)['error_message']?.toString() ??
+                'No song match was found.')
+            : 'No song match was found in this sample.'
+      };
     }
     final result = Map<String, dynamic>.from(payload['result'] as Map);
-    final spotify = result['spotify'] is Map ? Map<String, dynamic>.from(result['spotify'] as Map) : <String, dynamic>{};
+    final spotify = result['spotify'] is Map
+        ? Map<String, dynamic>.from(result['spotify'] as Map)
+        : <String, dynamic>{};
     return <String, dynamic>{
       'success': true,
       'configured': true,
@@ -596,8 +921,11 @@ class MusicCatalogService {
       'album': result['album']?.toString() ?? '',
       'releaseDate': result['release_date']?.toString() ?? '',
       'songLink': result['song_link']?.toString() ?? '',
-      'spotifyUrl': spotify['external_urls'] is Map ? ((spotify['external_urls'] as Map)['spotify']?.toString() ?? '') : '',
-      'message': 'Song match provided by AudD. Confirm the title before adding it to your library.',
+      'spotifyUrl': spotify['external_urls'] is Map
+          ? ((spotify['external_urls'] as Map)['spotify']?.toString() ?? '')
+          : '',
+      'message':
+          'Song match provided by AudD. Confirm the title before adding it to your library.',
     };
   }
 
@@ -623,7 +951,8 @@ class MusicCatalogService {
     final byId = <String, Map<String, dynamic>>{};
     for (final year in <int>[nowYear, nowYear - 1, nowYear - 2]) {
       try {
-        final page = await _searchSpotify('year:$year', type: 'album', limit: 10);
+        final page =
+            await _searchSpotify('year:$year', type: 'album', limit: 10);
         final raw = page['albums'];
         if (raw is! List) continue;
         for (final row in raw.whereType<Map>()) {
@@ -640,7 +969,8 @@ class MusicCatalogService {
     final items = byId.values.toList()
       ..sort((a, b) => (b['releaseDate']?.toString() ?? '')
           .compareTo(a['releaseDate']?.toString() ?? ''));
-    final pageItems = items.skip(boundedOffset).take(boundedLimit).toList(growable: false);
+    final pageItems =
+        items.skip(boundedOffset).take(boundedLimit).toList(growable: false);
     return <String, dynamic>{
       'success': true,
       'configured': true,
@@ -650,7 +980,8 @@ class MusicCatalogService {
       'total': items.length,
       'limit': boundedLimit,
       'offset': boundedOffset,
-      'message': 'Recent albums are discovered through Spotify Search; this is not an official Spotify New Releases feed.',
+      'message':
+          'Recent albums are discovered through Spotify Search; this is not an official Spotify New Releases feed.',
     };
   }
 
@@ -675,9 +1006,12 @@ class MusicCatalogService {
     );
     final raw = payload['items'];
     final items = raw is List
-        ? raw.whereType<Map>().map((entry) => _spotifyAlbumSummary(
-              Map<String, dynamic>.from(entry),
-            )).toList()
+        ? raw
+            .whereType<Map>()
+            .map((entry) => _spotifyAlbumSummary(
+                  Map<String, dynamic>.from(entry),
+                ))
+            .toList()
         : <Map<String, dynamic>>[];
     return <String, dynamic>{
       'success': true,
@@ -718,19 +1052,22 @@ class MusicCatalogService {
         );
         reportedTrackTotal = int.tryParse(
               trackPayload['total']?.toString() ?? '',
-            ) ?? reportedTrackTotal;
+            ) ??
+            reportedTrackTotal;
         final rawTracks = trackPayload['items'];
         if (rawTracks is! List || rawTracks.isEmpty) break;
-        tracks.addAll(rawTracks.whereType<Map>().map((raw) =>
-            _spotifyTrackSummary(Map<String, dynamic>.from(raw))));
+        tracks.addAll(rawTracks.whereType<Map>().map(
+            (raw) => _spotifyTrackSummary(Map<String, dynamic>.from(raw))));
         offset += rawTracks.length;
         final next = trackPayload['next']?.toString() ?? '';
-        if (next.isEmpty || (reportedTrackTotal > 0 && tracks.length >= reportedTrackTotal)) {
+        if (next.isEmpty ||
+            (reportedTrackTotal > 0 && tracks.length >= reportedTrackTotal)) {
           break;
         }
       }
       if (reportedTrackTotal > tracks.length && tracks.length >= 500) {
-        trackWarning = 'The album has more tracks than this response limit; showing the first ${tracks.length} tracks.';
+        trackWarning =
+            'The album has more tracks than this response limit; showing the first ${tracks.length} tracks.';
       }
     } catch (_) {
       // Some Spotify app modes may restrict the track endpoint. Keep any
@@ -739,8 +1076,8 @@ class MusicCatalogService {
         final embedded = album['tracks'];
         final rawTracks = embedded is Map ? embedded['items'] : null;
         if (rawTracks is List) {
-          tracks.addAll(rawTracks.whereType<Map>().map((raw) =>
-              _spotifyTrackSummary(Map<String, dynamic>.from(raw))));
+          tracks.addAll(rawTracks.whereType<Map>().map(
+              (raw) => _spotifyTrackSummary(Map<String, dynamic>.from(raw))));
         }
       }
       trackWarning = tracks.isEmpty
@@ -766,8 +1103,11 @@ class MusicCatalogService {
     } catch (_) {
       musicBrainzCredits = <String, dynamic>{};
     }
-    var imageUrl = images.isNotEmpty ? images.first['url']?.toString() ?? '' : '';
-    if (imageUrl.isEmpty && (musicBrainzCredits['releaseGroupMbid']?.toString().isNotEmpty ?? false)) {
+    var imageUrl =
+        images.isNotEmpty ? images.first['url']?.toString() ?? '' : '';
+    if (imageUrl.isEmpty &&
+        (musicBrainzCredits['releaseGroupMbid']?.toString().isNotEmpty ??
+            false)) {
       try {
         final cover = await coverArt(
           mbid: musicBrainzCredits['releaseGroupMbid'].toString(),
@@ -777,7 +1117,10 @@ class MusicCatalogService {
         if (coverImages is List) {
           for (final raw in coverImages.whereType<Map>()) {
             final map = Map<String, dynamic>.from(raw);
-            final candidate = (map['thumbnail500'] ?? map['thumbnail250'] ?? map['image'])?.toString() ?? '';
+            final candidate =
+                (map['thumbnail500'] ?? map['thumbnail250'] ?? map['image'])
+                        ?.toString() ??
+                    '';
             if (candidate.startsWith('https://')) {
               imageUrl = candidate;
               break;
@@ -794,7 +1137,12 @@ class MusicCatalogService {
     return <String, dynamic>{
       'success': true,
       'source': 'Spotify',
-      'metadataSources': <String>['Spotify', if ((musicBrainzCredits['releaseGroupMbid']?.toString().isNotEmpty ?? false)) 'MusicBrainz'],
+      'metadataSources': <String>[
+        'Spotify',
+        if ((musicBrainzCredits['releaseGroupMbid']?.toString().isNotEmpty ??
+            false))
+          'MusicBrainz'
+      ],
       'id': id,
       'title': albumTitle,
       'albumType': album['album_type']?.toString() ?? 'album',
@@ -808,20 +1156,29 @@ class MusicCatalogService {
       'spotifyUrl': _spotifyExternalUrl(album),
       'label': label,
       'copyrights': album['copyrights'] is List
-          ? (album['copyrights'] as List).whereType<Map>().map((v) => Map<String, dynamic>.from(v)).toList()
+          ? (album['copyrights'] as List)
+              .whereType<Map>()
+              .map((v) => Map<String, dynamic>.from(v))
+              .toList()
           : <Map<String, dynamic>>[],
       'composers': musicBrainzCredits['composers'] ?? <String>[],
       'producers': musicBrainzCredits['producers'] ?? <String>[],
-      'musicBrainzReleaseGroupMbid': musicBrainzCredits['releaseGroupMbid'] ?? '',
+      'musicBrainzReleaseGroupMbid':
+          musicBrainzCredits['releaseGroupMbid'] ?? '',
       'musicBrainzReleaseUrl': musicBrainzCredits['releaseUrl'] ?? '',
-      'musicBrainzReleaseCredits': musicBrainzCredits['releaseCredits'] ?? <Map<String, dynamic>>[],
-      'musicBrainzReleaseDetails': musicBrainzCredits['releaseDetails'] ?? <String, dynamic>{},
-      'musicBrainzTrackCreditCount': musicBrainzCredits['trackCreditCount'] ?? 0,
-      'creditNote': musicBrainzCredits['creditNote'] ?? 'MusicBrainz release credits are unavailable for this album match.',
+      'musicBrainzReleaseCredits':
+          musicBrainzCredits['releaseCredits'] ?? <Map<String, dynamic>>[],
+      'musicBrainzReleaseDetails':
+          musicBrainzCredits['releaseDetails'] ?? <String, dynamic>{},
+      'musicBrainzTrackCreditCount':
+          musicBrainzCredits['trackCreditCount'] ?? 0,
+      'creditNote': musicBrainzCredits['creditNote'] ??
+          'MusicBrainz release credits are unavailable for this album match.',
       'tracks': tracks,
       'trackCountReturned': tracks.length,
       'trackWarning': trackWarning,
-      'attribution': 'Album and track metadata/artwork are provided by Spotify. Release edition details and role-by-role credits are from MusicBrainz when an exact release match is available.',
+      'attribution':
+          'Album and track metadata/artwork are provided by Spotify. Release edition details and role-by-role credits are from MusicBrainz when an exact release match is available.',
     };
   }
 
@@ -831,9 +1188,8 @@ class MusicCatalogService {
     required String releaseDate,
     required List<Map<String, dynamic>> spotifyTracks,
   }) async {
-    String escape(String value) => value
-        .replaceAll('\\', r'\\')
-        .replaceAll('"', r'\"');
+    String escape(String value) =>
+        value.replaceAll('\\', r'\\').replaceAll('"', r'\"');
     String normalize(String value) => value
         .toLowerCase()
         .trim()
@@ -870,12 +1226,24 @@ class MusicCatalogService {
         'recording engineer': 'Recording engineer',
       };
       final qualifiers = attributes
-          .where((value) => const <String>{'assistant', 'associate', 'additional', 'co', 'executive', 'remix'}.contains(value.toLowerCase().trim()))
+          .where((value) => const <String>{
+                'assistant',
+                'associate',
+                'additional',
+                'co',
+                'executive',
+                'remix'
+              }.contains(value.toLowerCase().trim()))
           .map((value) => value.toLowerCase().trim())
           .toList();
-      final base = fixedRoles[type] ?? (type.isEmpty ? 'Credit' : type[0].toUpperCase() + type.substring(1));
+      final base = fixedRoles[type] ??
+          (type.isEmpty ? 'Credit' : type[0].toUpperCase() + type.substring(1));
       if (qualifiers.isEmpty) return base;
-      final prefix = qualifiers.map((value) => value == 'co' ? 'Co-' : value[0].toUpperCase() + value.substring(1)).join(' ');
+      final prefix = qualifiers
+          .map((value) => value == 'co'
+              ? 'Co-'
+              : value[0].toUpperCase() + value.substring(1))
+          .join(' ');
       return '$prefix $base';
     }
 
@@ -892,22 +1260,35 @@ class MusicCatalogService {
     ));
     final rawGroups = search['release-groups'];
     if (rawGroups is! List) return <String, dynamic>{};
-    final groups = rawGroups.whereType<Map>()
+    final groups = rawGroups
+        .whereType<Map>()
         .map((v) => Map<String, dynamic>.from(v))
         .where((v) => normalize(v['title']?.toString() ?? '') == wantedTitle)
         .toList();
     if (groups.isEmpty) return <String, dynamic>{};
 
     // Prefer the exact credited artist when several release groups share a title.
-    final normalizedArtists = artistNames.split(',').map(normalize).where((v) => v.isNotEmpty).toSet();
+    final normalizedArtists = artistNames
+        .split(',')
+        .map(normalize)
+        .where((v) => v.isNotEmpty)
+        .toSet();
     final group = groups.firstWhere((candidate) {
       final credits = candidate['artist-credit'];
       if (credits is! List) return false;
-      final creditedNames = credits.whereType<Map>().map((credit) {
-        final artist = credit['artist'];
-        return normalize(artist is Map ? (artist['name']?.toString() ?? '') : (credit['name']?.toString() ?? ''));
-      }).where((v) => v.isNotEmpty).toSet();
-      return normalizedArtists.isEmpty || creditedNames.isEmpty || creditedNames.intersection(normalizedArtists).isNotEmpty;
+      final creditedNames = credits
+          .whereType<Map>()
+          .map((credit) {
+            final artist = credit['artist'];
+            return normalize(artist is Map
+                ? (artist['name']?.toString() ?? '')
+                : (credit['name']?.toString() ?? ''));
+          })
+          .where((v) => v.isNotEmpty)
+          .toSet();
+      return normalizedArtists.isEmpty ||
+          creditedNames.isEmpty ||
+          creditedNames.intersection(normalizedArtists).isNotEmpty;
     }, orElse: () => groups.first);
     final groupId = group['id']?.toString() ?? '';
     if (!_isMbid(groupId)) return <String, dynamic>{};
@@ -919,7 +1300,8 @@ class MusicCatalogService {
         'release-group': groupId,
         'fmt': 'json',
         'limit': '10',
-        'inc': 'artist-credits+labels+recordings+media+release-groups+discids+isrcs+release-rels+recording-rels+work-rels+recording-level-rels+release-group-level-rels+work-level-rels',
+        'inc':
+            'artist-credits+labels+recordings+media+release-groups+discids+isrcs+release-rels+recording-rels+work-rels+recording-level-rels+release-group-level-rels+work-level-rels',
       },
     ));
     final rawReleases = browse['releases'];
@@ -930,20 +1312,27 @@ class MusicCatalogService {
         'composers': <String>[],
         'producers': <String>[],
         'releaseCredits': <Map<String, dynamic>>[],
-        'creditNote': 'MusicBrainz matched this album but returned no detailed release credits.',
+        'creditNote':
+            'MusicBrainz matched this album but returned no detailed release credits.',
       };
     }
 
-    final releases = rawReleases.whereType<Map>()
-        .map((v) => Map<String, dynamic>.from(v)).toList();
-    final targetYear = releaseDate.length >= 4 ? releaseDate.substring(0, 4) : '';
+    final releases = rawReleases
+        .whereType<Map>()
+        .map((v) => Map<String, dynamic>.from(v))
+        .toList();
+    final targetYear =
+        releaseDate.length >= 4 ? releaseDate.substring(0, 4) : '';
     int releaseScore(Map<String, dynamic> value) {
       var score = 0;
-      if ((value['status']?.toString().toLowerCase() ?? '') == 'official') score += 10;
-      if (targetYear.isNotEmpty && (value['date']?.toString() ?? '').startsWith(targetYear)) score += 20;
+      if ((value['status']?.toString().toLowerCase() ?? '') == 'official')
+        score += 10;
+      if (targetYear.isNotEmpty &&
+          (value['date']?.toString() ?? '').startsWith(targetYear)) score += 20;
       if ((value['country']?.toString() ?? '') == 'XW') score -= 1;
       return score;
     }
+
     releases.sort((a, b) => releaseScore(b).compareTo(releaseScore(a)));
     final release = releases.first;
     final releaseId = release['id']?.toString() ?? '';
@@ -953,23 +1342,28 @@ class MusicCatalogService {
     final perTrackMbids = <String, String>{};
     final perTrackIsrcs = <String, List<String>>{};
 
-    void addRole(Map<String, Set<String>> destination, String role, String person) {
+    void addRole(
+        Map<String, Set<String>> destination, String role, String person) {
       final cleanRole = role.trim();
       final cleanPerson = person.trim();
       if (cleanRole.isEmpty || cleanPerson.isEmpty) return;
       destination.putIfAbsent(cleanRole, () => <String>{}).add(cleanPerson);
     }
 
-    void readRelations(dynamic node, Map<String, Set<String>> destination, [int depth = 0]) {
+    void readRelations(dynamic node, Map<String, Set<String>> destination,
+        [int depth = 0]) {
       if (node is! Map || depth > 5) return;
       final row = Map<String, dynamic>.from(node);
       final relations = row['relations'];
       if (relations is! List) return;
       for (final rawRelation in relations.whereType<Map>()) {
         final relation = Map<String, dynamic>.from(rawRelation);
-        final type = (relation['type'] ?? relation['type-name'] ?? '').toString().trim();
+        final type =
+            (relation['type'] ?? relation['type-name'] ?? '').toString().trim();
         final attrs = relation['attributes'] is List
-            ? (relation['attributes'] as List).map((value) => value.toString()).toList()
+            ? (relation['attributes'] as List)
+                .map((value) => value.toString())
+                .toList()
             : <String>[];
         final artist = relation['artist'] is Map
             ? Map<String, dynamic>.from(relation['artist'] as Map)
@@ -983,10 +1377,23 @@ class MusicCatalogService {
         if (name.isNotEmpty && type.isNotEmpty) {
           final role = displayRole(type, attrs);
           // MusicBrainz stores instrument/vocal specifics as relationship attributes.
-          final nonQualifierAttrs = attrs.where((value) => !const <String>{'assistant', 'associate', 'additional', 'co', 'executive', 'remix'}.contains(value.toLowerCase().trim())).toList();
-          if ((type.toLowerCase() == 'instrument' || type.toLowerCase() == 'vocal') && nonQualifierAttrs.isNotEmpty) {
+          final nonQualifierAttrs = attrs
+              .where((value) => !const <String>{
+                    'assistant',
+                    'associate',
+                    'additional',
+                    'co',
+                    'executive',
+                    'remix'
+                  }.contains(value.toLowerCase().trim()))
+              .toList();
+          if ((type.toLowerCase() == 'instrument' ||
+                  type.toLowerCase() == 'vocal') &&
+              nonQualifierAttrs.isNotEmpty) {
             for (final detail in nonQualifierAttrs) {
-              final detailRole = detail.isEmpty ? role : detail[0].toUpperCase() + detail.substring(1);
+              final detailRole = detail.isEmpty
+                  ? role
+                  : detail[0].toUpperCase() + detail.substring(1);
               addRole(destination, detailRole, name);
             }
           } else {
@@ -995,7 +1402,8 @@ class MusicCatalogService {
         }
         // Recording relationships can point to a work; the work contains writer,
         // composer and lyricist credits. Walk only that bounded relationship tree.
-        if (relation['work'] is Map) readRelations(relation['work'], destination, depth + 1);
+        if (relation['work'] is Map)
+          readRelations(relation['work'], destination, depth + 1);
       }
     }
 
@@ -1007,30 +1415,43 @@ class MusicCatalogService {
     }
 
     final releaseMedia = release['media'] is List
-        ? (release['media'] as List).whereType<Map>().map((v) => Map<String, dynamic>.from(v)).toList()
+        ? (release['media'] as List)
+            .whereType<Map>()
+            .map((v) => Map<String, dynamic>.from(v))
+            .toList()
         : <Map<String, dynamic>>[];
     final mediaFormats = <String>{};
     var mbTrackCount = 0;
     for (final medium in releaseMedia) {
       final format = medium['format']?.toString().trim() ?? '';
       if (format.isNotEmpty) mediaFormats.add(format);
-      final tracksRaw = medium['tracks'] is List ? medium['tracks'] as List : <dynamic>[];
-      mbTrackCount += int.tryParse(medium['track-count']?.toString() ?? '') ?? tracksRaw.length;
+      final tracksRaw =
+          medium['tracks'] is List ? medium['tracks'] as List : <dynamic>[];
+      mbTrackCount += int.tryParse(medium['track-count']?.toString() ?? '') ??
+          tracksRaw.length;
       for (final rawTrack in tracksRaw.whereType<Map>()) {
         final track = Map<String, dynamic>.from(rawTrack);
         final recording = track['recording'] is Map
             ? Map<String, dynamic>.from(track['recording'] as Map)
             : <String, dynamic>{};
-        final trackTitle = (recording['title'] ?? track['title'] ?? '').toString();
+        final trackTitle =
+            (recording['title'] ?? track['title'] ?? '').toString();
         final key = normalize(trackTitle);
         if (key.isEmpty) continue;
-        final credits = perTrackCredits.putIfAbsent(key, () => <String, Set<String>>{});
+        final credits =
+            perTrackCredits.putIfAbsent(key, () => <String, Set<String>>{});
         readRelations(recording, credits);
         readRelations(track, credits);
         final recordingId = recording['id']?.toString() ?? '';
         if (recordingId.isNotEmpty) perTrackMbids[key] = recordingId;
-        final isrcRows = recording['isrcs'] is List ? (recording['isrcs'] as List).map((value) => value.toString()).where((value) => value.trim().isNotEmpty).toList() : <String>[];
-        if (isrcRows.isNotEmpty) perTrackIsrcs[key] = isrcRows.toSet().toList()..sort();
+        final isrcRows = recording['isrcs'] is List
+            ? (recording['isrcs'] as List)
+                .map((value) => value.toString())
+                .where((value) => value.trim().isNotEmpty)
+                .toList()
+            : <String>[];
+        if (isrcRows.isNotEmpty)
+          perTrackIsrcs[key] = isrcRows.toSet().toList()..sort();
       }
     }
 
@@ -1039,24 +1460,42 @@ class MusicCatalogService {
     for (final track in spotifyTracks) {
       final key = normalize(track['title']?.toString() ?? '');
       final roles = perTrackCredits[key] ?? <String, Set<String>>{};
-      List<String> valuesFor(bool Function(String role) predicate) => roles.entries
-          .where((entry) => predicate(entry.key.toLowerCase()))
-          .expand((entry) => entry.value)
-          .toSet()
-          .toList()..sort();
+      List<String> valuesFor(bool Function(String role) predicate) =>
+          roles.entries
+              .where((entry) => predicate(entry.key.toLowerCase()))
+              .expand((entry) => entry.value)
+              .toSet()
+              .toList()
+            ..sort();
       track['producers'] = valuesFor((role) => role.contains('producer'));
-      track['composers'] = valuesFor((role) => role.contains('composer') || role.contains('writer') || role.contains('lyricist'));
-      track['performers'] = valuesFor((role) => role.contains('performer') || role.contains('vocal') || role.contains('guitar') || role.contains('drum') || role.contains('piano') || role.contains('cello') || role.contains('saxophone'));
+      track['composers'] = valuesFor((role) =>
+          role.contains('composer') ||
+          role.contains('writer') ||
+          role.contains('lyricist'));
+      track['performers'] = valuesFor((role) =>
+          role.contains('performer') ||
+          role.contains('vocal') ||
+          role.contains('guitar') ||
+          role.contains('drum') ||
+          role.contains('piano') ||
+          role.contains('cello') ||
+          role.contains('saxophone'));
       track['musicBrainzRecordingMbid'] = perTrackMbids[key] ?? '';
       track['isrcs'] = perTrackIsrcs[key] ?? <String>[];
       track['musicBrainzCredits'] = roles.entries
           .where((entry) => entry.value.isNotEmpty)
-          .map((entry) => <String, dynamic>{'role': entry.key, 'people': entry.value.toList()..sort()})
+          .map((entry) => <String, dynamic>{
+                'role': entry.key,
+                'people': entry.value.toList()..sort()
+              })
           .toList()
-        ..sort((a, b) => (a['role']?.toString() ?? '').compareTo(b['role']?.toString() ?? ''));
+        ..sort((a, b) => (a['role']?.toString() ?? '')
+            .compareTo(b['role']?.toString() ?? ''));
     }
 
-    final labelsRaw = release['label-info'] is List ? release['label-info'] as List : <dynamic>[];
+    final labelsRaw = release['label-info'] is List
+        ? release['label-info'] as List
+        : <dynamic>[];
     final labels = <String>{};
     final catalogNumbers = <String>{};
     for (final rawLabelInfo in labelsRaw.whereType<Map>()) {
@@ -1065,7 +1504,8 @@ class MusicCatalogService {
           ? Map<String, dynamic>.from(labelInfo['label'] as Map)
           : <String, dynamic>{};
       final labelName = labelObject['name']?.toString().trim() ?? '';
-      final catalogNumber = labelInfo['catalog-number']?.toString().trim() ?? '';
+      final catalogNumber =
+          labelInfo['catalog-number']?.toString().trim() ?? '';
       if (labelName.isNotEmpty) labels.add(labelName);
       if (catalogNumber.isNotEmpty) catalogNumbers.add(catalogNumber);
     }
@@ -1077,19 +1517,28 @@ class MusicCatalogService {
         : 'https://musicbrainz.org/release/$releaseId';
     final releaseCredits = albumRoleMap.entries
         .where((entry) => entry.value.isNotEmpty)
-        .map((entry) => <String, dynamic>{'role': entry.key, 'people': entry.value.toList()..sort()})
+        .map((entry) => <String, dynamic>{
+              'role': entry.key,
+              'people': entry.value.toList()..sort()
+            })
         .toList()
-      ..sort((a, b) => (a['role']?.toString() ?? '').compareTo(b['role']?.toString() ?? ''));
+      ..sort((a, b) =>
+          (a['role']?.toString() ?? '').compareTo(b['role']?.toString() ?? ''));
     final producers = <String>{};
     final composers = <String>{};
     void aggregateAlbumRole(String role, Iterable<String> people) {
       final normalizedRole = role.toLowerCase();
       if (normalizedRole.contains('producer')) producers.addAll(people);
-      if (normalizedRole.contains('composer') || normalizedRole.contains('writer') || normalizedRole.contains('lyricist')) composers.addAll(people);
+      if (normalizedRole.contains('composer') ||
+          normalizedRole.contains('writer') ||
+          normalizedRole.contains('lyricist')) composers.addAll(people);
     }
+
     for (final row in releaseCredits) {
       final role = row['role']?.toString() ?? '';
-      final people = row['people'] is List ? (row['people'] as List).map((v) => v.toString()) : const <String>[];
+      final people = row['people'] is List
+          ? (row['people'] as List).map((v) => v.toString())
+          : const <String>[];
       aggregateAlbumRole(role, people);
     }
     for (final track in spotifyTracks) {
@@ -1097,15 +1546,25 @@ class MusicCatalogService {
       if (rows is! List) continue;
       for (final rawRow in rows.whereType<Map>()) {
         final row = Map<String, dynamic>.from(rawRow);
-        final people = row['people'] is List ? (row['people'] as List).map((v) => v.toString()) : const <String>[];
+        final people = row['people'] is List
+            ? (row['people'] as List).map((v) => v.toString())
+            : const <String>[];
         aggregateAlbumRole(row['role']?.toString() ?? '', people);
       }
     }
     final primaryType = releaseGroup['primary-type']?.toString() ?? '';
     final secondaryTypes = releaseGroup['secondary-types'] is List
-        ? (releaseGroup['secondary-types'] as List).map((v) => v.toString()).toList()
+        ? (releaseGroup['secondary-types'] as List)
+            .map((v) => v.toString())
+            .toList()
         : <String>[];
-    final trackCreditCount = spotifyTracks.fold<int>(0, (count, track) => count + ((track['musicBrainzCredits'] is List) ? (track['musicBrainzCredits'] as List).length : 0));
+    final trackCreditCount = spotifyTracks.fold<int>(
+        0,
+        (count, track) =>
+            count +
+            ((track['musicBrainzCredits'] is List)
+                ? (track['musicBrainzCredits'] as List).length
+                : 0));
     return <String, dynamic>{
       'releaseGroupMbid': groupId,
       'releaseId': releaseId,
@@ -1127,7 +1586,8 @@ class MusicCatalogService {
         'mediumCount': releaseMedia.length,
         'primaryType': primaryType,
         'secondaryTypes': secondaryTypes,
-        'releaseGroupFirstDate': releaseGroup['first-release-date']?.toString() ?? '',
+        'releaseGroupFirstDate':
+            releaseGroup['first-release-date']?.toString() ?? '',
         'quality': release['quality']?.toString() ?? '',
       },
       'trackCreditCount': trackCreditCount,
@@ -1163,7 +1623,9 @@ class MusicCatalogService {
       'title': item['name']?.toString() ?? 'Untitled album',
       'artist': _spotifyArtistNames(item['artists']),
       'releaseDate': item['release_date']?.toString() ?? '',
-      'albumType': item['album_type']?.toString() ?? item['album_group']?.toString() ?? 'album',
+      'albumType': item['album_type']?.toString() ??
+          item['album_group']?.toString() ??
+          'album',
       'totalTracks': item['total_tracks'],
       'imageUrl': images.isNotEmpty ? images.first['url'] : '',
       'images': images,
@@ -1209,17 +1671,22 @@ class MusicCatalogService {
 
   List<Map<String, dynamic>> _spotifyImages(dynamic value) {
     if (value is! List) return <Map<String, dynamic>>[];
-    return value.whereType<Map>().map((raw) {
-      final image = Map<String, dynamic>.from(raw);
-      return <String, dynamic>{
-        'url': _secureImageUrl(image['url']?.toString()),
-        'width': image['width'],
-        'height': image['height'],
-      };
-    }).where((image) => (image['url']?.toString() ?? '').isNotEmpty).toList();
+    return value
+        .whereType<Map>()
+        .map((raw) {
+          final image = Map<String, dynamic>.from(raw);
+          return <String, dynamic>{
+            'url': _secureImageUrl(image['url']?.toString()),
+            'width': image['width'],
+            'height': image['height'],
+          };
+        })
+        .where((image) => (image['url']?.toString() ?? '').isNotEmpty)
+        .toList();
   }
 
-  Future<Map<String, dynamic>?> _findTmdbPersonForArtist(String artistName) async {
+  Future<Map<String, dynamic>?> _findTmdbPersonForArtist(
+      String artistName) async {
     final search = await _tmdbGet('/search/person', <String, String>{
       'query': artistName,
       'include_adult': 'false',
@@ -1229,13 +1696,17 @@ class MusicCatalogService {
     final raw = search['results'];
     if (raw is! List) return null;
     final requested = _normalizePersonName(artistName);
-    final exact = raw.whereType<Map>().map((value) => Map<String, dynamic>.from(value))
-        .where((value) => _normalizePersonName(value['name']?.toString() ?? '') == requested)
+    final exact = raw
+        .whereType<Map>()
+        .map((value) => Map<String, dynamic>.from(value))
+        .where((value) =>
+            _normalizePersonName(value['name']?.toString() ?? '') == requested)
         .toList();
     if (exact.isEmpty) return null;
     Map<String, dynamic>? match;
     for (final candidate in exact) {
-      if ((candidate['known_for_department']?.toString().toLowerCase() ?? '') == 'music') {
+      if ((candidate['known_for_department']?.toString().toLowerCase() ?? '') ==
+          'music') {
         match = candidate;
         break;
       }
@@ -1260,7 +1731,8 @@ class MusicCatalogService {
     final uri = Uri.https('api.themoviedb.org', '/3$path', parameters);
     final headers = <String, String>{'Accept': 'application/json'};
     if (tmdbApiToken.trim().isNotEmpty) {
-      headers[HttpHeaders.authorizationHeader] = 'Bearer ${tmdbApiToken.trim()}';
+      headers[HttpHeaders.authorizationHeader] =
+          'Bearer ${tmdbApiToken.trim()}';
     }
     return _getJson(uri, headers: headers);
   }
@@ -1282,9 +1754,11 @@ class MusicCatalogService {
     int limit = 100,
   }) async {
     if (!_isMbid(artistMbid)) {
-      throw const FormatException('A valid MusicBrainz artist MBID is required.');
+      throw const FormatException(
+          'A valid MusicBrainz artist MBID is required.');
     }
-    final uri = Uri.https('musicbrainz.org', '/ws/2/release-group/', <String, String>{
+    final uri =
+        Uri.https('musicbrainz.org', '/ws/2/release-group/', <String, String>{
       'artist': artistMbid,
       'fmt': 'json',
       'limit': '${limit.clamp(1, 100)}',
@@ -1303,7 +1777,9 @@ class MusicCatalogService {
         'year': firstDate.length >= 4 ? firstDate.substring(0, 4) : '',
         'primaryType': item['primary-type']?.toString() ?? 'Release',
         'secondaryTypes': item['secondary-types'] is List
-            ? (item['secondary-types'] as List).map((v) => v.toString()).toList()
+            ? (item['secondary-types'] as List)
+                .map((v) => v.toString())
+                .toList()
             : <String>[],
         'source': 'MusicBrainz',
         'coverArtUrl': _coverArtFrontUrl(mbid, entity: 'release-group'),
@@ -1326,7 +1802,8 @@ class MusicCatalogService {
   }) async {
     final cleanEntity = entity.trim().toLowerCase();
     if (cleanEntity != 'release' && cleanEntity != 'release-group') {
-      throw const FormatException('Cover-art entity must be release or release-group.');
+      throw const FormatException(
+          'Cover-art entity must be release or release-group.');
     }
     if (!_isMbid(mbid)) {
       throw const FormatException('A valid MusicBrainz MBID is required.');
@@ -1370,11 +1847,11 @@ class MusicCatalogService {
       // Put the community-designated front cover first when available, while
       // preserving the archive order for the remaining images.
       images.sort((a, b) {
-        final frontOrder = (b['front'] == true ? 1 : 0) -
-            (a['front'] == true ? 1 : 0);
+        final frontOrder =
+            (b['front'] == true ? 1 : 0) - (a['front'] == true ? 1 : 0);
         if (frontOrder != 0) return frontOrder;
-        final approvedOrder = (b['approved'] == true ? 1 : 0) -
-            (a['approved'] == true ? 1 : 0);
+        final approvedOrder =
+            (b['approved'] == true ? 1 : 0) - (a['approved'] == true ? 1 : 0);
         return approvedOrder;
       });
       final releaseUrl = payload['release']?.toString() ?? '';
@@ -1432,23 +1909,32 @@ class MusicCatalogService {
           : <String, dynamic>{};
       final raw = container['items'];
       return raw is List
-          ? raw.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
+          ? raw
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList()
           : <Map<String, dynamic>>[];
     }
 
     return <String, dynamic>{
-      'artists': items('artists').map((item) => <String, dynamic>{
-        'id': item['id']?.toString() ?? '',
-        'name': item['name']?.toString() ?? 'Unknown artist',
-        'genres': item['genres'] is List ? (item['genres'] as List).map((v) => v.toString()).toList() : <String>[],
-        'imageUrl': _spotifyImage(item['images']),
-        'images': _spotifyImages(item['images']),
-        'followers': item['followers'] is Map ? (item['followers'] as Map)['total'] : null,
-        'popularity': item['popularity'],
-        'spotifyUrl': _spotifyExternalUrl(item),
-        'source': 'Spotify',
-        'type': 'artist',
-      }).toList(),
+      'artists': items('artists')
+          .map((item) => <String, dynamic>{
+                'id': item['id']?.toString() ?? '',
+                'name': item['name']?.toString() ?? 'Unknown artist',
+                'genres': item['genres'] is List
+                    ? (item['genres'] as List).map((v) => v.toString()).toList()
+                    : <String>[],
+                'imageUrl': _spotifyImage(item['images']),
+                'images': _spotifyImages(item['images']),
+                'followers': item['followers'] is Map
+                    ? (item['followers'] as Map)['total']
+                    : null,
+                'popularity': item['popularity'],
+                'spotifyUrl': _spotifyExternalUrl(item),
+                'source': 'Spotify',
+                'type': 'artist',
+              })
+          .toList(),
       'albums': items('albums').map((item) {
         final artists = _spotifyArtistNames(item['artists']);
         return <String, dynamic>{
@@ -1507,7 +1993,9 @@ class MusicCatalogService {
     return raw.whereType<Map>().map((rawItem) {
       final item = Map<String, dynamic>.from(rawItem);
       if (entity == 'artist') {
-        final area = item['area'] is Map ? Map<String, dynamic>.from(item['area'] as Map) : <String, dynamic>{};
+        final area = item['area'] is Map
+            ? Map<String, dynamic>.from(item['area'] as Map)
+            : <String, dynamic>{};
         return <String, dynamic>{
           'id': item['id']?.toString() ?? '',
           'name': item['name']?.toString() ?? 'Unknown artist',
@@ -1517,7 +2005,9 @@ class MusicCatalogService {
           'area': area['name']?.toString() ?? '',
           'artistType': item['type']?.toString() ?? '',
           'type': 'artist',
-          'lifeSpan': item['life-span'] is Map ? Map<String, dynamic>.from(item['life-span'] as Map) : <String, dynamic>{},
+          'lifeSpan': item['life-span'] is Map
+              ? Map<String, dynamic>.from(item['life-span'] as Map)
+              : <String, dynamic>{},
           'source': 'MusicBrainz',
           'entityType': 'artist',
         };
@@ -1529,7 +2019,11 @@ class MusicCatalogService {
           'title': item['title']?.toString() ?? 'Untitled release',
           'firstReleaseDate': item['first-release-date']?.toString() ?? '',
           'primaryType': item['primary-type']?.toString() ?? 'Release',
-          'secondaryTypes': item['secondary-types'] is List ? (item['secondary-types'] as List).map((v) => v.toString()).toList() : <String>[],
+          'secondaryTypes': item['secondary-types'] is List
+              ? (item['secondary-types'] as List)
+                  .map((v) => v.toString())
+                  .toList()
+              : <String>[],
           'artist': _musicBrainzArtistCredits(item['artist-credit']),
           'coverArtUrl': _coverArtFrontUrl(mbid, entity: 'release-group'),
           'coverArtApiUrl': _coverArtApiUrl(mbid, entity: 'release-group'),
@@ -1552,7 +2046,8 @@ class MusicCatalogService {
   Future<String> _spotifyAccessToken() async {
     final currentToken = _spotifyToken;
     final expiresAt = _spotifyTokenExpiresAt;
-    if (currentToken != null && expiresAt != null &&
+    if (currentToken != null &&
+        expiresAt != null &&
         DateTime.now().toUtc().isBefore(expiresAt)) {
       return currentToken;
     }
@@ -1560,9 +2055,11 @@ class MusicCatalogService {
       throw const FormatException('Spotify credentials are not configured.');
     }
 
-    final request = await _client.postUrl(
-      Uri.https('accounts.spotify.com', '/api/token'),
-    ).timeout(const Duration(seconds: 8));
+    final request = await _client
+        .postUrl(
+          Uri.https('accounts.spotify.com', '/api/token'),
+        )
+        .timeout(const Duration(seconds: 8));
     request.headers.set(
       HttpHeaders.authorizationHeader,
       'Basic ${base64Encode(utf8.encode('$spotifyClientId:$spotifyClientSecret'))}',
@@ -1573,25 +2070,33 @@ class MusicCatalogService {
     );
     request.write('grant_type=client_credentials');
     final response = await request.close().timeout(const Duration(seconds: 8));
-    final body = await response.transform(utf8.decoder).join().timeout(const Duration(seconds: 8));
+    final body = await response
+        .transform(utf8.decoder)
+        .join()
+        .timeout(const Duration(seconds: 8));
     final payload = _decodeJsonMap(body);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw MusicCatalogUpstreamException(response.statusCode, 'Spotify token request failed.');
+      throw MusicCatalogUpstreamException(
+          response.statusCode, 'Spotify token request failed.');
     }
     final token = payload['access_token']?.toString() ?? '';
-    final expiresIn = int.tryParse(payload['expires_in']?.toString() ?? '') ?? 3600;
+    final expiresIn =
+        int.tryParse(payload['expires_in']?.toString() ?? '') ?? 3600;
     if (token.isEmpty) {
       throw const FormatException('Spotify did not return an access token.');
     }
     _spotifyToken = token;
-    _spotifyTokenExpiresAt = DateTime.now().toUtc().add(Duration(seconds: (expiresIn - 60).clamp(60, 86400).toInt()));
+    _spotifyTokenExpiresAt = DateTime.now()
+        .toUtc()
+        .add(Duration(seconds: (expiresIn - 60).clamp(60, 86400).toInt()));
     return token;
   }
 
   Future<Map<String, dynamic>> _musicBrainzGet(Uri uri) {
     final completer = Completer<Map<String, dynamic>>();
     _musicBrainzQueue = _musicBrainzQueue.then((_) async {
-      final elapsed = DateTime.now().toUtc().difference(_lastMusicBrainzRequestAt);
+      final elapsed =
+          DateTime.now().toUtc().difference(_lastMusicBrainzRequestAt);
       final wait = const Duration(milliseconds: 1050) - elapsed;
       if (wait > Duration.zero) await Future<void>.delayed(wait);
       try {
@@ -1613,14 +2118,19 @@ class MusicCatalogService {
     Uri uri, {
     Map<String, String> headers = const <String, String>{},
   }) async {
-    final request = await _client.getUrl(uri).timeout(const Duration(seconds: 8));
+    final request =
+        await _client.getUrl(uri).timeout(const Duration(seconds: 8));
     request.followRedirects = true;
     request.headers.set(HttpHeaders.acceptHeader, 'application/json');
     headers.forEach(request.headers.set);
     final response = await request.close().timeout(const Duration(seconds: 8));
-    final body = await response.transform(utf8.decoder).join().timeout(const Duration(seconds: 8));
+    final body = await response
+        .transform(utf8.decoder)
+        .join()
+        .timeout(const Duration(seconds: 8));
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw MusicCatalogUpstreamException(response.statusCode, 'Music metadata provider returned HTTP ${response.statusCode}.');
+      throw MusicCatalogUpstreamException(response.statusCode,
+          'Music metadata provider returned HTTP ${response.statusCode}.');
     }
     return _decodeJsonMap(body);
   }
@@ -1633,7 +2143,8 @@ class MusicCatalogService {
 
   static String _normalizeType(String value) {
     final type = value.trim().toLowerCase();
-    return const <String>{'all', 'artist', 'album', 'track', 'recording'}.contains(type)
+    return const <String>{'all', 'artist', 'album', 'track', 'recording'}
+            .contains(type)
         ? type
         : 'all';
   }
@@ -1644,7 +2155,11 @@ class MusicCatalogService {
 
   static String _spotifyArtistNames(dynamic value) {
     if (value is! List) return '';
-    return value.whereType<Map>().map((artist) => artist['name']?.toString() ?? '').where((name) => name.isNotEmpty).join(', ');
+    return value
+        .whereType<Map>()
+        .map((artist) => artist['name']?.toString() ?? '')
+        .where((name) => name.isNotEmpty)
+        .join(', ');
   }
 
   static String _spotifyImage(dynamic value) {
@@ -1677,7 +2192,9 @@ class MusicCatalogService {
         names.add(raw);
       } else if (raw is Map) {
         final item = Map<String, dynamic>.from(raw);
-        final artist = item['artist'] is Map ? Map<String, dynamic>.from(item['artist'] as Map) : <String, dynamic>{};
+        final artist = item['artist'] is Map
+            ? Map<String, dynamic>.from(item['artist'] as Map)
+            : <String, dynamic>{};
         final name = (artist['name'] ?? item['name'])?.toString() ?? '';
         if (name.isNotEmpty) names.add(name);
         if (item['joinphrase'] != null && names.isNotEmpty) {

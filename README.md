@@ -70,7 +70,7 @@ Open **More → Hey Marathon** to create a timed movie or TV marathon from the c
 
 ## Expanded platform capabilities
 
-The next set of additions (proactive Hey Media suggestions, custom media spaces, franchise viewing orders, metadata provenance, NAS health, integrations, and recovery foundations) is documented in [`docs/EXPANDED_PLATFORM_PHASE2.md`](docs/EXPANDED_PLATFORM_PHASE2.md). Its additive migration is `Backend/database/expanded_platform_phase2.sql`. These are foundations and roadmap entries, not a claim that all integrations are complete.
+The next set of additions (custom media spaces, franchise viewing orders, metadata provenance, NAS health, integrations, and recovery foundations) is documented in [`docs/EXPANDED_PLATFORM_PHASE2.md`](docs/EXPANDED_PLATFORM_PHASE2.md). Its additive migration is `Backend/database/expanded_platform_phase2.sql`. These are foundations and roadmap entries, not a claim that all integrations are complete.
 
 The next-wave shared foundation is documented in [`docs/EXPANDED_PLATFORM_IMPLEMENTATION.md`](docs/EXPANDED_PLATFORM_IMPLEMENTATION.md). It includes typed Flutter capability metadata and an additive Supabase migration in `Backend/database/expanded_platform_features.sql`. Podcasts and audiobooks are intentionally excluded from the product scope.
 
@@ -82,7 +82,7 @@ The project includes profile-scoped playback preferences, device-local QoE diagn
 
 ## Production readiness, privacy, and recovery
 
-See [`docs/PRODUCTION_READINESS_AND_RELIABILITY.md`](docs/PRODUCTION_READINESS_AND_RELIABILITY.md) for the rollout steps covering privacy-aware presence/diagnostics, owner-gated operations probes, accessibility, offline progress sync, Hey Media action confirmation, CI quality gates, encrypted database backups, and TrueNAS recovery boundaries. Use [`docs/RECOVERY_DRILL_CHECKLIST.md`](docs/RECOVERY_DRILL_CHECKLIST.md) for scheduled restoration drills. Apply `Backend/database/production_readiness_and_privacy.sql` only after a verified backup and the existing base/account migrations.
+See [`docs/PRODUCTION_READINESS_AND_RELIABILITY.md`](docs/PRODUCTION_READINESS_AND_RELIABILITY.md) for the rollout steps covering privacy-aware presence/diagnostics, owner-gated operations probes, accessibility, offline progress sync, CI quality gates, encrypted database backups, and TrueNAS recovery boundaries. Use [`docs/RECOVERY_DRILL_CHECKLIST.md`](docs/RECOVERY_DRILL_CHECKLIST.md) for scheduled restoration drills. Apply `Backend/database/production_readiness_and_privacy.sql` only after a verified backup and the existing base/account migrations.
 
 ## Entertainment Studio and upgraded My TV / storage tools
 

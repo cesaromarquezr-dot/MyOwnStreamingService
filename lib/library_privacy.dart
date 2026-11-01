@@ -43,39 +43,9 @@ class _LibraryPrivacyScreenState extends State<LibraryPrivacyScreen> {
   }
 
   Future<void> _updatePrivacy(void Function() change) async {
-    final oldPresence = preferences.sharePresence;
-    final oldActivity = preferences.shareActivity;
     setState(change);
-    final nextPresence = preferences.sharePresence;
-    final nextActivity = preferences.shareActivity;
-    final profileId = AppController.instance.currentProfile?.id;
-    final api = AppController.instance.backendApi;
-    if (profileId != null &&
-        api.isAuthenticated &&
-        ((oldPresence && !nextPresence) || (oldActivity && !nextActivity))) {
-      try {
-        await api.setSocialProfilePresence(
-          profileId: profileId,
-          availability: nextPresence ? null : 'away',
-          clearActivity: !nextActivity || !nextPresence,
-        );
-      } catch (_) {
-        // Local privacy intent is still saved if presence service is unavailable.
-      }
-    }
     await PrivacyPreferencesStore.save(
         profileId: _profileId, value: preferences);
-    if (profileId != null &&
-        api.isAuthenticated &&
-        !oldPresence &&
-        nextPresence) {
-      try {
-        await api.setSocialProfilePresence(
-            profileId: profileId, availability: 'active', clearActivity: true);
-      } catch (_) {
-        // Presence can refresh on the next authenticated heartbeat.
-      }
-    }
   }
 
   /// Performs `_deleteAccount` for this feature. Update this documentation when its contract changes.
@@ -207,24 +177,6 @@ class _LibraryPrivacyScreenState extends State<LibraryPrivacyScreen> {
                 ? null
                 : (v) => _updatePrivacy(
                     () => preferences.sharePlaybackDiagnostics = v),
-          ),
-          SwitchListTile(
-            title: const UniversalText('Share online status'),
-            subtitle: const UniversalText(
-                'Allow other profiles on the account to see when this profile is active.'),
-            value: preferences.sharePresence,
-            onChanged: loadingPreferences
-                ? null
-                : (v) => _updatePrivacy(() => preferences.sharePresence = v),
-          ),
-          SwitchListTile(
-            title: const UniversalText('Share current activity'),
-            subtitle: const UniversalText(
-                'Allow current movies, episodes, or music to appear beside this profile.'),
-            value: preferences.shareActivity,
-            onChanged: loadingPreferences
-                ? null
-                : (v) => _updatePrivacy(() => preferences.shareActivity = v),
           ),
           SwitchListTile(
             title: const UniversalText(

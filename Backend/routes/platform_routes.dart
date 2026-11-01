@@ -109,7 +109,6 @@ class PlatformRoutes {
           /*
            * Core discovery and intelligence.
            */
-          'aiConcierge': true,
           'naturalLanguageSearch': true,
           'metadataEnrichment': true,
           'internationalAdaptationRecommendations': true,

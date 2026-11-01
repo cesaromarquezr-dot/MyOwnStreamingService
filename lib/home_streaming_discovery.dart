@@ -3,7 +3,6 @@
 
 import 'dart:async';
 import 'dart:math';
-import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -30,6 +29,7 @@ import 'music.dart';
 import 'profile_content_safety.dart';
 import 'localization.dart';
 import 'player.dart';
+import 'physical_media_library.dart';
 import 'recommendation_ownership.dart';
 import 'core/services/cinematic_title_metadata_service.dart';
 import 'media_artwork_auto_resolver.dart';
@@ -107,82 +107,70 @@ MediaCollection? _makeVirtualThemeCollection({
   );
 }
 
-/// Streaming-style navigation row. Browse destinations occupy one side, while
-/// Live TV and My TV remain on the opposite side. Flutter's Directionality
-/// automatically mirrors the two groups for right-to-left locales.
+/// Streaming-style navigation row for the Home screen's primary destinations.
 class HomeBrowseNavigation extends StatelessWidget {
-  final VoidCallback onExplore;
   final VoidCallback onMovies;
   final VoidCallback onShows;
   final VoidCallback onMusic;
-  final VoidCallback onPhysicalMedia;
-  final VoidCallback onLiveTv;
   final VoidCallback onMyTv;
   final VoidCallback onComingSoon;
+  final VoidCallback onWrapped;
+  final VoidCallback onIdentifySong;
+  final ValueChanged<DiscFormat> onDiscFormat;
 
   const HomeBrowseNavigation({
     super.key,
-    required this.onExplore,
     required this.onMovies,
     required this.onShows,
     required this.onMusic,
-    required this.onPhysicalMedia,
-    required this.onLiveTv,
     required this.onMyTv,
     required this.onComingSoon,
+    required this.onWrapped,
+    required this.onIdentifySong,
+    required this.onDiscFormat,
   });
 
   @override
   Widget build(BuildContext context) {
     final direction = Directionality.of(context);
+    final profile = AppController.instance.currentProfile;
+    final library = AppController.instance.library
+        .where((media) => media.isAccessibleTo(profile))
+        .toList(growable: false);
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 8, 18, 2),
       child: SizedBox(
         height: 48,
-        child: Row(
-          textDirection: direction,
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  textDirection: direction,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _tab('For Me', selected: true, onTap: () {}),
-                    const SizedBox(width: 7),
-                    _tab('Explore', onTap: onExplore),
-                    const SizedBox(width: 7),
-                    _tab('Movies', onTap: onMovies),
-                    const SizedBox(width: 7),
-                    _tab('Shows', onTap: onShows),
-                    const SizedBox(width: 7),
-                    _tab('Music', onTap: onMusic),
-                    const SizedBox(width: 7),
-                    _tab('Physical Media', onTap: onPhysicalMedia),
-                  ],
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            textDirection: direction,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _tab('For Me', selected: true, onTap: () {}),
+              const SizedBox(width: 7),
+              _tab('Coming Soon', onTap: onComingSoon),
+              const SizedBox(width: 7),
+              _tab('My TV', onTap: onMyTv),
+              const SizedBox(width: 7),
+              _tab('Movies', onTap: onMovies),
+              const SizedBox(width: 7),
+              _tab('Shows', onTap: onShows),
+              const SizedBox(width: 7),
+              _tab('Music', onTap: onMusic),
+              for (final format in PhysicalMediaLibraryScreen.formats) ...[
+                const SizedBox(width: 7),
+                _tab(
+                  '${format.label}: ${library.where((media) => matchesDiscType(media.discType, format.sourceType)).length}',
+                  onTap: () => onDiscFormat(format),
                 ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            SizedBox(
-              width: math.min(300.0, MediaQuery.sizeOf(context).width * .82),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  textDirection: direction,
-                  children: [
-                    _tab('Live TV', onTap: onLiveTv),
-                    const SizedBox(width: 6),
-                    _tab('My TV', onTap: onMyTv),
-                    const SizedBox(width: 6),
-                    _tab('Coming Soon', onTap: onComingSoon),
-                  ],
-                ),
-              ),
-            ),
-          ],
+              ],
+              const SizedBox(width: 7),
+              _tab('Identify Song', onTap: onIdentifySong),
+              const SizedBox(width: 7),
+              _tab('Entertainment Wrapped', onTap: onWrapped),
+            ],
+          ),
         ),
       ),
     );
@@ -2142,7 +2130,6 @@ class HomeThemedEpisodesSection extends StatelessWidget {
         settings: const RouteSettings(name: '/app/player'),
         builder: (_) => PlayerScreen(
           media: episodeMedia,
-          activityLabel: 'Watching ${entry.parent.title}: ${entry.title}',
         ),
       ));
       return;
@@ -2157,7 +2144,6 @@ class HomeThemedEpisodesSection extends StatelessWidget {
         settings: const RouteSettings(name: '/app/player'),
         builder: (_) => PlayerScreen(
           media: entry.parent,
-          activityLabel: 'Watching ${entry.parent.title}',
         ),
       ));
       return;
@@ -2209,15 +2195,15 @@ class HomeThemedEpisodesSection extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _HolidaySectionHeader(
-              title: '$seasonalLabel themed episodes',
+              title: '$seasonalLabel holiday picks',
               subtitle:
-                  'Holiday episodes, movies and shows update with the season. All holiday collections remain available year-round.',
+                  'Themed episodes, movies and shows from holidays around the world stay available year-round.',
               themeKey: currentThemeKey,
             ),
             const Padding(
               padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
               child: Text(
-                'No themed matches yet. Add episode details, tags, descriptions, or correctly identified holiday movies and shows. Direct playback requires a playable local item.',
+                'No themed matches yet. Add episode details, tags, descriptions, or correctly identified holiday movies and shows from your library. Direct playback requires a playable local item.',
                 style: TextStyle(color: Colors.white54, fontSize: 12),
               ),
             ),
@@ -2232,9 +2218,9 @@ class HomeThemedEpisodesSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _HolidaySectionHeader(
-            title: '$seasonalLabel themed episodes',
+            title: '$seasonalLabel holiday picks',
             subtitle:
-                'Closest seasonal holiday first • every recognized holiday remains available year-round',
+                'Seasonal picks first • international holidays and other celebrations remain available year-round',
             themeKey: currentThemeKey,
           ),
           for (final themeKey in episodeThemeKeys)
@@ -2304,8 +2290,7 @@ class HomeThemedEpisodesSection extends StatelessWidget {
                   if (confidence != 0) return confidence;
                   return a.title.toLowerCase().compareTo(b.title.toLowerCase());
                 });
-              final themedEntries =
-                  rankedThemeEntries.take(12).toList(growable: false);
+              final themedEntries = rankedThemeEntries.toList(growable: false);
               final themeLabel = ThemedEpisodeEngine.labelFor(themeKey);
               final current =
                   ThemedEpisodeEngine.seasonalPriority(themeKey) < 3;
@@ -5000,9 +4985,6 @@ void _startRandomFromCollection(
       settings: const RouteSettings(name: '/app/player'),
       builder: (_) => PlayerScreen(
         media: pick.media,
-        activityLabel: pick.media.type.toLowerCase() == 'episode'
-            ? 'Watching ${pick.parent.title}: ${pick.media.title}'
-            : 'Shuffled from ${collection.name}',
       ),
     ));
     return;

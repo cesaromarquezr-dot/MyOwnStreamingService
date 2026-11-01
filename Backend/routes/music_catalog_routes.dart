@@ -56,6 +56,11 @@ class MusicCatalogRoutes {
         return;
       }
 
+      if (path == '$_prefix/global-charts') {
+        await _json(request, HttpStatus.ok, await service.globalMusicCharts());
+        return;
+      }
+
       if (path == '$_prefix/search') {
         final query = request.uri.queryParameters['q']?.trim() ?? '';
         if (query.isEmpty) {
@@ -73,60 +78,79 @@ class MusicCatalogRoutes {
           return;
         }
         final type = request.uri.queryParameters['type'] ?? 'all';
-        final limit = int.tryParse(request.uri.queryParameters['limit'] ?? '10') ?? 10;
-        final result = await service.search(query: query, type: type, limit: limit);
+        final limit =
+            int.tryParse(request.uri.queryParameters['limit'] ?? '10') ?? 10;
+        final result =
+            await service.search(query: query, type: type, limit: limit);
         await _json(request, HttpStatus.ok, result);
         return;
       }
 
       if (path == '$_prefix/artist-related') {
         final artistName = request.uri.queryParameters['name']?.trim() ?? '';
-        if (artistName.isEmpty || artistName.length > 120 || artistName.contains('\u0000')) {
+        if (artistName.isEmpty ||
+            artistName.length > 120 ||
+            artistName.contains('\u0000')) {
           await _json(request, HttpStatus.badRequest, <String, dynamic>{
             'success': false,
             'error': 'An artist name between 1 and 120 characters is required.',
           });
           return;
         }
-        final limit = int.tryParse(request.uri.queryParameters['limit'] ?? '12') ?? 12;
-        await _json(request, HttpStatus.ok, await service.relatedArtists(artistName: artistName, limit: limit));
+        final limit =
+            int.tryParse(request.uri.queryParameters['limit'] ?? '12') ?? 12;
+        await _json(request, HttpStatus.ok,
+            await service.relatedArtists(artistName: artistName, limit: limit));
         return;
       }
 
       if (path == '$_prefix/artist-popular') {
         final artistName = request.uri.queryParameters['name']?.trim() ?? '';
-        if (artistName.isEmpty || artistName.length > 120 || artistName.contains('\u0000')) {
+        if (artistName.isEmpty ||
+            artistName.length > 120 ||
+            artistName.contains('\u0000')) {
           await _json(request, HttpStatus.badRequest, <String, dynamic>{
             'success': false,
             'error': 'An artist name between 1 and 120 characters is required.',
           });
           return;
         }
-        await _json(request, HttpStatus.ok, await service.popularArtistTracks(artistName: artistName));
+        await _json(request, HttpStatus.ok,
+            await service.popularArtistTracks(artistName: artistName));
         return;
       }
 
       if (path == '$_prefix/lyrics-search') {
         final query = request.uri.queryParameters['q']?.trim() ?? '';
-        if (query.length < 3 || query.length > 180 || query.contains('\u0000')) {
+        if (query.length < 3 ||
+            query.length > 180 ||
+            query.contains('\u0000')) {
           await _json(request, HttpStatus.badRequest, <String, dynamic>{
             'success': false,
             'error': 'A lyric phrase between 3 and 180 characters is required.',
           });
           return;
         }
-        await _json(request, HttpStatus.ok, await service.searchByLyrics(query: query));
+        await _json(
+            request, HttpStatus.ok, await service.searchByLyrics(query: query));
         return;
       }
 
       if (path == '$_prefix/recognize') {
         if (request.method != 'POST') {
-          await _json(request, HttpStatus.methodNotAllowed, <String, dynamic>{'success': false, 'error': 'Use POST to identify a song.'});
+          await _json(request, HttpStatus.methodNotAllowed, <String, dynamic>{
+            'success': false,
+            'error': 'Use POST to identify a song.'
+          });
           return;
         }
         final contentLength = request.contentLength;
         if (contentLength > 7 * 1024 * 1024) {
-          await _json(request, HttpStatus.requestEntityTooLarge, <String, dynamic>{'success': false, 'error': 'Audio sample payload is too large.'});
+          await _json(
+              request, HttpStatus.requestEntityTooLarge, <String, dynamic>{
+            'success': false,
+            'error': 'Audio sample payload is too large.'
+          });
           return;
         }
         final bodyBuilder = BytesBuilder(copy: false);
@@ -134,28 +158,42 @@ class MusicCatalogRoutes {
         await for (final chunk in request) {
           receivedBytes += chunk.length;
           if (receivedBytes > 7 * 1024 * 1024) {
-            await _json(request, HttpStatus.requestEntityTooLarge, <String, dynamic>{'success': false, 'error': 'Audio sample payload is too large.'});
+            await _json(
+                request, HttpStatus.requestEntityTooLarge, <String, dynamic>{
+              'success': false,
+              'error': 'Audio sample payload is too large.'
+            });
             return;
           }
           bodyBuilder.add(chunk);
         }
         final decodedBody = jsonDecode(utf8.decode(bodyBuilder.takeBytes()));
         if (decodedBody is! Map) {
-          await _json(request, HttpStatus.badRequest, <String, dynamic>{'success': false, 'error': 'A JSON audio payload is required.'});
+          await _json(request, HttpStatus.badRequest, <String, dynamic>{
+            'success': false,
+            'error': 'A JSON audio payload is required.'
+          });
           return;
         }
         final encodedAudio = decodedBody['audioBase64']?.toString() ?? '';
         final mimeType = decodedBody['mimeType']?.toString() ?? 'audio/mp4';
         if (encodedAudio.isEmpty || encodedAudio.length > 7 * 1024 * 1024) {
-          await _json(request, HttpStatus.badRequest, <String, dynamic>{'success': false, 'error': 'A valid audio sample is required.'});
+          await _json(request, HttpStatus.badRequest, <String, dynamic>{
+            'success': false,
+            'error': 'A valid audio sample is required.'
+          });
           return;
         }
         final audio = base64Decode(encodedAudio);
         if (audio.isEmpty || audio.length > 5 * 1024 * 1024) {
-          await _json(request, HttpStatus.badRequest, <String, dynamic>{'success': false, 'error': 'Audio sample must be no larger than 5 MB.'});
+          await _json(request, HttpStatus.badRequest, <String, dynamic>{
+            'success': false,
+            'error': 'Audio sample must be no larger than 5 MB.'
+          });
           return;
         }
-        await _json(request, HttpStatus.ok, await service.recognizeSong(audioBytes: audio, mimeType: mimeType));
+        await _json(request, HttpStatus.ok,
+            await service.recognizeSong(audioBytes: audio, mimeType: mimeType));
         return;
       }
 
@@ -171,36 +209,49 @@ class MusicCatalogRoutes {
         if (query.length > 180 || query.contains('\u0000')) {
           await _json(request, HttpStatus.badRequest, <String, dynamic>{
             'success': false,
-            'error': 'Music-video search query must be between 1 and 180 characters.',
+            'error':
+                'Music-video search query must be between 1 and 180 characters.',
           });
           return;
         }
-        final limit = int.tryParse(request.uri.queryParameters['limit'] ?? '6') ?? 6;
-        final result = await service.searchMusicVideos(query: query, limit: limit);
+        final limit =
+            int.tryParse(request.uri.queryParameters['limit'] ?? '6') ?? 6;
+        final result =
+            await service.searchMusicVideos(query: query, limit: limit);
         await _json(request, HttpStatus.ok, result);
         return;
       }
 
       if (path == '$_prefix/upcoming-albums') {
-        final limit = int.tryParse(request.uri.queryParameters['limit'] ?? '60') ?? 60;
-        await _json(request, HttpStatus.ok, await service.upcomingAlbums(
-          limit: limit.clamp(1, 100).toInt(),
-        ));
+        final limit =
+            int.tryParse(request.uri.queryParameters['limit'] ?? '60') ?? 60;
+        await _json(
+            request,
+            HttpStatus.ok,
+            await service.upcomingAlbums(
+              limit: limit.clamp(1, 100).toInt(),
+            ));
         return;
       }
 
       if (path == '$_prefix/featured-albums') {
-        final limit = int.tryParse(request.uri.queryParameters['limit'] ?? '10') ?? 10;
-        final offset = int.tryParse(request.uri.queryParameters['offset'] ?? '0') ?? 0;
-        await _json(request, HttpStatus.ok, await service.featuredAlbums(
-          limit: limit,
-          offset: offset,
-        ));
+        final limit =
+            int.tryParse(request.uri.queryParameters['limit'] ?? '10') ?? 10;
+        final offset =
+            int.tryParse(request.uri.queryParameters['offset'] ?? '0') ?? 0;
+        await _json(
+            request,
+            HttpStatus.ok,
+            await service.featuredAlbums(
+              limit: limit,
+              offset: offset,
+            ));
         return;
       }
 
       if (path == '$_prefix/artist') {
-        final spotifyId = request.uri.queryParameters['spotifyId']?.trim() ?? '';
+        final spotifyId =
+            request.uri.queryParameters['spotifyId']?.trim() ?? '';
         if (spotifyId.isEmpty) {
           await _json(request, HttpStatus.badRequest, <String, dynamic>{
             'success': false,
@@ -208,12 +259,14 @@ class MusicCatalogRoutes {
           });
           return;
         }
-        await _json(request, HttpStatus.ok, await service.artistDetails(spotifyId: spotifyId));
+        await _json(request, HttpStatus.ok,
+            await service.artistDetails(spotifyId: spotifyId));
         return;
       }
 
       if (path == '$_prefix/artist-albums') {
-        final spotifyId = request.uri.queryParameters['spotifyId']?.trim() ?? '';
+        final spotifyId =
+            request.uri.queryParameters['spotifyId']?.trim() ?? '';
         if (spotifyId.isEmpty) {
           await _json(request, HttpStatus.badRequest, <String, dynamic>{
             'success': false,
@@ -221,18 +274,24 @@ class MusicCatalogRoutes {
           });
           return;
         }
-        final limit = int.tryParse(request.uri.queryParameters['limit'] ?? '10') ?? 10;
-        final offset = int.tryParse(request.uri.queryParameters['offset'] ?? '0') ?? 0;
-        await _json(request, HttpStatus.ok, await service.artistAlbums(
-          spotifyId: spotifyId,
-          limit: limit,
-          offset: offset,
-        ));
+        final limit =
+            int.tryParse(request.uri.queryParameters['limit'] ?? '10') ?? 10;
+        final offset =
+            int.tryParse(request.uri.queryParameters['offset'] ?? '0') ?? 0;
+        await _json(
+            request,
+            HttpStatus.ok,
+            await service.artistAlbums(
+              spotifyId: spotifyId,
+              limit: limit,
+              offset: offset,
+            ));
         return;
       }
 
       if (path == '$_prefix/album') {
-        final spotifyId = request.uri.queryParameters['spotifyId']?.trim() ?? '';
+        final spotifyId =
+            request.uri.queryParameters['spotifyId']?.trim() ?? '';
         if (spotifyId.isEmpty) {
           await _json(request, HttpStatus.badRequest, <String, dynamic>{
             'success': false,
@@ -240,7 +299,8 @@ class MusicCatalogRoutes {
           });
           return;
         }
-        await _json(request, HttpStatus.ok, await service.albumDetails(spotifyId: spotifyId));
+        await _json(request, HttpStatus.ok,
+            await service.albumDetails(spotifyId: spotifyId));
         return;
       }
 
@@ -253,7 +313,8 @@ class MusicCatalogRoutes {
           });
           return;
         }
-        final limit = int.tryParse(request.uri.queryParameters['limit'] ?? '100') ?? 100;
+        final limit =
+            int.tryParse(request.uri.queryParameters['limit'] ?? '100') ?? 100;
         final items = await service.discography(artistMbid: mbid, limit: limit);
         await _json(request, HttpStatus.ok, <String, dynamic>{
           'success': true,

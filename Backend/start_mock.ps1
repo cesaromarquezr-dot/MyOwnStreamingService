@@ -6,6 +6,8 @@
 
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot 'load_env.ps1')
+
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host " Streaming Service Backend - MOCK ARM" -ForegroundColor Cyan

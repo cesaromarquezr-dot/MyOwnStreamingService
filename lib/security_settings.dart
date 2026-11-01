@@ -196,7 +196,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                           'The security API reserves the WebAuthn/passkey integration surface; passkey credentials are not exposed as passwords or bearer tokens.')),
                   ListTile(
                     leading: const Icon(Icons.security_rounded),
-                    title: const UniversalText('Security Bot Control Center'),
+                    title: const UniversalText('Security Diagnostics Center'),
                     subtitle: const UniversalText(
                         'On-demand read-only checks for authentication signals, database connectivity, backups, and transport configuration.'),
                     trailing: const Icon(Icons.chevron_right_rounded),

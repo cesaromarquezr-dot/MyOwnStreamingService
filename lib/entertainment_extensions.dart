@@ -910,26 +910,15 @@ class _SecurityBotCenterScreenState extends State<SecurityBotCenterScreen> {
   bool loading = false;
   String? error;
   Map<String, dynamic>? backendReport;
-  List<_LocalBotCheck> localChecks = const [];
-  final Map<String, String> modes = <String, String>{};
+  List<_LocalDiagnosticCheck> localChecks = const [];
 
   @override
   void initState() {
     super.initState();
-    _loadModes();
     _runChecks();
   }
 
-  Future<void> _loadModes() async {
-    final prefs = await SharedPreferences.getInstance();
-    final profile = AppController.instance.currentProfile?.id ?? 'default';
-    for (final id in const ['account_guardian', 'catalog_quality', 'connection_review', 'backup_watch']) {
-      modes[id] = prefs.getString('moss_bot_mode_${profile}_$id') ?? 'Human approval required';
-    }
-    if (mounted) setState(() {});
-  }
-
-  List<_LocalBotCheck> _inspectLocalData() {
+  List<_LocalDiagnosticCheck> _inspectLocalData() {
     final controller = AppController.instance;
     final library = controller.library;
     final profiles = controller.currentAccount?.profiles ?? const [];
@@ -943,12 +932,12 @@ class _SecurityBotCenterScreenState extends State<SecurityBotCenterScreen> {
       final uri = Uri.tryParse(value);
       return value.isNotEmpty && uri != null && uri.scheme == 'http' && uri.host != 'localhost' && uri.host != '127.0.0.1';
     }).length;
-    return <_LocalBotCheck>[
-      _LocalBotCheck('catalog_quality', 'Catalog Quality Bot', duplicateMediaIds == 0 ? 'passed' : 'warning', '$duplicateMediaIds duplicate media IDs in the loaded library.'),
-      _LocalBotCheck('account_guardian', 'Account & Profile Guardian', duplicateUsernames == 0 && missingUsernames == 0 ? 'passed' : 'warning', '$duplicateUsernames repeated usernames; $missingUsernames profiles without a username.'),
-      _LocalBotCheck('metadata_health', 'Media Library Health Bot', missingArtwork == 0 ? 'passed' : 'info', '$missingArtwork loaded media items are missing artwork.'),
-      _LocalBotCheck('connection_review', 'Playback URL Review', insecureUrls == 0 ? 'passed' : 'warning', '$insecureUrls external playback URLs use HTTP. Development localhost URLs are excluded.'),
-      const _LocalBotCheck('backup_watch', 'Backup & Recovery Watch', 'not_connected', 'Backup encryption, restore drills and server storage cannot be verified from the client-only scan.'),
+    return <_LocalDiagnosticCheck>[
+      _LocalDiagnosticCheck('catalog_quality', 'Catalog Quality', duplicateMediaIds == 0 ? 'passed' : 'warning', '$duplicateMediaIds duplicate media IDs in the loaded library.'),
+      _LocalDiagnosticCheck('account_guardian', 'Account & Profile Integrity', duplicateUsernames == 0 && missingUsernames == 0 ? 'passed' : 'warning', '$duplicateUsernames repeated usernames; $missingUsernames profiles without a username.'),
+      _LocalDiagnosticCheck('metadata_health', 'Media Library Health', missingArtwork == 0 ? 'passed' : 'info', '$missingArtwork loaded media items are missing artwork.'),
+      _LocalDiagnosticCheck('connection_review', 'Playback URL Review', insecureUrls == 0 ? 'passed' : 'warning', '$insecureUrls external playback URLs use HTTP. Development localhost URLs are excluded.'),
+      const _LocalDiagnosticCheck('backup_watch', 'Backup & Recovery', 'not_connected', 'Backup encryption, restore drills and server storage cannot be verified from the client-only scan.'),
     ];
   }
 
@@ -976,22 +965,15 @@ class _SecurityBotCenterScreenState extends State<SecurityBotCenterScreen> {
     });
   }
 
-  Future<void> _setMode(String id, String value) async {
-    final profile = AppController.instance.currentProfile?.id ?? 'default';
-    modes[id] = value;
-    await (await SharedPreferences.getInstance()).setString('moss_bot_mode_${profile}_$id', value);
-    if (mounted) setState(() {});
-  }
-
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const UniversalText('Security & Database Bot Center'), actions: [IconButton(tooltip: 'Run checks', onPressed: loading ? null : _runChecks, icon: const Icon(Icons.refresh_rounded))]),
+        appBar: AppBar(title: const UniversalText('Security & Database Checks'), actions: [IconButton(tooltip: 'Run checks', onPressed: loading ? null : _runChecks, icon: const Icon(Icons.refresh_rounded))]),
         body: loading
             ? const Center(child: CircularProgressIndicator())
             : RefreshIndicator(onRefresh: _runChecks, child: ListView(padding: const EdgeInsets.all(16), children: [
                 const Text('Permission-controlled diagnostics', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 8),
-                const Text('Local checks inspect only metadata currently loaded by this client. Server checks are owner-only and never return secret values. Bot modes here configure policy intent; this screen does not permit destructive autonomous remediation.', style: TextStyle(color: Colors.white70, height: 1.4)),
+                const Text('Local checks inspect only metadata currently loaded by this client. Server checks are owner-only and never return secret values. This screen reports findings without performing automatic changes.', style: TextStyle(color: Colors.white70, height: 1.4)),
                 if (error != null) Card(child: Padding(padding: const EdgeInsets.all(12), child: Text(error!))),
                 if (backendReport != null) _backendReportCard(backendReport!),
                 const SizedBox(height: 10),
@@ -1001,23 +983,6 @@ class _SecurityBotCenterScreenState extends State<SecurityBotCenterScreen> {
                   title: Text(check.title),
                   subtitle: Text(check.details),
                   trailing: const Text('LOCAL', style: TextStyle(fontSize: 10, color: Colors.white54)),
-                )),
-                const SizedBox(height: 16),
-                const Text('Bot permission policies', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                for (final bot in const [
-                  ('account_guardian', 'Account & Profile Protection Bot'),
-                  ('catalog_quality', 'Catalog Quality Bot'),
-                  ('connection_review', 'Vulnerability / Connection Review Bot'),
-                  ('backup_watch', 'Backup & Recovery Bot'),
-                ]) Card(child: ListTile(
-                  title: Text(bot.$2),
-                  subtitle: const Text('Default is approval required for changes. This selection is a policy preference, not proof a background worker is running.'),
-                  trailing: DropdownButton<String>(value: modes[bot.$1] ?? 'Human approval required', items: const [
-                    DropdownMenuItem(value: 'Observe only', child: Text('Observe')),
-                    DropdownMenuItem(value: 'Recommend only', child: Text('Recommend')),
-                    DropdownMenuItem(value: 'Limited automatic response', child: Text('Limited auto')),
-                    DropdownMenuItem(value: 'Human approval required', child: Text('Approval')),
-                  ], onChanged: (value) { if (value != null) _setMode(bot.$1, value); }),
                 )),
               ])),
       );
@@ -1059,10 +1024,10 @@ class _SecurityBotCenterScreenState extends State<SecurityBotCenterScreen> {
       };
 }
 
-class _LocalBotCheck {
+class _LocalDiagnosticCheck {
   final String id;
   final String title;
   final String status;
   final String details;
-  const _LocalBotCheck(this.id, this.title, this.status, this.details);
+  const _LocalDiagnosticCheck(this.id, this.title, this.status, this.details);
 }

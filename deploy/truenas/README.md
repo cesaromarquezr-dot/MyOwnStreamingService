@@ -52,7 +52,7 @@ Never store `/mnt/tank/media/...` in the key; never return `relative_media_key` 
 
 The backend heartbeat route added with this integration verifies the shared secret, resolves `server_id` ownership through Supabase, and only then updates the in-memory agent snapshot. On backend restart, the agent will repopulate its snapshot on the next heartbeat (normally within 30 seconds). Do not bypass the owner check or mark every server online by default. The heartbeat endpoint is intended for the trusted private LAN; do not expose it without network controls and rate limiting.
 
-The agent currently supports direct file streaming and byte ranges. It does not transcode, generate HLS/DASH, extract subtitles, or normalize codecs. For broad TV/console compatibility, use a media server/transcoder such as Jellyfin behind an equally secure authorization integration.
+The agent currently supports direct file streaming and byte ranges. It does not transcode, generate HLS/DASH, extract subtitles, or normalize codecs. For broad TV/console compatibility, use a compatible media server/transcoder behind an equally secure authorization integration.
 
 ## Security notes
 

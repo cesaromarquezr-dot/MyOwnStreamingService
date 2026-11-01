@@ -15,18 +15,12 @@ import 'music_catalog_screen.dart';
 import 'cinematic_title.dart';
 import 'artwork_gallery_screen.dart';
 import 'artwork_selection_store.dart';
-import 'reviews.dart';
 import 'player.dart';
-import 'group_watch.dart';
 import 'localization.dart';
-import 'shop.dart';
 import 'media_actions.dart';
 import 'media_continuity.dart';
 import 'media_knowledge.dart';
-import 'widgets/like_toggle_button.dart';
 import 'widgets/added_by_profile_label.dart';
-import 'social_sharing.dart';
-import 'food_delivery.dart';
 import 'catalog_entity_details.dart';
 import 'page_customization_button.dart';
 import 'recommendation_ownership.dart';
@@ -301,26 +295,6 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                     onPressed: _openArtworkGalleryForCurrentMedia,
                   ),
                 const PageCustomizeButton(pageId: 'details'),
-                IconButton(
-                  tooltip: 'Food & Delivery',
-                  icon: const Icon(Icons.delivery_dining_rounded),
-                  onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => FoodOrderingScreen(viewingContext: media.title))),
-                ),
-                IconButton(
-                  tooltip: 'Share to chats',
-                  onPressed: () => showSocialShareDialog(
-                    context,
-                    title: media.title,
-                    message: 'Recommendation: ${media.title}',
-                    mediaReference: {
-                      'type': 'recommendation',
-                      'title': media.title,
-                      'mediaId': media.id,
-                      'mediaType': media.type,
-                    },
-                  ),
-                  icon: const Icon(Icons.share_outlined),
-                ),
               ],
             ),
             SliverToBoxAdapter(
@@ -365,11 +339,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildEditionSelector(),
-          // The Shop marketplace action now lives in the unified purchase
-          // card below, preventing duplicate Shop buttons in Details.
           for (final section in customization.sectionOrder)
-            if (section != 'Shop') _buildSection(section),
-          if (!_isCurrentMediaOwned) _buildExternalPurchaseOptions(),
+            _buildSection(section),
           MediaContinuityPanel(mediaId: media.id, mediaTitle: media.title),
           MediaFranchiseConnectionsPanel(mediaId: media.id, hasSeasons: isTvShow),
           const SizedBox(height: 12),
@@ -773,52 +744,6 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     }
   }
 
-  /// Opens retailer search results rather than claiming that a specific copy
-  /// is in stock. Availability, format and regional eligibility are determined
-  /// by the retailer after the user follows the link.
-  Widget _buildExternalPurchaseOptions() {
-    final query = '${media.title} ${media.displayEditionLabel ?? ''} ${media.editionReleaseYear ?? media.releaseYear ?? ''}'.trim();
-    final encoded = Uri.encodeQueryComponent(query);
-    final retailers = <({String name, IconData icon, String url})>[
-      (name: 'Amazon', icon: Icons.shopping_bag_outlined, url: 'https://www.amazon.com/s?k=$encoded'),
-      (name: 'Walmart', icon: Icons.storefront_outlined, url: 'https://www.walmart.com/search?q=$encoded'),
-      (name: 'Mercado Libre', icon: Icons.store_mall_directory_outlined, url: 'https://listado.mercadolibre.com.mx/${Uri.encodeComponent(query)}'),
-      (name: 'eBay', icon: Icons.sell_outlined, url: 'https://www.ebay.com/sch/i.html?_nkw=$encoded'),
-    ];
-    return Padding(
-      padding: const EdgeInsets.only(top: 20, bottom: 12),
-      child: Card(
-        color: const Color(0xFF151515),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const UniversalText('Find to buy or rent', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 6),
-            const UniversalText('Search retailers for digital rentals, purchases, DVDs, Blu-rays, or used copies. These are search links; stock, format, price, and region availability are confirmed by each retailer.', style: TextStyle(color: Colors.white60)),
-            const SizedBox(height: 12),
-            Wrap(spacing: 8, runSpacing: 8, children: [
-              if (customization.showShop)
-                ContextualShopButton.forMedia(context, media),
-              for (final retailer in retailers)
-                OutlinedButton.icon(
-                  icon: Icon(retailer.icon, size: 18),
-                  label: Text(retailer.name),
-                  onPressed: () async {
-                    final uri = Uri.tryParse(retailer.url);
-                    if (uri == null) return;
-                    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-                    if (!opened && mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open ${retailer.name}.')));
-                    }
-                  },
-                ),
-            ]),
-          ]),
-        ),
-      ),
-    );
-  }
-
   // ===========================================================================
   // SECTION ROUTER
   // ===========================================================================
@@ -875,13 +800,9 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         return _buildTrailer();
 
       case 'Shop':
-        if (!customization.showShop) {
-          return const SizedBox.shrink();
-        }
-        return _buildShop();
-
       case 'Reviews':
-        return _buildReviews();
+      case 'Reactions':
+        return const SizedBox.shrink();
 
       case 'Recommendations':
         // Recommendation, 'because you watched', and mood discovery now live on Home.
@@ -892,12 +813,6 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           return const SizedBox.shrink();
         }
         return _buildAudioSubtitles();
-
-      case 'Reactions':
-        if (!customization.showReactions) {
-          return const SizedBox.shrink();
-        }
-        return _buildReactions();
 
       case 'Cast & Crew':
         return _buildCastCrew();
@@ -1583,29 +1498,12 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       return;
     }
 
-    final orderedSeasons = _orderedSeasons();
-    final selectedSeason = selectedSeasonIndex >= 0 && selectedSeasonIndex < orderedSeasons.length
-        ? orderedSeasons[selectedSeasonIndex]
-        : const <String, dynamic>{};
-    final seasonNumber = selectedSeason['seasonNumber'] ??
-        selectedSeason['season_number'] ??
-        selectedSeason['number'] ??
-        selectedSeason['season'];
-    final episodeNumber = episode['episodeNumber'] ??
-        episode['episode_number'] ??
-        episode['number'];
-    final episodeTitle = episode['title']?.toString() ??
-        episode['name']?.toString() ?? episodeMedia.title;
-    final activityLabel =
-        "Watching ${media.title} Season ${seasonNumber ?? '?'} Episode ${episodeNumber ?? '?'}: $episodeTitle";
-
     Navigator.of(context).push(
       MaterialPageRoute(
         settings: const RouteSettings(name: '/app/player'),
         builder: (_) {
           return PlayerScreen(
             media: episodeMedia,
-            activityLabel: activityLabel,
           );
         },
       ),
@@ -2305,22 +2203,6 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     );
   }
 
-  // ===========================================================================
-  // SHOP
-  // ===========================================================================
-
-  /// Opens the marketplace in the context of this movie or TV show.
-  Widget _buildShop() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: SizedBox(
-        height: 52,
-        width: double.infinity,
-        child: ContextualShopButton.forMedia(context, media),
-      ),
-    );
-  }
-
   /// Treats a local item as owned when either its ID is owned or the active
   /// profile has the same title/type/year in its library. The title fallback
   /// handles duplicate catalog IDs referring to the same movie or show.
@@ -2328,25 +2210,6 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         media: media,
         controller: AppController.instance,
       );
-
-  // ===========================================================================
-  // REVIEWS
-  // ===========================================================================
-
-  /// Opens profile and global reviews for this movie or show.
-  Widget _buildReviews() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: SizedBox(
-        height: 52,
-        child: OutlinedButton.icon(
-          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ReviewsHubScreen(media: media, initialMetadata: _providerTitleMetadata))),
-          icon: const Icon(Icons.rate_review_outlined),
-          label: const UniversalText('Reviews'),
-        ),
-      ),
-    );
-  }
 
   // ===========================================================================
   // AUDIO / SUBTITLES
@@ -2433,80 +2296,6 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           },
         );
       },
-    );
-  }
-
-  // ===========================================================================
-  // REACTIONS
-  // ===========================================================================
-
-  /// Performs `_buildReactions` for this feature. Update this documentation when its contract changes.
-  Widget _buildReactions() {
-    final controller = AppController.instance;
-
-    final liked = controller.isLiked(media.id);
-    final disliked = controller.isDisliked(media.id);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 24),
-      child: Row(
-        children: [
-          Expanded(
-            child: LikeToggleButton(
-              liked: liked,
-              showLabel: true,
-              onPressed: () async {
-                final result = await UniversalMediaActions.perform(
-                  context: _actionContext(const {
-                    UniversalMediaAction.like,
-                    UniversalMediaAction.removeReaction,
-                  }),
-                  action: liked
-                      ? UniversalMediaAction.removeReaction
-                      : UniversalMediaAction.like,
-                  apply: () => setState(() {
-                    if (liked) {
-                      controller.clearReaction(media.id);
-                    } else {
-                      controller.likeMedia(media);
-                    }
-                  }),
-                );
-                if (result.applied && mounted) setState(() {});
-              },
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () async {
-                await UniversalMediaActions.perform(
-                  context: _actionContext(const {
-                    UniversalMediaAction.dislike,
-                    UniversalMediaAction.removeReaction,
-                  }),
-                  action: disliked
-                      ? UniversalMediaAction.removeReaction
-                      : UniversalMediaAction.dislike,
-                  apply: () => setState(() {
-                    if (disliked) {
-                      controller.clearReaction(media.id);
-                    } else {
-                      controller.dislikeMedia(media);
-                    }
-                  }),
-                );
-              },
-              icon: Icon(
-                disliked
-                    ? Icons.thumb_down_rounded
-                    : Icons.thumb_down_outlined,
-              ),
-              label: const UniversalText('Dislike'),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -3218,96 +3007,6 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         });
       }
     });
-  }
-
-  /// Performs `startGroupWatch` for this feature. Update this documentation when its contract changes.
-  void startGroupWatch() {
-    showDialog<void>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const UniversalText('Watch Together'),
-        content: const UniversalText('Who do you want to watch with?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _launchGroupWatch();
-            },
-            child: const UniversalText('People in this account',
-            ),
-          ),
-          ElevatedButton.icon(
-            onPressed: () {
-              Navigator.pop(context);
-              _shareGroupWatch();
-            },
-            icon: const Icon(
-              Icons.share_outlined,
-            ),
-            label: const UniversalText('Other people',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Performs `_launchGroupWatch` for this feature. Update this documentation when its contract changes.
-  void _launchGroupWatch() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => GroupWatchScreen(
-          media: media,
-        ),
-      ),
-    );
-  }
-
-  /// Performs `_shareGroupWatch` for this feature. Update this documentation when its contract changes.
-  void _shareGroupWatch() {
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (_) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              const SizedBox(
-                width: double.infinity,
-                child: UniversalText('Invite with…',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              for (final app in [
-                'Messenger',
-                'WhatsApp',
-                'Telegram',
-                'Instagram',
-                'iMessage',
-              ])
-                ActionChip(
-                  label: Text(app),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: UniversalText('Group Watch invite ready for $app.',
-                        ),
-                      ),
-                    );
-                  },
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   /// Performs `watchTrailer` for this feature. Update this documentation when its contract changes.

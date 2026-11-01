@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'innovation_features.dart';
 import 'feature_center.dart';
 import 'platform_capability_registry.dart';
-import 'mindscape_ai_team.dart';
-import 'mindscape_ai_orchestrator.dart';
 import 'platform_reliability_center.dart';
 import 'security_bot_center.dart';
 import 'playback_diagnostics_center.dart';
@@ -20,91 +18,88 @@ class InnovationHubScreen extends StatelessWidget {
   static final _sections = <_InnovationEntry>[
     _InnovationEntry(
       title: 'Platform Expansion',
-      subtitle: 'Profile preferences, playback behavior, security and platform settings.',
+      subtitle:
+          'Profile preferences, playback behavior, security and platform settings.',
       icon: Icons.tune_rounded,
       builder: () => PlatformExpansionScreen(),
       stage: 'Settings',
     ),
     _InnovationEntry(
       title: 'Expanded Platform',
-      subtitle: 'Browse capabilities, foundations and remaining implementation work.',
+      subtitle:
+          'Browse capabilities, foundations and remaining implementation work.',
       icon: Icons.hub_rounded,
       builder: () => ExpandedPlatformScreen(),
       stage: 'Capability catalog',
     ),
     _InnovationEntry(
       title: 'Ultimate Features',
-      subtitle: 'Explore the app’s advanced media, account and service utilities.',
+      subtitle:
+          'Explore the app’s advanced media, account and service utilities.',
       icon: Icons.auto_awesome_rounded,
       builder: () => UltimateFeaturesScreen(),
       stage: 'Feature suite',
     ),
     _InnovationEntry(
       title: 'Ultimate Streaming Platform',
-      subtitle: 'AI, player, family, social, library, cloud, security, devices and studio.',
+      subtitle:
+          'Player, family, social, library, cloud, security, devices and studio.',
       icon: Icons.rocket_launch_rounded,
       builder: () => UltimatePlatformScreen(),
       stage: 'Platform suite',
     ),
     _InnovationEntry(
       title: 'Disc Ingestion Center',
-      subtitle: 'Monitor MakeMKV jobs, write to NAS storage, validate output, and review metadata before library import.',
+      subtitle:
+          'Monitor MakeMKV jobs, write to NAS storage, validate output, and review metadata before library import.',
       icon: Icons.album_rounded,
       builder: () => const DiscIngestionCenterScreen(),
       stage: 'Disc ingestion',
     ),
     _InnovationEntry(
-      title: 'Security Bot Control Center',
-      subtitle: 'Run read-only security, database, backup, transport, and dependency-scan status checks.',
+      title: 'Security Diagnostics',
+      subtitle:
+          'Run read-only security, database, backup, transport, and dependency-scan status checks.',
       icon: Icons.security_rounded,
       builder: () => const ServerSecurityBotCenterScreen(),
-      stage: 'Security bots',
+      stage: 'Diagnostics',
     ),
     _InnovationEntry(
       title: 'Discover & Recaps',
-      subtitle: 'Recommendations, collections, entertainment recaps and shared actors.',
+      subtitle:
+          'Recommendations, collections, entertainment recaps and shared actors.',
       icon: Icons.explore_rounded,
       builder: () => FeatureCenterScreen(),
       stage: 'Discovery',
     ),
     _InnovationEntry(
       title: 'Feature Roadmap',
-      subtitle: 'Open additional feature concepts and implementation entry points.',
+      subtitle:
+          'Open additional feature concepts and implementation entry points.',
       icon: Icons.map_outlined,
       builder: () => RoadmapFeaturesScreen(),
       stage: 'Roadmap',
     ),
     _InnovationEntry(
       title: 'Playback Diagnostics',
-      subtitle: 'Guided troubleshooting for buffering, failed playback, subtitles, transcoding, and remote access.',
+      subtitle:
+          'Guided troubleshooting for buffering, failed playback, subtitles, transcoding, and remote access.',
       icon: Icons.troubleshoot_rounded,
       builder: () => const PlaybackDiagnosticsCenterScreen(),
       stage: 'Playback diagnostics',
     ),
     _InnovationEntry(
       title: 'MyOwn Reliability Center',
-      subtitle: 'Performance planning, storage forecasts, recovery workstreams, household safety, and honest system readiness signals.',
+      subtitle:
+          'Performance planning, storage forecasts, recovery workstreams, household safety, and honest system readiness signals.',
       icon: Icons.monitor_heart_outlined,
       builder: () => const PlatformReliabilityCenterScreen(),
       stage: 'Reliability and recovery',
     ),
     _InnovationEntry(
-      title: 'Mindscape AI Team',
-      subtitle: 'Steward, Moxie, and Fixer: scoped roles for security, social coordination, maintenance, and authorized media analysis.',
-      icon: Icons.psychology_alt_rounded,
-      builder: () => const MindscapeAiTeamScreen(),
-      stage: 'AI role catalog',
-    ),
-    _InnovationEntry(
-      title: 'Mindscape AI Orchestrator',
-      subtitle: 'Draft, classify, and review tasks for AI roles without executing privileged tools.',
-      icon: Icons.account_tree_outlined,
-      builder: () => const MindscapeAiOrchestratorScreen(),
-      stage: 'AI task proposals',
-    ),
-    _InnovationEntry(
       title: 'Capability Registry & Master Roadmap',
-      subtitle: 'Search all major capabilities, status, acceptance criteria, and integration dependencies.',
+      subtitle:
+          'Search all major capabilities, status, acceptance criteria, and integration dependencies.',
       icon: Icons.fact_check_outlined,
       builder: () => const PlatformCapabilityRegistryScreen(),
       stage: 'Capability Registry',
@@ -134,7 +129,8 @@ class InnovationHubScreen extends StatelessWidget {
                 Icon(Icons.layers_rounded, size: 32, color: Color(0xFFFFD36E)),
                 SizedBox(height: 10),
                 Text('One home for the expanded platform',
-                    style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+                    style:
+                        TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
                 SizedBox(height: 6),
                 Text(
                   'These feature modules are linked from the main app here. Each screen keeps its existing implementation; capabilities that need provider, device, or backend support remain subject to those integrations.',
@@ -148,12 +144,15 @@ class InnovationHubScreen extends StatelessWidget {
             Card(
               clipBehavior: Clip.antiAlias,
               child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 leading: CircleAvatar(
-                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                  backgroundColor:
+                      Theme.of(context).colorScheme.primaryContainer,
                   child: Icon(entry.icon),
                 ),
-                title: Text(entry.title, style: const TextStyle(fontWeight: FontWeight.w800)),
+                title: Text(entry.title,
+                    style: const TextStyle(fontWeight: FontWeight.w800)),
                 subtitle: Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(entry.subtitle),
@@ -161,7 +160,9 @@ class InnovationHubScreen extends StatelessWidget {
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () => Navigator.of(context).push<void>(
                   MaterialPageRoute<void>(
-                    settings: RouteSettings(name: '/app/innovation/${entry.stage.toLowerCase().replaceAll(' ', '-')}'),
+                    settings: RouteSettings(
+                        name:
+                            '/app/innovation/${entry.stage.toLowerCase().replaceAll(' ', '-')}'),
                     builder: (_) => entry.builder(),
                   ),
                 ),

@@ -68,8 +68,6 @@ class _MediaUniverseScreenState extends State<MediaUniverseScreen> {
                   () => _open(context, const MediaConnectionGraphScreen())),
               _tile('Artwork Library', Icons.photo_library_outlined,
                   () => _open(context, const MediaArtworkScreen())),
-              _tile('AI Media Lab', Icons.auto_awesome_rounded,
-                  () => _open(context, const MediaAiLabScreen())),
               _tile('My Media Passport', Icons.badge_outlined,
                   () => _open(context, const MediaPassportScreen())),
             ],
@@ -470,41 +468,6 @@ class _MediaArtworkScreenState extends State<MediaArtworkScreen> {
               ))),
         ]));
   }
-}
-
-class MediaAiLabScreen extends StatelessWidget {
-  const MediaAiLabScreen({super.key});
-  @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const UniversalText('AI Media Lab')),
-        body: ListView(
-          padding: const EdgeInsets.all(18),
-          children: const [
-            _AiPrompt('What should I watch tonight?',
-                'Uses your history, availability and explainable media relationships.'),
-            _AiPrompt('Why do I like this?',
-                'Explains patterns from your own watched/listened history.'),
-            _AiPrompt('Find things connected to this.',
-                'Traverses people, songs, albums, franchises, extras and geographic associations.'),
-            _AiPrompt('Complete my collection.',
-                'Finds missing pieces without silently buying, downloading or deleting anything.'),
-            _AiPrompt('Build a media night.',
-                'Can combine a movie, soundtrack, extras and related content into one session.'),
-          ],
-        ),
-      );
-}
-
-class _AiPrompt extends StatelessWidget {
-  final String title;
-  final String description;
-  const _AiPrompt(this.title, this.description);
-  @override
-  Widget build(BuildContext context) => Card(
-      child: ListTile(
-          leading: const Icon(Icons.auto_awesome),
-          title: Text(title),
-          subtitle: Text(description)));
 }
 
 class MediaPassportScreen extends StatelessWidget {

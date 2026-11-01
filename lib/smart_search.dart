@@ -17,9 +17,7 @@ import 'music.dart';
 import 'music_catalog_screen.dart';
 import 'music_soundtrack_index.dart';
 import 'music_favorites.dart';
-import 'shop.dart';
 import 'hollywood.dart';
-import 'social_detail_pages.dart';
 import 'home_streaming_discovery.dart';
 import 'character_discovery.dart';
 import 'smart_search_intelligence.dart';
@@ -518,7 +516,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
   List<MusicTrack> musicResults = [];
   List<Map<String, dynamic>> albumResults = <Map<String, dynamic>>[];
   String selectedSearchCategory = 'All';
-  List<ShopProduct> productResults = <ShopProduct>[];
+  List<Object?> productResults = <Object?>[];
   List<Map<String, dynamic>> peopleResults = <Map<String, dynamic>>[];
   List<Map<String, dynamic>> characterResults = <Map<String, dynamic>>[];
   List<SmartSearchEpisodeHit> episodeResults = <SmartSearchEpisodeHit>[];
@@ -565,7 +563,6 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
           () => MusicLibraryStore.instance.initializeForProfile(profileId)),
       _ignoreOptionalInitialization(
           () => MusicFavoritesBridge.initializeForProfile(profileId)),
-      _ignoreOptionalInitialization(() => ShopCatalog.instance.initialize()),
     ]);
     if (mounted && controller.text.trim().isNotEmpty) {
       performSearch(controller.text);
@@ -703,16 +700,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     final themedEpisodes = normalized.isEmpty
         ? <SmartSearchEpisodeHit>[]
         : SmartSearchIntelligence.themedEpisodes(query, library);
-    final products = normalized.isEmpty
-        ? <ShopProduct>[]
-        : (normalized == 'shop' ||
-                normalized == 'products' ||
-                normalized == 'merchandise'
-            ? ShopCatalog.instance.products
-                .where((product) => product.active)
-                .take(12)
-                .toList()
-            : ShopCatalog.instance.searchProducts(query).take(12).toList());
+    const products = <Object?>[];
     _searchDebounce?.cancel();
     final generation = ++_remoteSearchGeneration;
     setState(() {
@@ -1136,7 +1124,6 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     final remoteMedia = <MediaItem>[];
     final remotePeople = <Map<String, dynamic>>[];
     final remoteCharacters = <Map<String, dynamic>>[];
-    final remoteSocial = <Map<String, dynamic>>[];
     final remoteMusic = <MusicTrack>[];
     final remoteAlbums = <Map<String, dynamic>>[];
     try {
@@ -1707,45 +1694,6 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
       // The authenticated music catalog is optional; keep local results available.
     }
 
-    try {
-      // Social search is limited to the current profile's authorized home feed.
-      // It never searches arbitrary private accounts or private community content.
-      final home = await app.backendApi.getSocialHome(profileId: profile.id);
-      final showAllFriends = query == 'friends' || query == 'friend';
-      final showAllCommunities = query == 'communities' || query == 'community';
-      final showAllPosts = query == 'posts' || query == 'post';
-      for (final key in <String>['friends', 'communities', 'posts']) {
-        for (final item in _maps(home[key])) {
-          final haystack = _mapText(item, <String>[
-            'name',
-            'display_name',
-            'displayName',
-            'username',
-            'description',
-            'body',
-            'text',
-            'title',
-            'content',
-            'message',
-          ]).toLowerCase();
-          final categoryBrowse = key == 'friends' && showAllFriends ||
-              key == 'communities' && showAllCommunities ||
-              key == 'posts' && showAllPosts;
-          if (!categoryBrowse && !haystack.contains(query)) continue;
-          remoteSocial.add(<String, dynamic>{
-            'kind': key == 'friends'
-                ? 'friend'
-                : key == 'communities'
-                    ? 'community'
-                    : 'post',
-            'data': item,
-          });
-        }
-      }
-    } catch (_) {
-      // Social access may be unavailable for an offline or limited session.
-    }
-
     if (!mounted ||
         generation != _remoteSearchGeneration ||
         controller.text.trim().toLowerCase() != query) {
@@ -1981,7 +1929,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
       peopleResults =
           mergedPeopleWithMusic.values.take(50).toList(growable: false);
       episodeResults = mergedEpisodeResults;
-      socialResults = remoteSocial.take(30).toList(growable: false);
+      socialResults = <Map<String, dynamic>>[];
       remoteSearchLoading = false;
     });
   }
@@ -2075,50 +2023,6 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
         ));
   }
 
-  void _openSocialResult(Map<String, dynamic> result) {
-    final kind = result['kind']?.toString() ?? '';
-    final data = result['data'] is Map
-        ? Map<String, dynamic>.from(result['data'] as Map)
-        : <String, dynamic>{};
-    if (kind == 'community') {
-      Navigator.push<void>(
-          context,
-          MaterialPageRoute<void>(
-            builder: (_) => SocialCommunityDetailScreen(community: data),
-          ));
-    } else if (kind == 'post') {
-      final id =
-          (data['id'] ?? data['postId'] ?? data['post_id'] ?? '').toString();
-      if (id.isEmpty) {
-        return;
-      }
-      Navigator.push<void>(
-          context,
-          MaterialPageRoute<void>(
-            builder: (_) =>
-                SocialPostDetailScreen(postId: id, initialPost: data),
-          ));
-    } else if (kind == 'friend') {
-      final accountId =
-          (data['id'] ?? data['accountId'] ?? data['account_id'] ?? '')
-              .toString();
-      final profileId =
-          (data['profileId'] ?? data['profile_id'] ?? '').toString();
-      if (accountId.isEmpty || profileId.isEmpty) {
-        return;
-      }
-      Navigator.push<void>(
-          context,
-          MaterialPageRoute<void>(
-            builder: (_) => SocialProfileDetailScreen(
-              targetAccountId: accountId,
-              targetProfileId: profileId,
-              initialProfile: data,
-            ),
-          ));
-    }
-  }
-
   /// Performs `clearSearch` for this feature. Update this documentation when its contract changes.
   void clearSearch() {
     controller.clear();
@@ -2128,7 +2032,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
       results = <MediaItem>[];
       musicResults = <MusicTrack>[];
       albumResults = <Map<String, dynamic>>[];
-      productResults = <ShopProduct>[];
+      productResults = <Object?>[];
       peopleResults = <Map<String, dynamic>>[];
       characterResults = <Map<String, dynamic>>[];
       episodeResults = <SmartSearchEpisodeHit>[];
@@ -2467,7 +2371,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
             icon: Icons.movie_filter_outlined,
             title: tr('Nothing found'),
             message: tr(
-              'Try a title, artist, actor, friend, community, post, or shop product.',
+              'Try a title, artist, actor, genre, or soundtrack.',
             ),
           ),
         ),
@@ -3018,80 +2922,6 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: () => unawaited(_openPerson(person)),
                   )),
-          ],
-          if (showAll && socialResults.isNotEmpty) ...[
-            const Padding(
-              padding: EdgeInsets.only(top: 18, bottom: 8),
-              child: UniversalText('Friends, communities & posts',
-                  style: TextStyle(
-                      color: Colors.white70, fontWeight: FontWeight.w800)),
-            ),
-            for (final result in socialResults)
-              Builder(builder: (context) {
-                final data = result['data'] is Map
-                    ? Map<String, dynamic>.from(result['data'] as Map)
-                    : <String, dynamic>{};
-                final kind = result['kind']?.toString() ?? 'social';
-                final title = _mapText(data, <String>[
-                  'name',
-                  'display_name',
-                  'displayName',
-                  'username',
-                  'title',
-                  'body',
-                  'text',
-                  'content'
-                ]).trim();
-                final subtitle = switch (kind) {
-                  'community' =>
-                    'Community · ${data['memberCount'] ?? data['member_count'] ?? ''} members',
-                  'post' => 'Community or friend post',
-                  _ => 'Friend',
-                };
-                return Card(
-                  color: Colors.white.withValues(alpha: .055),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                        child: Icon(kind == 'community'
-                            ? Icons.groups_2_outlined
-                            : kind == 'post'
-                                ? Icons.forum_outlined
-                                : Icons.person_outline_rounded)),
-                    title: Text(title.isEmpty ? 'Untitled $kind' : title,
-                        maxLines: kind == 'post' ? 2 : 1,
-                        overflow: TextOverflow.ellipsis),
-                    subtitle: Text(subtitle),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => _openSocialResult(result),
-                  ),
-                );
-              }),
-          ],
-          if (showAll && productResults.isNotEmpty) ...[
-            const Padding(
-              padding: EdgeInsets.only(top: 18, bottom: 8),
-              child: UniversalText('Shop & merchandise',
-                  style: TextStyle(
-                      color: Colors.white70, fontWeight: FontWeight.w800)),
-            ),
-            for (final product in productResults)
-              Card(
-                color: Colors.white.withValues(alpha: .055),
-                child: ListTile(
-                  leading: const CircleAvatar(
-                      child: Icon(Icons.shopping_bag_outlined)),
-                  title: Text(product.name),
-                  subtitle: Text(
-                      '${product.category} · ${product.price.toStringAsFixed(2)} ${product.currency}'),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => Navigator.push<void>(
-                      context,
-                      MaterialPageRoute<void>(
-                        builder: (_) =>
-                            ShopProductDetailsScreen(product: product),
-                      )),
-                ),
-              ),
           ],
           if (remoteSearchLoading)
             const Padding(

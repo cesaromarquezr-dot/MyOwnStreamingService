@@ -20,16 +20,12 @@ import 'core/services/original_language_defaults.dart';
 class PlayerScreen extends StatefulWidget {
   final MediaItem media;
 
-  /// Optional, richer presence label supplied by episodes, collections or TV channels.
-  final String? activityLabel;
-
   /// Optional absolute start offset used when tuning into a scheduled My TV program.
   final int? initialPositionSeconds;
 
   const PlayerScreen({
     super.key,
     required this.media,
-    this.activityLabel,
     this.initialPositionSeconds,
   });
 
@@ -38,9 +34,6 @@ class PlayerScreen extends StatefulWidget {
 }
 
 class _PlayerScreenState extends State<PlayerScreen> {
-  // Presence is advisory. A broken backend schema should not flood the debug
-  // console on both playback start and disposal for the same profile.
-  static final Set<String> _presenceFailureReportedProfiles = <String>{};
   double position = 0.0;
   final ValueNotifier<Duration> xrayPlaybackPosition =
       ValueNotifier<Duration>(Duration.zero);
@@ -54,7 +47,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   Timer? autoplayTimer;
   Timer? controlsTimer;
-  Timer? _socialActivityHeartbeat;
 
   String selectedAudio = '';
   bool subtitlesEnabled = false;
@@ -119,7 +111,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
     unawaited(_loadStreamingExperiencePreferences());
     _startControlsTimer();
-    unawaited(_setSocialWatchActivity(_activityText));
   }
 
   Future<void> _recordQoe(String event, {int? valueMs}) =>
@@ -221,49 +212,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
         positionSeconds: seconds,
       );
     } catch (_) {}
-  }
-
-  String get _activityText {
-    final custom = widget.activityLabel?.trim();
-    final value = custom == null || custom.isEmpty
-        ? 'Watching ${widget.media.title}'
-        : custom;
-    return value.length <= 160 ? value : '${value.substring(0, 157)}...';
-  }
-
-  Future<void> _setSocialWatchActivity(String? activity) async {
-    final profile = AppController.instance.currentProfile;
-    final api = AppController.instance.backendApi;
-    _socialActivityHeartbeat?.cancel();
-    _socialActivityHeartbeat = null;
-    if (profile == null || !api.isAuthenticated) return;
-    try {
-      if (activity == null) {
-        await api.setSocialProfilePresence(
-          profileId: profile.id,
-          availability: 'active',
-          clearActivity: true,
-        );
-      } else {
-        await api.setSocialProfilePresence(
-          profileId: profile.id,
-          availability: 'busy',
-          activityType: 'watching',
-          activityText: activity,
-        );
-        _socialActivityHeartbeat = Timer.periodic(
-          const Duration(minutes: 1),
-          (_) => unawaited(_setSocialWatchActivity(activity)),
-        );
-      }
-    } catch (error) {
-      if (_presenceFailureReportedProfiles.add(profile.id)) {
-        debugPrint(
-          'Unable to update viewing presence for this profile; further advisory presence errors are suppressed for this app session: '
-          '${error.toString().replaceFirst('Exception: ', '')}',
-        );
-      }
-    }
   }
 
   /// Performs `_initializeYoutubePlayer` for this feature. Update this documentation when its contract changes.
@@ -442,8 +390,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void dispose() {
     autoplayTimer?.cancel();
     controlsTimer?.cancel();
-    _socialActivityHeartbeat?.cancel();
-    _socialActivityHeartbeat = null;
     PlaybackInterruptionBridge.detach(this);
 
     unawaited(_syncIndependentPlaybackSession(state: 'stopped'));
@@ -454,8 +400,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     xrayPlaybackPosition.dispose();
     if (musicWasPlayingBeforeVideo) {
       MusicPlaybackController.instance.resumeAfterVideo();
-    } else {
-      unawaited(_setSocialWatchActivity(null));
     }
 
     super.dispose();
@@ -972,7 +916,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (_usesAdaptivePlayback) {
       return AdaptiveStreamingPlayer(
         media: widget.media,
-        activityLabel: widget.activityLabel,
         initialPositionSeconds: widget.initialPositionSeconds,
       );
     }

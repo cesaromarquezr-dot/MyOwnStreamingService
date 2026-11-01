@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 
-import 'core/services/ai_bot_activity_service.dart';
 import 'app_core.dart';
 
-/// Administrator-facing, on-demand security diagnostics. The screen never
-/// treats a bot recommendation as authorization to perform a mutation.
+/// Administrator-facing, on-demand security diagnostics.
 class ServerSecurityBotCenterScreen extends StatefulWidget {
   const ServerSecurityBotCenterScreen({super.key});
 
@@ -59,33 +57,8 @@ class _ServerSecurityBotCenterScreenState
 
   Future<void> _runChecks() async {
     setState(() => _running = true);
-    final watch = Stopwatch()..start();
-    final activity = AiBotActivityService.instance;
-    final taskId = activity.startTask(
-      botId: 'security',
-      botName: 'Security Bot',
-      title: 'Run read-only security diagnostics',
-      details: 'Started an explicitly requested, administrator-authorized backend check.',
-    );
-    activity.recordStep(
-      botId: 'security',
-      botName: 'Security Bot',
-      title: 'Calling backend diagnostics',
-      details: 'Requesting the configured security-bot check endpoint; no account or network changes are authorized by this task.',
-      taskId: taskId,
-    );
     try {
       await AppController.instance.backendApi.runSecurityBotChecks();
-      watch.stop();
-      activity.completeTask(
-        botId: 'security',
-        botName: 'Security Bot',
-        taskId: taskId,
-        title: 'Security diagnostics completed',
-        details: 'The backend accepted and completed the on-demand check request. Review the returned report for individual findings.',
-        success: true,
-        durationMs: watch.elapsedMilliseconds,
-      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Read-only security checks completed.')),
@@ -93,16 +66,6 @@ class _ServerSecurityBotCenterScreenState
       }
       await _load(showLoading: false);
     } catch (error) {
-      watch.stop();
-      activity.completeTask(
-        botId: 'security',
-        botName: 'Security Bot',
-        taskId: taskId,
-        title: 'Security diagnostics failed',
-        details: 'The check did not complete: ${error.runtimeType}. Details are shown in the security screen; sensitive error text is not copied into the general activity log.',
-        success: false,
-        durationMs: watch.elapsedMilliseconds,
-      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(error.toString())),
@@ -123,7 +86,7 @@ class _ServerSecurityBotCenterScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Security Bot Control Center'),
+        title: const Text('Security Diagnostics Center'),
         actions: [
           IconButton(
             tooltip: 'Refresh',
@@ -168,12 +131,12 @@ class _ServerSecurityBotCenterScreenState
                   const SizedBox(height: 8),
                   if (report != null) _reportSummary(context, report),
                   const SizedBox(height: 16),
-                  Text('Bot network',
+                  Text('Available checks',
                       style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 8),
                   if (bots.isEmpty && _error == null)
                     const Text(
-                        'The backend has not returned a bot catalog yet.')
+                        'The backend has not returned a check catalog yet.')
                   else
                     for (final bot in bots) _botCard(context, bot),
                   if (findings.isNotEmpty) ...[
@@ -206,8 +169,8 @@ class _ServerSecurityBotCenterScreenState
                     const Card(
                       child: Padding(
                         padding: EdgeInsets.all(16),
-                        child: Text(
-                            'No previous security-bot scans are available.'),
+                        child:
+                            Text('No previous security scans are available.'),
                       ),
                     )
                   else
@@ -219,7 +182,7 @@ class _ServerSecurityBotCenterScreenState
                     icon: Icons.gpp_good_outlined,
                     title: 'Safety boundary',
                     message:
-                        'These bots observe and recommend. They do not automatically revoke sessions, ban IPs, change database policies, rotate keys, modify records, restore backups, or delete files. Backend authorization and database policies remain the security boundary.',
+                        'These checks observe and report. They do not automatically revoke sessions, ban IPs, change database policies, rotate keys, modify records, restore backups, or delete files. Backend authorization and database policies remain the security boundary.',
                     severity: 'info',
                   ),
                 ],
@@ -246,7 +209,7 @@ class _ServerSecurityBotCenterScreenState
           children: [
             Icon(Icons.security_rounded, size: 34, color: Color(0xFF8CE0C7)),
             SizedBox(height: 10),
-            Text('Security & Reliability Bot Network',
+            Text('Security & Reliability Checks',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
             SizedBox(height: 6),
             Text(
@@ -435,7 +398,6 @@ class _ServerSecurityBotCenterScreenState
         'transport_guardian' => Icons.router_rounded,
         'vulnerability_watch' => Icons.bug_report_outlined,
         'permission_auditor' => Icons.policy_outlined,
-        'ai_safety_guardian' => Icons.smart_toy_outlined,
         _ => Icons.shield_outlined,
       };
 }

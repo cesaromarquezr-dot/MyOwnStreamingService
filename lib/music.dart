@@ -10,7 +10,6 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'backend_api.dart';
 import 'app_core.dart';
 import 'catalog_poster_image.dart' show AlbumArtworkImage;
 import 'music_favorites.dart';
@@ -19,14 +18,11 @@ import 'details.dart';
 import 'localization.dart';
 import 'media_text_localizer.dart';
 import 'profile_content_safety.dart';
-import 'shop.dart';
 import 'media_actions.dart';
-import 'navidrome_setup.dart';
-import 'social_sharing.dart';
 import 'music_catalog_screen.dart';
+import 'smart_search.dart';
 import 'cinematic_title_fonts.dart';
 import 'music_video_search_screen.dart';
-import 'music_lyrics_search_screen.dart';
 import 'library_view_modes.dart';
 
 /// A music track imported from the account's home-server library.
@@ -139,12 +135,20 @@ class MusicTrack {
   bool matchesSearchQuery(String query) {
     final needle = query.trim().toLowerCase();
     if (needle.isEmpty) return false;
-    String compact(String value) => value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
+    String compact(String value) =>
+        value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
     final compactNeedle = compact(needle);
     final fields = <String>[
-      title, artist, album, lyrics,
-      ...genres, ...featuredArtists, ...subgenres,
-      ...soundtrackForTitles, ...relatedMediaTitles, ...credits,
+      title,
+      artist,
+      album,
+      lyrics,
+      ...genres,
+      ...featuredArtists,
+      ...subgenres,
+      ...soundtrackForTitles,
+      ...relatedMediaTitles,
+      ...credits,
     ];
     return fields.any((value) {
       final normalized = value.trim().toLowerCase();
@@ -183,21 +187,28 @@ class MusicTrack {
 
   factory MusicTrack.fromCatalogJson(Map<String, dynamic> json) {
     List<String> strings(dynamic value) => value is List
-        ? value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList()
+        ? value
+            .map((item) => item.toString().trim())
+            .where((item) => item.isNotEmpty)
+            .toList()
         : <String>[];
     final id = (json['id'] ?? '').toString().trim();
     final title = (json['title'] ?? '').toString().trim();
     if (id.isEmpty || title.isEmpty) {
       throw const FormatException('Catalog track requires an id and title.');
     }
-    final durationMs = json['durationMs'] ?? json['lengthMs'] ?? json['duration_ms'];
+    final durationMs =
+        json['durationMs'] ?? json['lengthMs'] ?? json['duration_ms'];
     return MusicTrack(
       id: id,
       title: title,
       artist: (json['artist'] ?? 'Unknown artist').toString(),
       album: (json['album'] ?? '').toString(),
       artworkUrl: (json['artworkUrl'] ?? json['imageUrl'])?.toString(),
-      duration: Duration(milliseconds: durationMs is num ? durationMs.toInt().clamp(0, 86400000).toInt() : 0),
+      duration: Duration(
+          milliseconds: durationMs is num
+              ? durationMs.toInt().clamp(0, 86400000).toInt()
+              : 0),
       genres: strings(json['genres']),
       featuredArtists: strings(json['featuredArtists']),
       subgenres: strings(json['subgenres']),
@@ -207,8 +218,12 @@ class MusicTrack {
       soundtrackForTitles: strings(json['soundtrackForTitles']),
       relatedMediaTitles: strings(json['relatedMediaTitles']),
       credits: strings(json['credits']),
-      soundtrackSourceName: (json['soundtrackSourceName'] ?? json['soundtrack_source_name'])?.toString(),
-      soundtrackSourceUrl: (json['soundtrackSourceUrl'] ?? json['soundtrack_source_url'])?.toString(),
+      soundtrackSourceName:
+          (json['soundtrackSourceName'] ?? json['soundtrack_source_name'])
+              ?.toString(),
+      soundtrackSourceUrl:
+          (json['soundtrackSourceUrl'] ?? json['soundtrack_source_url'])
+              ?.toString(),
       providerUrl: (json['providerUrl'] ?? json['spotifyUrl'])?.toString(),
       providerName: (json['providerName'] ?? json['source'])?.toString(),
       providerId: json['providerId']?.toString(),
@@ -258,7 +273,8 @@ String? _musicTrackAttribution(MusicTrack track) {
 }
 
 String _musicTrackSubtitle(MusicTrack track, {String? prefix}) {
-  final base = prefix?.trim().isNotEmpty == true ? prefix!.trim() : track.artist;
+  final base =
+      prefix?.trim().isNotEmpty == true ? prefix!.trim() : track.artist;
   final attribution = _musicTrackAttribution(track);
   return attribution == null ? base : '$base • $attribution';
 }
@@ -271,22 +287,32 @@ String musicTrackSubtitle(MusicTrack track, {String? prefix}) =>
 String? musicTrackAttributionLabel(MusicTrack track) =>
     _musicTrackAttribution(track);
 
-String? _albumAttribution(List<MusicTrack> tracks, String albumTitle, String artist) {
+String? _albumAttribution(
+    List<MusicTrack> tracks, String albumTitle, String artist) {
   final normalizedAlbum = albumTitle.trim().toLowerCase();
   final normalizedArtist = artist.trim().toLowerCase();
   final matching = tracks.where((track) =>
       track.album.trim().toLowerCase() == normalizedAlbum &&
-      (normalizedArtist.isEmpty || track.artist.trim().toLowerCase() == normalizedArtist));
-  final knownNames = matching.map((track) => track.addedByProfileName?.trim() ?? '')
-      .where((name) => name.isNotEmpty).toSet();
+      (normalizedArtist.isEmpty ||
+          track.artist.trim().toLowerCase() == normalizedArtist));
+  final knownNames = matching
+      .map((track) => track.addedByProfileName?.trim() ?? '')
+      .where((name) => name.isNotEmpty)
+      .toSet();
   if (knownNames.length == 1) return knownNames.first;
   if (knownNames.length > 1) return 'multiple profiles';
-  final catalogAlbum = AppController.instance.library.where((media) =>
-      media.type.toLowerCase().contains('album') &&
-      media.title.trim().toLowerCase() == normalizedAlbum &&
-      (media.addedByProfileName?.trim().isNotEmpty ?? false)).toList();
-  if (catalogAlbum.isNotEmpty) return catalogAlbum.first.addedByProfileName!.trim();
-  if (matching.any((track) => _musicTrackAttribution(track) != null)) return 'unknown profile';
+  final catalogAlbum = AppController.instance.library
+      .where((media) =>
+          media.type.toLowerCase().contains('album') &&
+          media.title.trim().toLowerCase() == normalizedAlbum &&
+          (media.addedByProfileName?.trim().isNotEmpty ?? false))
+      .toList();
+  if (catalogAlbum.isNotEmpty) {
+    return catalogAlbum.first.addedByProfileName!.trim();
+  }
+  if (matching.any((track) => _musicTrackAttribution(track) != null)) {
+    return 'unknown profile';
+  }
   return null;
 }
 
@@ -295,7 +321,6 @@ class MusicPageCustomization {
   bool showSearch;
   bool showPlayer;
   bool showWeeklyDiscovery;
-  bool showAIDJ;
   bool showSystemPlaylists;
   bool showLikedSongs;
   bool showRecentlyPlayed;
@@ -303,7 +328,11 @@ class MusicPageCustomization {
   bool showSoundtrackUniverse;
   bool showAlbums;
   bool showArtists;
+  bool showAllSongs;
   bool showPlaylists;
+  String albumSortOrder;
+  String artistSortOrder;
+  String songSortOrder;
   String cardStyle;
   String playerStyle;
   List<String> sectionOrder;
@@ -312,7 +341,6 @@ class MusicPageCustomization {
     this.showSearch = true,
     this.showPlayer = true,
     this.showWeeklyDiscovery = true,
-    this.showAIDJ = true,
     this.showSystemPlaylists = true,
     this.showLikedSongs = true,
     this.showRecentlyPlayed = true,
@@ -320,7 +348,11 @@ class MusicPageCustomization {
     this.showSoundtrackUniverse = true,
     this.showAlbums = true,
     this.showArtists = true,
+    this.showAllSongs = true,
     this.showPlaylists = true,
+    this.albumSortOrder = 'A-Z',
+    this.artistSortOrder = 'A-Z',
+    this.songSortOrder = 'A-Z',
     this.cardStyle = 'Comfortable',
     this.playerStyle = 'Bottom player',
     List<String>? sectionOrder,
@@ -328,7 +360,6 @@ class MusicPageCustomization {
             [
               'Weekly Discovery',
               'Featured Tracks',
-              'AI DJ',
               'Made For You',
               'Liked Songs',
               'On Repeat',
@@ -337,6 +368,7 @@ class MusicPageCustomization {
               'Mood Mixes',
               'Artists',
               'Albums',
+              'All Songs',
               'Playlists',
               'Soundtrack Universe',
               'Genre Blends',
@@ -346,7 +378,6 @@ class MusicPageCustomization {
         showSearch: showSearch,
         showPlayer: showPlayer,
         showWeeklyDiscovery: showWeeklyDiscovery,
-        showAIDJ: showAIDJ,
         showSystemPlaylists: showSystemPlaylists,
         showLikedSongs: showLikedSongs,
         showRecentlyPlayed: showRecentlyPlayed,
@@ -354,7 +385,11 @@ class MusicPageCustomization {
         showSoundtrackUniverse: showSoundtrackUniverse,
         showAlbums: showAlbums,
         showArtists: showArtists,
+        showAllSongs: showAllSongs,
         showPlaylists: showPlaylists,
+        albumSortOrder: albumSortOrder,
+        artistSortOrder: artistSortOrder,
+        songSortOrder: songSortOrder,
         cardStyle: cardStyle,
         playerStyle: playerStyle,
         sectionOrder: List<String>.from(sectionOrder),
@@ -385,10 +420,10 @@ class MusicPageCustomizationStore {
   static MusicPageCustomization settingsFor(Profile? profile) {
     final key = profile?.id ?? 'default';
     final value = _settings[key] ??= MusicPageCustomization();
+    value.sectionOrder.remove('AI DJ');
     const defaults = <String>[
       'Weekly Discovery',
       'Featured Tracks',
-      'AI DJ',
       'Made For You',
       'Liked Songs',
       'On Repeat',
@@ -397,6 +432,7 @@ class MusicPageCustomizationStore {
       'Mood Mixes',
       'Artists',
       'Albums',
+      'All Songs',
       'Playlists',
       'Soundtrack Universe',
       'Genre Blends',
@@ -412,6 +448,7 @@ class MusicPageCustomizationStore {
   static void apply(Profile? profile, MusicPageCustomization value) {
     final key = profile?.id ?? 'default';
     final copy = value.copy();
+    copy.sectionOrder.remove('AI DJ');
     _settings[key] = copy;
     _prefs?.setString(
       'music_customization_$key',
@@ -426,7 +463,6 @@ class MusicPageCustomizationStore {
         'showSearch': value.showSearch,
         'showPlayer': value.showPlayer,
         'showWeeklyDiscovery': value.showWeeklyDiscovery,
-        'showAIDJ': value.showAIDJ,
         'showSystemPlaylists': value.showSystemPlaylists,
         'showLikedSongs': value.showLikedSongs,
         'showRecentlyPlayed': value.showRecentlyPlayed,
@@ -434,7 +470,11 @@ class MusicPageCustomizationStore {
         'showSoundtrackUniverse': value.showSoundtrackUniverse,
         'showAlbums': value.showAlbums,
         'showArtists': value.showArtists,
+        'showAllSongs': value.showAllSongs,
         'showPlaylists': value.showPlaylists,
+        'albumSortOrder': value.albumSortOrder,
+        'artistSortOrder': value.artistSortOrder,
+        'songSortOrder': value.songSortOrder,
         'cardStyle': value.cardStyle,
         'playerStyle': value.playerStyle,
         'sectionOrder': value.sectionOrder,
@@ -445,7 +485,6 @@ class MusicPageCustomizationStore {
         showSearch: map['showSearch'] == false ? false : true,
         showPlayer: map['showPlayer'] == false ? false : true,
         showWeeklyDiscovery: map['showWeeklyDiscovery'] == false ? false : true,
-        showAIDJ: map['showAIDJ'] == false ? false : true,
         showSystemPlaylists: map['showSystemPlaylists'] == false ? false : true,
         showLikedSongs: map['showLikedSongs'] == false ? false : true,
         showRecentlyPlayed: map['showRecentlyPlayed'] == false ? false : true,
@@ -454,7 +493,11 @@ class MusicPageCustomizationStore {
             map['showSoundtrackUniverse'] == false ? false : true,
         showAlbums: map['showAlbums'] == false ? false : true,
         showArtists: map['showArtists'] == false ? false : true,
+        showAllSongs: map['showAllSongs'] == false ? false : true,
         showPlaylists: map['showPlaylists'] == false ? false : true,
+        albumSortOrder: map['albumSortOrder']?.toString() ?? 'A-Z',
+        artistSortOrder: map['artistSortOrder']?.toString() ?? 'A-Z',
+        songSortOrder: map['songSortOrder']?.toString() ?? 'A-Z',
         cardStyle: map['cardStyle']?.toString() ?? 'Comfortable',
         playerStyle: map['playerStyle']?.toString() ?? 'Bottom player',
         sectionOrder: map['sectionOrder'] is List
@@ -469,6 +512,7 @@ class MusicLibraryStore extends ChangeNotifier {
   static final MusicLibraryStore instance = MusicLibraryStore._();
 
   final List<MusicTrack> tracks = <MusicTrack>[];
+
   /// Search-discovered external records, kept separate from the owned library.
   final Map<String, MusicTrack> catalogTracks = <String, MusicTrack>{};
   final Map<String, List<String>> playlists = <String, List<String>>{};
@@ -481,12 +525,16 @@ class MusicLibraryStore extends ChangeNotifier {
   final Map<String, List<int>> listenEventTimestamps = <String, List<int>>{};
 
   bool get hasWeeklyListenData {
-    final cutoff = DateTime.now().subtract(const Duration(days: 7)).millisecondsSinceEpoch;
-    return listenEventTimestamps.values.any((events) => events.any((value) => value >= cutoff));
+    final cutoff =
+        DateTime.now().subtract(const Duration(days: 7)).millisecondsSinceEpoch;
+    return listenEventTimestamps.values
+        .any((events) => events.any((value) => value >= cutoff));
   }
 
   int weeklyListenCount(String trackId, {DateTime? now}) {
-    final cutoff = (now ?? DateTime.now()).subtract(const Duration(days: 7)).millisecondsSinceEpoch;
+    final cutoff = (now ?? DateTime.now())
+        .subtract(const Duration(days: 7))
+        .millisecondsSinceEpoch;
     return (listenEventTimestamps[trackId] ?? const <int>[])
         .where((value) => value >= cutoff)
         .length;
@@ -579,7 +627,8 @@ class MusicLibraryStore extends ChangeNotifier {
   /// it during the same first frame. This prevents duplicate preview entries
   /// and overlapping profile-preference writes.
   Future<void> initializeForProfile(String? profileId) {
-    final next = _initializationQueue.then((_) => _initializeForProfile(profileId));
+    final next =
+        _initializationQueue.then((_) => _initializeForProfile(profileId));
     _initializationQueue = next.catchError((Object _) {});
     return next;
   }
@@ -597,7 +646,8 @@ class MusicLibraryStore extends ChangeNotifier {
         if (decoded is List) {
           for (final value in decoded.whereType<Map>().take(300)) {
             try {
-              final track = MusicTrack.fromCatalogJson(Map<String, dynamic>.from(value));
+              final track =
+                  MusicTrack.fromCatalogJson(Map<String, dynamic>.from(value));
               catalogTracks[track.id] = track;
             } catch (_) {
               // Ignore an obsolete or malformed metadata-cache entry.
@@ -615,10 +665,12 @@ class MusicLibraryStore extends ChangeNotifier {
       ));
     playlistAddedByProfileNames
       ..clear()
-      ..addAll(_decodeStringMap(_playlistPreferences!.getString('music_playlist_added_by_name_$_playlistProfileKey')));
+      ..addAll(_decodeStringMap(_playlistPreferences!
+          .getString('music_playlist_added_by_name_$_playlistProfileKey')));
     playlistAddedByProfileIds
       ..clear()
-      ..addAll(_decodeStringMap(_playlistPreferences!.getString('music_playlist_added_by_id_$_playlistProfileKey')));
+      ..addAll(_decodeStringMap(_playlistPreferences!
+          .getString('music_playlist_added_by_id_$_playlistProfileKey')));
     listenCounts
       ..clear()
       ..addAll(_decodeListenCounts(
@@ -628,7 +680,8 @@ class MusicLibraryStore extends ChangeNotifier {
     listenEventTimestamps
       ..clear()
       ..addAll(_decodeListenEvents(
-        _playlistPreferences!.getString('music_listen_events_$_playlistProfileKey'),
+        _playlistPreferences!
+            .getString('music_listen_events_$_playlistProfileKey'),
       ));
 
     // Preview-only tracks provide a realistic album page while keeping actual
@@ -665,18 +718,90 @@ class MusicLibraryStore extends ChangeNotifier {
     // Local album/artist examples ensure Album and Artist details can be
     // explored before a real music library is imported. No audio URLs are set.
     const catalogExampleTracks = <MusicTrack>[
-      MusicTrack(id: 'demo-catalog-track-1989-blank-space', title: 'Blank Space', artist: 'Taylor Swift', album: '1989', duration: Duration(minutes: 3, seconds: 51), genres: ['Pop']),
-      MusicTrack(id: 'demo-catalog-track-1989-style', title: 'Style', artist: 'Taylor Swift', album: '1989', duration: Duration(minutes: 3, seconds: 51), genres: ['Pop']),
-      MusicTrack(id: 'demo-catalog-track-1989-shake-it-off', title: 'Shake It Off', artist: 'Taylor Swift', album: '1989', duration: Duration(minutes: 3, seconds: 39), genres: ['Pop']),
-      MusicTrack(id: 'demo-catalog-track-rare-rare', title: 'Rare', artist: 'Selena Gomez', album: 'Rare', duration: Duration(minutes: 3, seconds: 40), genres: ['Pop', 'Dance Pop']),
-      MusicTrack(id: 'demo-catalog-track-rare-lose-you-to-love-me', title: 'Lose You to Love Me', artist: 'Selena Gomez', album: 'Rare', duration: Duration(minutes: 3, seconds: 26), genres: ['Pop']),
-      MusicTrack(id: 'demo-catalog-track-rare-look-at-her-now', title: 'Look at Her Now', artist: 'Selena Gomez', album: 'Rare', duration: Duration(minutes: 2, seconds: 55), genres: ['Pop']),
-      MusicTrack(id: 'demo-catalog-track-yhlqmdlg-la-dificil', title: 'La Difícil', artist: 'Bad Bunny', album: 'YHLQMDLG', duration: Duration(minutes: 2, seconds: 43), genres: ['Latin', 'Reggaeton']),
-      MusicTrack(id: 'demo-catalog-track-yhlqmdlg-yo-perreo-sola', title: 'Yo Perreo Sola', artist: 'Bad Bunny', album: 'YHLQMDLG', duration: Duration(minutes: 2, seconds: 52), genres: ['Latin', 'Reggaeton']),
-      MusicTrack(id: 'demo-catalog-track-yhlqmdlg-safaera', title: 'Safaera', artist: 'Bad Bunny', album: 'YHLQMDLG', duration: Duration(minutes: 4, seconds: 55), genres: ['Latin', 'Reggaeton', 'Latin Trap']),
-      MusicTrack(id: 'demo-catalog-track-colores-amarillo', title: 'Amarillo', artist: 'J Balvin', album: 'Colores', duration: Duration(minutes: 2, seconds: 37), genres: ['Latin', 'Reggaeton']),
-      MusicTrack(id: 'demo-catalog-track-colores-azul', title: 'Azul', artist: 'J Balvin', album: 'Colores', duration: Duration(minutes: 3, seconds: 25), genres: ['Latin', 'Reggaeton']),
-      MusicTrack(id: 'demo-catalog-track-colores-rojo', title: 'Rojo', artist: 'J Balvin', album: 'Colores', duration: Duration(minutes: 2, seconds: 30), genres: ['Latin', 'Reggaeton']),
+      MusicTrack(
+          id: 'demo-catalog-track-1989-blank-space',
+          title: 'Blank Space',
+          artist: 'Taylor Swift',
+          album: '1989',
+          duration: Duration(minutes: 3, seconds: 51),
+          genres: ['Pop']),
+      MusicTrack(
+          id: 'demo-catalog-track-1989-style',
+          title: 'Style',
+          artist: 'Taylor Swift',
+          album: '1989',
+          duration: Duration(minutes: 3, seconds: 51),
+          genres: ['Pop']),
+      MusicTrack(
+          id: 'demo-catalog-track-1989-shake-it-off',
+          title: 'Shake It Off',
+          artist: 'Taylor Swift',
+          album: '1989',
+          duration: Duration(minutes: 3, seconds: 39),
+          genres: ['Pop']),
+      MusicTrack(
+          id: 'demo-catalog-track-rare-rare',
+          title: 'Rare',
+          artist: 'Selena Gomez',
+          album: 'Rare',
+          duration: Duration(minutes: 3, seconds: 40),
+          genres: ['Pop', 'Dance Pop']),
+      MusicTrack(
+          id: 'demo-catalog-track-rare-lose-you-to-love-me',
+          title: 'Lose You to Love Me',
+          artist: 'Selena Gomez',
+          album: 'Rare',
+          duration: Duration(minutes: 3, seconds: 26),
+          genres: ['Pop']),
+      MusicTrack(
+          id: 'demo-catalog-track-rare-look-at-her-now',
+          title: 'Look at Her Now',
+          artist: 'Selena Gomez',
+          album: 'Rare',
+          duration: Duration(minutes: 2, seconds: 55),
+          genres: ['Pop']),
+      MusicTrack(
+          id: 'demo-catalog-track-yhlqmdlg-la-dificil',
+          title: 'La Difícil',
+          artist: 'Bad Bunny',
+          album: 'YHLQMDLG',
+          duration: Duration(minutes: 2, seconds: 43),
+          genres: ['Latin', 'Reggaeton']),
+      MusicTrack(
+          id: 'demo-catalog-track-yhlqmdlg-yo-perreo-sola',
+          title: 'Yo Perreo Sola',
+          artist: 'Bad Bunny',
+          album: 'YHLQMDLG',
+          duration: Duration(minutes: 2, seconds: 52),
+          genres: ['Latin', 'Reggaeton']),
+      MusicTrack(
+          id: 'demo-catalog-track-yhlqmdlg-safaera',
+          title: 'Safaera',
+          artist: 'Bad Bunny',
+          album: 'YHLQMDLG',
+          duration: Duration(minutes: 4, seconds: 55),
+          genres: ['Latin', 'Reggaeton', 'Latin Trap']),
+      MusicTrack(
+          id: 'demo-catalog-track-colores-amarillo',
+          title: 'Amarillo',
+          artist: 'J Balvin',
+          album: 'Colores',
+          duration: Duration(minutes: 2, seconds: 37),
+          genres: ['Latin', 'Reggaeton']),
+      MusicTrack(
+          id: 'demo-catalog-track-colores-azul',
+          title: 'Azul',
+          artist: 'J Balvin',
+          album: 'Colores',
+          duration: Duration(minutes: 3, seconds: 25),
+          genres: ['Latin', 'Reggaeton']),
+      MusicTrack(
+          id: 'demo-catalog-track-colores-rojo',
+          title: 'Rojo',
+          artist: 'J Balvin',
+          album: 'Colores',
+          duration: Duration(minutes: 2, seconds: 30),
+          genres: ['Latin', 'Reggaeton']),
     ];
     for (final example in catalogExampleTracks) {
       if (!tracks.any((track) => track.id == example.id)) tracks.add(example);
@@ -686,11 +811,10 @@ class MusicLibraryStore extends ChangeNotifier {
     // Save names per profile; notify only for genuinely new generated genre mixes,
     // not for the baseline set on first launch.
     final knownPlaylistKey = 'music_known_auto_playlists_$_playlistProfileKey';
-    final currentAutomaticNames = smartPlaylists.keys
-        .where((name) => name.endsWith(' Mix'))
-        .toSet();
-    final previouslyKnown = _playlistPreferences!
-        .getStringList(knownPlaylistKey);
+    final currentAutomaticNames =
+        smartPlaylists.keys.where((name) => name.endsWith(' Mix')).toSet();
+    final previouslyKnown =
+        _playlistPreferences!.getStringList(knownPlaylistKey);
     if (previouslyKnown == null) {
       await _playlistPreferences!.setStringList(
         knownPlaylistKey,
@@ -698,13 +822,15 @@ class MusicLibraryStore extends ChangeNotifier {
       );
     } else {
       final previousSet = previouslyKnown.toSet();
-      final newNames = currentAutomaticNames.difference(previousSet).toList()..sort();
+      final newNames = currentAutomaticNames.difference(previousSet).toList()
+        ..sort();
       for (final name in newNames) {
         AppController.instance.addNotification(
           action: 'a new automatic playlist was created: $name',
         );
       }
-      if (newNames.isNotEmpty || previousSet.length != currentAutomaticNames.length) {
+      if (newNames.isNotEmpty ||
+          previousSet.length != currentAutomaticNames.length) {
         await _playlistPreferences!.setStringList(
           knownPlaylistKey,
           currentAutomaticNames.toList()..sort(),
@@ -735,7 +861,8 @@ class MusicLibraryStore extends ChangeNotifier {
     try {
       final decoded = jsonDecode(encoded);
       if (decoded is! Map) return <String, String>{};
-      return decoded.map((key, value) => MapEntry(key.toString(), value.toString()));
+      return decoded
+          .map((key, value) => MapEntry(key.toString(), value.toString()));
     } catch (_) {
       return <String, String>{};
     }
@@ -760,20 +887,28 @@ class MusicLibraryStore extends ChangeNotifier {
     try {
       final decoded = jsonDecode(encoded);
       if (decoded is! Map) return <String, List<int>>{};
-      final cutoff = DateTime.now().subtract(const Duration(days: 45)).millisecondsSinceEpoch;
+      final cutoff = DateTime.now()
+          .subtract(const Duration(days: 45))
+          .millisecondsSinceEpoch;
       return decoded.map((key, value) {
         final events = value is List
-            ? value.whereType<num>().map((entry) => entry.toInt()).where((entry) => entry >= cutoff).toList(growable: true)
+            ? value
+                .whereType<num>()
+                .map((entry) => entry.toInt())
+                .where((entry) => entry >= cutoff)
+                .toList(growable: true)
             : <int>[];
         return MapEntry(key.toString(), events);
-      })..removeWhere((_, events) => events.isEmpty);
+      })
+        ..removeWhere((_, events) => events.isEmpty);
     } catch (_) {
       return <String, List<int>>{};
     }
   }
 
   Future<void> _persistListenEvents() async {
-    final preferences = _playlistPreferences ??= await SharedPreferences.getInstance();
+    final preferences =
+        _playlistPreferences ??= await SharedPreferences.getInstance();
     await preferences.setString(
       'music_listen_events_$_playlistProfileKey',
       jsonEncode(listenEventTimestamps),
@@ -809,108 +944,9 @@ class MusicLibraryStore extends ChangeNotifier {
   bool shuffle = false;
   bool repeat = false;
 
-  /// Tracks the ordered queue used by AI DJ and normal playback.
+  /// Tracks the ordered queue used by normal playback and optional Jam mode.
   final List<String> queue = <String>[];
-  bool aiDjActive = false;
-
-  /// Publishes lightweight music metadata to the Shop association index.
-  /// Audio files and private track data remain on the account's home server.
-  void registerShopEntities() {
-    final entities = <ShopEntity>[];
-    final registeredGenreBlends = <String>{};
-
-    for (final track in tracks) {
-      entities.add(
-        ShopEntity(
-          type: 'song',
-          id: track.id,
-          name: track.title,
-          subtitle: 'Song • ${track.artist}',
-        ),
-      );
-
-      if (track.artist.trim().isNotEmpty) {
-        final artistId = 'artist:${track.artist.trim().toLowerCase()}';
-        entities.add(
-          ShopEntity(
-            type: 'artist',
-            id: artistId,
-            name: track.artist,
-            subtitle: 'Artist',
-          ),
-        );
-      }
-
-      if (track.album.trim().isNotEmpty) {
-        final albumId =
-            'album:${track.artist.trim().toLowerCase()}:${track.album.trim().toLowerCase()}';
-        entities.add(
-          ShopEntity(
-            type: 'album',
-            id: albumId,
-            name: track.album,
-            subtitle: 'Album • ${track.artist}',
-          ),
-        );
-      }
-
-      for (final genre in track.allGenreTags) {
-        final clean = genre.trim();
-        if (clean.isEmpty) continue;
-        entities.add(
-          ShopEntity(
-            type: 'genre',
-            id: 'music-genre:${clean.toLowerCase()}',
-            name: clean,
-            subtitle: 'Music genre',
-          ),
-        );
-      }
-
-      if (track.hasGenreBlend) {
-        final blend = track.genreBlendLabel.trim();
-        final key = blend.toLowerCase();
-        if (blend.isNotEmpty && registeredGenreBlends.add(key)) {
-          entities.add(
-            ShopEntity(
-              type: 'genre',
-              id: 'music-genre-blend:$key',
-              name: blend,
-              subtitle: 'Genre blend • Music',
-            ),
-          );
-        }
-      }
-
-      for (final artist in track.featuredArtists) {
-        final clean = artist.trim();
-        if (clean.isEmpty) continue;
-        entities.add(
-          ShopEntity(
-            type: 'artist',
-            id: 'artist:${clean.toLowerCase()}',
-            name: clean,
-            subtitle: 'Featured artist',
-          ),
-        );
-      }
-    }
-
-    for (final playlistName in playlists.keys) {
-      final clean = playlistName.trim();
-      if (clean.isEmpty) continue;
-      entities.add(
-        ShopEntity(
-          type: 'playlist',
-          id: 'playlist:${clean.toLowerCase()}',
-          name: clean,
-          subtitle: 'Music playlist',
-        ),
-      );
-    }
-
-    ShopCatalog.instance.registerExternalEntities(entities);
-  }
+  bool autoAdvanceQueue = false;
 
   String homeBackground = '0xFF090909';
   String navbarColor = '0xFF101010';
@@ -927,7 +963,11 @@ class MusicLibraryStore extends ChangeNotifier {
   /// Cache external search metadata without adding it to the owned/playable list.
   Future<void> cacheCatalogTracks(Iterable<MusicTrack> entries) async {
     for (final track in entries) {
-      if (track.id.trim().isEmpty || track.title.trim().isEmpty || !track.catalogOnly) continue;
+      if (track.id.trim().isEmpty ||
+          track.title.trim().isEmpty ||
+          !track.catalogOnly) {
+        continue;
+      }
       // Do not let an external duplicate shadow an imported local file.
       if (tracks.any((local) => local.id == track.id)) continue;
       catalogTracks[track.id] = track;
@@ -942,12 +982,15 @@ class MusicLibraryStore extends ChangeNotifier {
         });
       catalogTracks
         ..clear()
-        ..addEntries(retained.take(300).map((track) => MapEntry(track.id, track)));
+        ..addEntries(
+            retained.take(300).map((track) => MapEntry(track.id, track)));
     }
-    final preferences = _playlistPreferences ??= await SharedPreferences.getInstance();
+    final preferences =
+        _playlistPreferences ??= await SharedPreferences.getInstance();
     await preferences.setString(
       'music_catalog_track_cache_$_playlistProfileKey',
-      jsonEncode(catalogTracks.values.map((track) => track.toCatalogJson()).toList()),
+      jsonEncode(
+          catalogTracks.values.map((track) => track.toCatalogJson()).toList()),
     );
     notifyListeners();
   }
@@ -971,7 +1014,8 @@ class MusicLibraryStore extends ChangeNotifier {
       playlistAddedByProfileIds[clean] = creator.id;
     }
     _persistPlaylists();
-    AppController.instance.addNotification(action: 'created a new playlist: $clean');
+    AppController.instance
+        .addNotification(action: 'created a new playlist: $clean');
     notifyListeners();
   }
 
@@ -1004,11 +1048,11 @@ class MusicLibraryStore extends ChangeNotifier {
   }
 
   /// Replaces the current playback queue without changing the source files.
-  void setQueue(Iterable<MusicTrack> tracks, {bool aiDj = false}) {
+  void setQueue(Iterable<MusicTrack> tracks, {bool autoAdvance = false}) {
     queue
       ..clear()
       ..addAll(tracks.map((track) => track.id));
-    aiDjActive = aiDj;
+    autoAdvanceQueue = autoAdvance;
     notifyListeners();
   }
 
@@ -1021,7 +1065,7 @@ class MusicLibraryStore extends ChangeNotifier {
 
   void removeFromQueue(String trackId) {
     queue.remove(trackId);
-    if (queue.isEmpty) aiDjActive = false;
+    if (queue.isEmpty) autoAdvanceQueue = false;
     notifyListeners();
   }
 
@@ -1035,7 +1079,7 @@ class MusicLibraryStore extends ChangeNotifier {
 
   void clearQueue() {
     queue.clear();
-    aiDjActive = false;
+    autoAdvanceQueue = false;
     notifyListeners();
   }
 
@@ -1043,7 +1087,9 @@ class MusicLibraryStore extends ChangeNotifier {
   /// local chart is a personal listening chart, not a worldwide streaming rank.
   void recordListen(String trackId) {
     final now = DateTime.now().millisecondsSinceEpoch;
-    final cutoff = DateTime.now().subtract(const Duration(days: 45)).millisecondsSinceEpoch;
+    final cutoff = DateTime.now()
+        .subtract(const Duration(days: 45))
+        .millisecondsSinceEpoch;
     final events = listenEventTimestamps.putIfAbsent(trackId, () => <int>[]);
     events.removeWhere((timestamp) => timestamp < cutoff);
     events.add(now);
@@ -1067,32 +1113,9 @@ class MusicPlaybackController extends ChangeNotifier {
   bool _advancing = false;
   bool _wrappedCompletionRecordedForCurrentPlayback = false;
   String? _playbackProfileId;
-  Timer? _presenceHeartbeat;
 
   VideoPlayerController? get videoController => _controller;
   bool get isReady => _controller?.value.isInitialized == true;
-
-  String _listeningActivity(MusicTrack track) {
-    final library = MusicLibraryStore.instance;
-    final playlist = library.activePlaylist;
-    if (playlist != null && playlist.trim().isNotEmpty) {
-      final ids = library.playlists[playlist] ?? const <String>[];
-      final index = ids.indexOf(track.id);
-      if (index >= 0) {
-        return _capActivity(
-            'Listening to playlist $playlist, item ${index + 1}, ${track.title}');
-      }
-    }
-    final album = track.album.trim();
-    if (album.isNotEmpty) {
-      return _capActivity(
-          'Listening to album $album, ${track.title} by ${track.artist}');
-    }
-    return _capActivity('Listening to ${track.title} by ${track.artist}');
-  }
-
-  String _capActivity(String value) =>
-      value.length <= 160 ? value : '${value.substring(0, 157)}...';
 
   /// Starts a server-provided audio stream for a track.
   Future<void> play(MusicTrack track) async {
@@ -1112,7 +1135,6 @@ class MusicPlaybackController extends ChangeNotifier {
     if (url == null || url.isEmpty) {
       isPlaying = false;
       notifyListeners();
-      unawaited(_updateSocialListeningActivity(null));
       return;
     }
 
@@ -1135,11 +1157,6 @@ class MusicPlaybackController extends ChangeNotifier {
       await controller.play();
       isPlaying = true;
       MusicLibraryStore.instance.recordListen(track.id);
-      unawaited(
-        _updateSocialListeningActivity(
-          _listeningActivity(track),
-        ),
-      );
     } catch (_) {
       isPlaying = false;
     } finally {
@@ -1148,14 +1165,15 @@ class MusicPlaybackController extends ChangeNotifier {
     }
   }
 
-  /// Advances an AI DJ queue when the active track finishes.
+  /// Advances a continuous queue when the active track finishes.
   void _handlePlaybackTick() {
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) return;
     if (!controller.value.isCompleted || _advancing) return;
 
     final finishedTrack = currentTrack;
-    if (finishedTrack != null && !_wrappedCompletionRecordedForCurrentPlayback) {
+    if (finishedTrack != null &&
+        !_wrappedCompletionRecordedForCurrentPlayback) {
       _wrappedCompletionRecordedForCurrentPlayback = true;
       unawaited(AppController.instance.recordWrappedActivityDetails(
         mediaId: finishedTrack.id,
@@ -1170,13 +1188,13 @@ class MusicPlaybackController extends ChangeNotifier {
     }
 
     final store = MusicLibraryStore.instance;
-    if (!store.aiDjActive || store.queue.isEmpty) return;
+    if (!store.autoAdvanceQueue || store.queue.isEmpty) return;
 
-    _advanceAiDj();
+    _advanceAutoQueue();
   }
 
-  /// Selects the next queued AI DJ track and starts it automatically.
-  Future<void> _advanceAiDj() async {
+  /// Selects the next queued track and starts it automatically.
+  Future<void> _advanceAutoQueue() async {
     if (_advancing) return;
     _advancing = true;
     try {
@@ -1209,7 +1227,6 @@ class MusicPlaybackController extends ChangeNotifier {
       _controller?.pause();
       isPlaying = false;
       notifyListeners();
-      unawaited(_updateSocialListeningActivity(null));
     }
     return _resumeAfterVideo;
   }
@@ -1221,14 +1238,6 @@ class MusicPlaybackController extends ChangeNotifier {
     await _controller!.play();
     isPlaying = true;
     notifyListeners();
-    final track = currentTrack;
-    if (track != null) {
-      unawaited(
-        _updateSocialListeningActivity(
-          _listeningActivity(track),
-        ),
-      );
-    }
   }
 
   /// Toggles play/pause for the active track.
@@ -1238,80 +1247,18 @@ class MusicPlaybackController extends ChangeNotifier {
     if (controller.value.isPlaying) {
       await controller.pause();
       isPlaying = false;
-      unawaited(_updateSocialListeningActivity(null));
     } else {
       await controller.play();
       isPlaying = true;
-      final track = currentTrack;
-      if (track != null) {
-        unawaited(
-          _updateSocialListeningActivity(
-            _listeningActivity(track),
-          ),
-        );
-      }
     }
     notifyListeners();
-  }
-
-  Future<void> _updateSocialListeningActivity(String? activity) async {
-    final profile = AppController.instance.currentProfile;
-    final api = AppController.instance.backendApi;
-
-    _presenceHeartbeat?.cancel();
-    _presenceHeartbeat = null;
-
-    if (activity == null) {
-      if (profile != null && api.isAuthenticated) {
-        try {
-          await api.setSocialProfilePresence(
-            profileId: profile.id,
-            clearActivity: true,
-          );
-        } catch (error) {
-          debugPrint(
-            'Unable to update music presence: '
-            '${error.toString().replaceFirst('Exception: ', '')}',
-          );
-        }
-      }
-      return;
-    }
-
-    if (profile == null || !api.isAuthenticated) return;
-
-    try {
-      await api.setSocialProfilePresence(
-        profileId: profile.id,
-        availability: 'busy',
-        activityType: 'listening',
-        activityText: activity,
-        clearActivity: false,
-      );
-    } catch (error) {
-      debugPrint(
-        'Unable to update music presence: '
-        '${error.toString().replaceFirst('Exception: ', '')}',
-      );
-    }
-
-    _presenceHeartbeat = Timer.periodic(
-      const Duration(minutes: 1),
-      (_) {
-        final track = currentTrack;
-        unawaited(
-          _updateSocialListeningActivity(
-            isPlaying && track != null ? _listeningActivity(track) : null,
-          ),
-        );
-      },
-    );
   }
 }
 
 /// Opens a local audio source when available; otherwise opens the catalog's
 /// official provider page without pretending the catalog record is playable.
-Future<void> openMusicSearchTrack(BuildContext context, MusicTrack track) async {
+Future<void> openMusicSearchTrack(
+    BuildContext context, MusicTrack track) async {
   final audio = track.audioUrl?.trim() ?? '';
   if (!track.catalogOnly && audio.isNotEmpty) {
     await MusicPlaybackController.instance.play(track);
@@ -1325,15 +1272,18 @@ Future<void> openMusicSearchTrack(BuildContext context, MusicTrack track) async 
   }
   if (context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content: Text('This result is catalog metadata. Import the audio file to play it locally.'),
+      content: Text(
+          'This result is catalog metadata. Import the audio file to play it locally.'),
     ));
   }
 }
 
 /// Spotify-like context menu shared by universal search and music pages.
-Future<void> showMusicTrackOptions(BuildContext context, MusicTrack track) async {
+Future<void> showMusicTrackOptions(
+    BuildContext context, MusicTrack track) async {
   final store = MusicLibraryStore.instance;
-  final playable = !track.catalogOnly && (track.audioUrl?.trim().isNotEmpty ?? false);
+  final playable =
+      !track.catalogOnly && (track.audioUrl?.trim().isNotEmpty ?? false);
   final isLiked = MusicFavoritesBridge.likedTracks().contains(track.id);
   final inQueue = store.queue.contains(track.id);
   final action = await showModalBottomSheet<String>(
@@ -1353,58 +1303,104 @@ Future<void> showMusicTrackOptions(BuildContext context, MusicTrack track) async
                   : null,
               child: const Icon(Icons.music_note_rounded),
             ),
-            title: Text(track.title, maxLines: 2, overflow: TextOverflow.ellipsis,
+            title: Text(track.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontWeight: FontWeight.w800)),
-            subtitle: Text('${track.artist}${track.album.trim().isEmpty ? '' : ' · ${track.album}'}'),
+            subtitle: Text(
+                '${track.artist}${track.album.trim().isEmpty ? '' : ' · ${track.album}'}'),
           ),
           const Divider(),
-          ListTile(leading: const Icon(Icons.play_arrow_rounded), title: Text(playable ? 'Play' : 'Open music provider'),
-            subtitle: Text(playable ? 'Play this imported file' : 'Catalog result · not imported'),
-            onTap: () => Navigator.pop(sheetContext, 'play')),
-          ListTile(leading: Icon(isLiked ? Icons.favorite : Icons.favorite_border),
-            title: Text(isLiked ? 'Remove from Liked Songs' : 'Add to Liked Songs'),
-            onTap: () => Navigator.pop(sheetContext, 'like')),
           ListTile(
-            leading: Icon(MusicFavoritesBridge.isTrackExcluded(track.id) ? Icons.auto_awesome_rounded : Icons.do_not_disturb_on_outlined),
-            title: Text(MusicFavoritesBridge.isTrackExcluded(track.id) ? 'Include in taste profile' : 'Exclude from taste profile'),
-            subtitle: const Text('Changes local recommendations, not search results or your files'),
+              leading: const Icon(Icons.play_arrow_rounded),
+              title: Text(playable ? 'Play' : 'Open music provider'),
+              subtitle: Text(playable
+                  ? 'Play this imported file'
+                  : 'Catalog result · not imported'),
+              onTap: () => Navigator.pop(sheetContext, 'play')),
+          ListTile(
+              leading: Icon(isLiked ? Icons.favorite : Icons.favorite_border),
+              title: Text(
+                  isLiked ? 'Remove from Liked Songs' : 'Add to Liked Songs'),
+              onTap: () => Navigator.pop(sheetContext, 'like')),
+          ListTile(
+            leading: Icon(MusicFavoritesBridge.isTrackExcluded(track.id)
+                ? Icons.auto_awesome_rounded
+                : Icons.do_not_disturb_on_outlined),
+            title: Text(MusicFavoritesBridge.isTrackExcluded(track.id)
+                ? 'Include in taste profile'
+                : 'Exclude from taste profile'),
+            subtitle: const Text(
+                'Changes local recommendations, not search results or your files'),
             onTap: () => Navigator.pop(sheetContext, 'exclude'),
           ),
-          ListTile(leading: const Icon(Icons.playlist_add_rounded), title: const Text('Add to playlist'),
-            onTap: () => Navigator.pop(sheetContext, 'playlist')),
-          ListTile(leading: const Icon(Icons.queue_music_rounded), title: const Text('Add to Queue'),
-            enabled: playable,
-            subtitle: playable ? null : const Text('Import the audio to queue it'),
-            onTap: playable ? () => Navigator.pop(sheetContext, 'queue') : null),
+          ListTile(
+              leading: const Icon(Icons.playlist_add_rounded),
+              title: const Text('Add to playlist'),
+              onTap: () => Navigator.pop(sheetContext, 'playlist')),
+          ListTile(
+              leading: const Icon(Icons.queue_music_rounded),
+              title: const Text('Add to Queue'),
+              enabled: playable,
+              subtitle:
+                  playable ? null : const Text('Import the audio to queue it'),
+              onTap:
+                  playable ? () => Navigator.pop(sheetContext, 'queue') : null),
           if (inQueue)
-            ListTile(leading: const Icon(Icons.remove_circle_outline_rounded), title: const Text('Remove from Queue'),
-              onTap: () => Navigator.pop(sheetContext, 'unqueue')),
-          ListTile(leading: const Icon(Icons.queue_play_next_rounded), title: const Text('Go to Queue'),
-            onTap: () => Navigator.pop(sheetContext, 'view-queue')),
-          ListTile(leading: const Icon(Icons.radio_rounded), title: const Text('Go to song radio'),
-            subtitle: playable ? null : const Text('Builds a station from related tracks in your local library'),
-            onTap: () => Navigator.pop(sheetContext, 'radio')),
-          ListTile(leading: const Icon(Icons.headphones_rounded), title: const Text('Start a Jam'),
-            enabled: playable,
-            subtitle: playable ? const Text('Starts a related local listening queue on this device') : const Text('Requires an imported playable track'),
-            onTap: playable ? () => Navigator.pop(sheetContext, 'jam') : null),
-          ListTile(leading: const Icon(Icons.person_outline_rounded), title: const Text('Go to Artist'),
-            onTap: () => Navigator.pop(sheetContext, 'artist')),
+            ListTile(
+                leading: const Icon(Icons.remove_circle_outline_rounded),
+                title: const Text('Remove from Queue'),
+                onTap: () => Navigator.pop(sheetContext, 'unqueue')),
+          ListTile(
+              leading: const Icon(Icons.queue_play_next_rounded),
+              title: const Text('Go to Queue'),
+              onTap: () => Navigator.pop(sheetContext, 'view-queue')),
+          ListTile(
+              leading: const Icon(Icons.radio_rounded),
+              title: const Text('Go to song radio'),
+              subtitle: playable
+                  ? null
+                  : const Text(
+                      'Builds a station from related tracks in your local library'),
+              onTap: () => Navigator.pop(sheetContext, 'radio')),
+          ListTile(
+              leading: const Icon(Icons.headphones_rounded),
+              title: const Text('Start a Jam'),
+              enabled: playable,
+              subtitle: playable
+                  ? const Text(
+                      'Starts a related local listening queue on this device')
+                  : const Text('Requires an imported playable track'),
+              onTap:
+                  playable ? () => Navigator.pop(sheetContext, 'jam') : null),
+          ListTile(
+              leading: const Icon(Icons.person_outline_rounded),
+              title: const Text('Go to Artist'),
+              onTap: () => Navigator.pop(sheetContext, 'artist')),
           if (track.album.trim().isNotEmpty)
-            ListTile(leading: const Icon(Icons.album_outlined), title: const Text('Go to Album'),
-              onTap: () => Navigator.pop(sheetContext, 'album')),
-          ListTile(leading: const Icon(Icons.receipt_long_outlined), title: const Text('View song credits'),
-            onTap: () => Navigator.pop(sheetContext, 'credits')),
-          ListTile(leading: const Icon(Icons.hub_outlined), title: const Text('Explore SongDNA'),
-            onTap: () => Navigator.pop(sheetContext, 'dna')),
-          ListTile(leading: const Icon(Icons.share_outlined), title: const Text('Share'),
-            onTap: () => Navigator.pop(sheetContext, 'share')),
+            ListTile(
+                leading: const Icon(Icons.album_outlined),
+                title: const Text('Go to Album'),
+                onTap: () => Navigator.pop(sheetContext, 'album')),
+          ListTile(
+              leading: const Icon(Icons.receipt_long_outlined),
+              title: const Text('View song credits'),
+              onTap: () => Navigator.pop(sheetContext, 'credits')),
+          ListTile(
+              leading: const Icon(Icons.hub_outlined),
+              title: const Text('Explore SongDNA'),
+              onTap: () => Navigator.pop(sheetContext, 'dna')),
           if ((track.soundtrackSourceUrl?.trim().isNotEmpty ?? false))
-            ListTile(leading: const Icon(Icons.fact_check_outlined), title: Text('View soundtrack source${track.soundtrackSourceName == null ? '' : ' · ${track.soundtrackSourceName}'}'),
-              onTap: () => Navigator.pop(sheetContext, 'soundtrack-source')),
+            ListTile(
+                leading: const Icon(Icons.fact_check_outlined),
+                title: Text(
+                    'View soundtrack source${track.soundtrackSourceName == null ? '' : ' · ${track.soundtrackSourceName}'}'),
+                onTap: () => Navigator.pop(sheetContext, 'soundtrack-source')),
           if ((track.providerUrl?.trim().isNotEmpty ?? false))
-            ListTile(leading: const Icon(Icons.open_in_new_rounded), title: Text('Open ${track.providerName ?? 'music'}'),
-              onTap: () => Navigator.pop(sheetContext, 'provider')),
+            ListTile(
+                leading: const Icon(Icons.open_in_new_rounded),
+                title: Text('Open ${track.providerName ?? 'music'}'),
+                onTap: () => Navigator.pop(sheetContext, 'provider')),
         ],
       ),
     ),
@@ -1420,7 +1416,8 @@ Future<void> showMusicTrackOptions(BuildContext context, MusicTrack track) async
       MusicFavoritesBridge.toggleTrack(track.id);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(isLiked ? 'Removed from Liked Songs.' : 'Added to Liked Songs.'),
+          content: Text(
+              isLiked ? 'Removed from Liked Songs.' : 'Added to Liked Songs.'),
         ));
       }
       break;
@@ -1441,99 +1438,174 @@ Future<void> showMusicTrackOptions(BuildContext context, MusicTrack track) async
       break;
     case 'queue':
       store.addToQueue(track);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Added to Queue.')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Added to Queue.')));
       break;
     case 'unqueue':
       store.removeFromQueue(track.id);
       break;
     case 'view-queue':
-      await Navigator.push<void>(context, MaterialPageRoute<void>(builder: (_) => const MusicQueueOverviewScreen()));
+      await Navigator.push<void>(
+          context,
+          MaterialPageRoute<void>(
+              builder: (_) => const MusicQueueOverviewScreen()));
       break;
     case 'radio':
-      await Navigator.push<void>(context, MaterialPageRoute<void>(builder: (_) => MusicSongRadioScreen(seed: track)));
+      await Navigator.push<void>(
+          context,
+          MaterialPageRoute<void>(
+              builder: (_) => MusicSongRadioScreen(seed: track)));
       break;
     case 'jam':
       final related = _relatedPlayableTracks(track, store.tracks, limit: 24);
-      store.setQueue(<MusicTrack>[track, ...related], aiDj: true);
+      store.setQueue(<MusicTrack>[track, ...related], autoAdvance: true);
       await MusicPlaybackController.instance.play(track);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Jam started on this device. Multi-device live Jam sync is not connected yet.'),
+          content: Text(
+              'Jam started on this device. Multi-device live Jam sync is not connected yet.'),
         ));
       }
       break;
     case 'artist':
-      await Navigator.push<void>(context, MaterialPageRoute<void>(builder: (_) => MusicArtistProfileScreen(artistName: track.artist)));
+      await Navigator.push<void>(
+          context,
+          MaterialPageRoute<void>(
+              builder: (_) =>
+                  MusicArtistProfileScreen(artistName: track.artist)));
       break;
     case 'album':
-      final albumTracks = store.tracks.where((entry) => entry.album.trim().toLowerCase() == track.album.trim().toLowerCase() && entry.artist.trim().toLowerCase() == track.artist.trim().toLowerCase()).toList();
-      final localRows = albumTracks.asMap().entries.map((entry) => <String, dynamic>{
-        'title': entry.value.title,
-        'artist': entry.value.artist,
-        'durationMs': entry.value.duration.inMilliseconds,
-        'trackNumber': entry.key + 1,
-        'artworkUrl': entry.value.artworkUrl,
-      }).toList();
+      final albumTracks = store.tracks
+          .where((entry) =>
+              entry.album.trim().toLowerCase() ==
+                  track.album.trim().toLowerCase() &&
+              entry.artist.trim().toLowerCase() ==
+                  track.artist.trim().toLowerCase())
+          .toList();
+      final localRows = albumTracks
+          .asMap()
+          .entries
+          .map((entry) => <String, dynamic>{
+                'title': entry.value.title,
+                'artist': entry.value.artist,
+                'durationMs': entry.value.duration.inMilliseconds,
+                'trackNumber': entry.key + 1,
+                'artworkUrl': entry.value.artworkUrl,
+              })
+          .toList();
       // A track's providerId is its track ID, not its album ID. Resolve the
       // album by its actual title/artist unless a future schema provides a
       // dedicated albumProviderId. Never pass a track ID to the album endpoint.
-      await Navigator.push<void>(context, MaterialPageRoute<void>(builder: (_) => OwnedAlbumDetailsScreen(albumTitle: track.album, artistName: track.artist, artworkUrl: track.artworkUrl, localTracks: localRows, isOwned: albumTracks.isNotEmpty, resolveSpotifyMetadata: true)));
+      await Navigator.push<void>(
+          context,
+          MaterialPageRoute<void>(
+              builder: (_) => OwnedAlbumDetailsScreen(
+                  albumTitle: track.album,
+                  artistName: track.artist,
+                  artworkUrl: track.artworkUrl,
+                  localTracks: localRows,
+                  isOwned: albumTracks.isNotEmpty,
+                  resolveSpotifyMetadata: true)));
       break;
     case 'credits':
       await _showMusicTrackCredits(context, track);
       break;
     case 'dna':
-      await Navigator.push<void>(context, MaterialPageRoute<void>(builder: (_) => MusicSongDnaScreen(track: track)));
-      break;
-    case 'share':
-      await showSocialShareDialog(context, title: 'Share song', message: '${track.title} — ${track.artist}${track.providerUrl == null ? '' : '\n${track.providerUrl}'}', mediaReference: <String, dynamic>{'type': 'music_track', 'id': track.id, 'title': track.title, 'artist': track.artist, 'album': track.album, if (track.providerUrl != null) 'url': track.providerUrl});
+      await Navigator.push<void>(
+          context,
+          MaterialPageRoute<void>(
+              builder: (_) => MusicSongDnaScreen(track: track)));
       break;
     case 'provider':
       final raw = track.providerUrl?.trim() ?? '';
       final uri = Uri.tryParse(raw);
-      if (uri != null && (uri.scheme == 'https' || uri.scheme == 'http')) await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (uri != null && (uri.scheme == 'https' || uri.scheme == 'http')) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
       break;
     case 'soundtrack-source':
       final uri = Uri.tryParse(track.soundtrackSourceUrl?.trim() ?? '');
-      if (uri != null && (uri.scheme == 'https' || uri.scheme == 'http')) await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (uri != null && (uri.scheme == 'https' || uri.scheme == 'http')) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
       break;
   }
 }
 
-List<MusicTrack> _relatedPlayableTracks(MusicTrack seed, Iterable<MusicTrack> tracks, {int limit = 20}) {
-  final seedArtists = <String>{seed.artist, ...seed.featuredArtists}.map((value) => value.trim().toLowerCase()).where((value) => value.isNotEmpty).toSet();
-  final seedGenres = seed.allGenreTags.map((value) => value.toLowerCase()).toSet();
+List<MusicTrack> _relatedPlayableTracks(
+    MusicTrack seed, Iterable<MusicTrack> tracks,
+    {int limit = 20}) {
+  final seedArtists = <String>{seed.artist, ...seed.featuredArtists}
+      .map((value) => value.trim().toLowerCase())
+      .where((value) => value.isNotEmpty)
+      .toSet();
+  final seedGenres =
+      seed.allGenreTags.map((value) => value.toLowerCase()).toSet();
   final excluded = MusicFavoritesBridge.excludedTracks().toSet();
-  final candidates = tracks.where((candidate) => candidate.id != seed.id && !excluded.contains(candidate.id) && !candidate.catalogOnly && (candidate.audioUrl?.trim().isNotEmpty ?? false)).map((candidate) {
-    final artists = <String>{candidate.artist, ...candidate.featuredArtists}.map((value) => value.trim().toLowerCase()).where((value) => value.isNotEmpty).toSet();
-    final sharedArtists = seedArtists.intersection(artists).length;
-    final sharedGenres = seedGenres.intersection(candidate.allGenreTags.map((value) => value.toLowerCase()).toSet()).length;
-    final sameAlbum = seed.album.trim().isNotEmpty && seed.album.trim().toLowerCase() == candidate.album.trim().toLowerCase();
-    return MapEntry(candidate, sharedArtists * 8 + sharedGenres * 2 + (sameAlbum ? 5 : 0));
-  }).where((entry) => entry.value > 0).toList()
+  final candidates = tracks
+      .where((candidate) =>
+          candidate.id != seed.id &&
+          !excluded.contains(candidate.id) &&
+          !candidate.catalogOnly &&
+          (candidate.audioUrl?.trim().isNotEmpty ?? false))
+      .map((candidate) {
+        final artists = <String>{candidate.artist, ...candidate.featuredArtists}
+            .map((value) => value.trim().toLowerCase())
+            .where((value) => value.isNotEmpty)
+            .toSet();
+        final sharedArtists = seedArtists.intersection(artists).length;
+        final sharedGenres = seedGenres
+            .intersection(candidate.allGenreTags
+                .map((value) => value.toLowerCase())
+                .toSet())
+            .length;
+        final sameAlbum = seed.album.trim().isNotEmpty &&
+            seed.album.trim().toLowerCase() ==
+                candidate.album.trim().toLowerCase();
+        return MapEntry(candidate,
+            sharedArtists * 8 + sharedGenres * 2 + (sameAlbum ? 5 : 0));
+      })
+      .where((entry) => entry.value > 0)
+      .toList()
     ..sort((a, b) {
       final score = b.value.compareTo(a.value);
-      return score != 0 ? score : a.key.title.toLowerCase().compareTo(b.key.title.toLowerCase());
+      return score != 0
+          ? score
+          : a.key.title.toLowerCase().compareTo(b.key.title.toLowerCase());
     });
-  return candidates.take(limit).map((entry) => entry.key).toList(growable: false);
+  return candidates
+      .take(limit)
+      .map((entry) => entry.key)
+      .toList(growable: false);
 }
 
-Future<void> _addMusicTrackToPlaylist(BuildContext context, MusicTrack track) async {
+Future<void> _addMusicTrackToPlaylist(
+    BuildContext context, MusicTrack track) async {
   final store = MusicLibraryStore.instance;
   final chosen = await showModalBottomSheet<String>(
     context: context,
     backgroundColor: const Color(0xFF17171B),
     showDragHandle: true,
-    builder: (sheetContext) => SafeArea(child: ListView(
+    builder: (sheetContext) => SafeArea(
+        child: ListView(
       shrinkWrap: true,
       children: <Widget>[
-        const ListTile(title: Text('Add to playlist', style: TextStyle(fontWeight: FontWeight.w800))),
+        const ListTile(
+            title: Text('Add to playlist',
+                style: TextStyle(fontWeight: FontWeight.w800))),
         for (final name in store.playlists.keys.toList()..sort())
-          ListTile(leading: const Icon(Icons.queue_music_rounded), title: Text(name),
-            trailing: (store.playlists[name] ?? const <String>[]).contains(track.id) ? const Icon(Icons.check_rounded) : null,
-            onTap: () => Navigator.pop(sheetContext, name)),
-        ListTile(leading: const Icon(Icons.add_rounded), title: const Text('Create playlist'),
-          onTap: () => Navigator.pop(sheetContext, '__create__')),
+          ListTile(
+              leading: const Icon(Icons.queue_music_rounded),
+              title: Text(name),
+              trailing:
+                  (store.playlists[name] ?? const <String>[]).contains(track.id)
+                      ? const Icon(Icons.check_rounded)
+                      : null,
+              onTap: () => Navigator.pop(sheetContext, name)),
+        ListTile(
+            leading: const Icon(Icons.add_rounded),
+            title: const Text('Create playlist'),
+            onTap: () => Navigator.pop(sheetContext, '__create__')),
       ],
     )),
   );
@@ -1541,56 +1613,95 @@ Future<void> _addMusicTrackToPlaylist(BuildContext context, MusicTrack track) as
   var target = chosen;
   if (chosen == '__create__') {
     final textController = TextEditingController();
-    target = (await showDialog<String>(context: context, builder: (dialogContext) => AlertDialog(
-      title: const Text('New playlist'),
-      content: TextField(controller: textController, autofocus: true, decoration: const InputDecoration(labelText: 'Playlist name')),
-      actions: <Widget>[
-        TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
-        FilledButton(onPressed: () => Navigator.pop(dialogContext, textController.text.trim()), child: const Text('Create')),
-      ],
-    )) ?? '').trim();
+    target = (await showDialog<String>(
+                context: context,
+                builder: (dialogContext) => AlertDialog(
+                      title: const Text('New playlist'),
+                      content: TextField(
+                          controller: textController,
+                          autofocus: true,
+                          decoration: const InputDecoration(
+                              labelText: 'Playlist name')),
+                      actions: <Widget>[
+                        TextButton(
+                            onPressed: () => Navigator.pop(dialogContext),
+                            child: const Text('Cancel')),
+                        FilledButton(
+                            onPressed: () => Navigator.pop(
+                                dialogContext, textController.text.trim()),
+                            child: const Text('Create')),
+                      ],
+                    )) ??
+            '')
+        .trim();
     textController.dispose();
-    if (!context.mounted || target.isEmpty || store.playlists.containsKey(target)) return;
+    if (!context.mounted ||
+        target.isEmpty ||
+        store.playlists.containsKey(target)) {
+      return;
+    }
     store.createPlaylist(target);
   }
   if (!store.playlists.containsKey(target)) return;
-  if (!(store.playlists[target] ?? const <String>[]).contains(track.id)) store.toggleTrackInPlaylist(target, track.id);
-  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Added to $target.')));
+  if (!(store.playlists[target] ?? const <String>[]).contains(track.id)) {
+    store.toggleTrackInPlaylist(target, track.id);
+  }
+  if (context.mounted) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('Added to $target.')));
+  }
 }
 
-Future<void> _showMusicTrackCredits(BuildContext context, MusicTrack track) async {
+Future<void> _showMusicTrackCredits(
+    BuildContext context, MusicTrack track) async {
   await showModalBottomSheet<void>(
     context: context,
     backgroundColor: const Color(0xFF17171B),
     showDragHandle: true,
-    builder: (sheetContext) => SafeArea(child: ListView(
+    builder: (sheetContext) => SafeArea(
+        child: ListView(
       shrinkWrap: true,
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
       children: <Widget>[
-        Text(track.title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+        Text(track.title,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
         Text(track.artist, style: const TextStyle(color: Colors.white70)),
         const SizedBox(height: 16),
         _creditRow('Artist', track.artist),
-        if (track.featuredArtists.isNotEmpty) _creditRow('Featured artists', track.featuredArtists.join(', ')),
+        if (track.featuredArtists.isNotEmpty)
+          _creditRow('Featured artists', track.featuredArtists.join(', ')),
         if (track.album.trim().isNotEmpty) _creditRow('Album', track.album),
-        if (track.allGenreTags.isNotEmpty) _creditRow('Genres', track.allGenreTags.join(', ')),
-        for (final credit in track.credits) _creditRow('Indexed credit', credit),
-        if (track.credits.isEmpty) const Padding(padding: EdgeInsets.only(top: 8), child: Text('No additional writer, producer, or engineering credits are indexed for this track yet.', style: TextStyle(color: Colors.white60))),
-        if (track.providerName?.trim().isNotEmpty == true) _creditRow('Metadata source', track.providerName!),
-        if (track.soundtrackSourceName?.trim().isNotEmpty == true) _creditRow('Soundtrack source', track.soundtrackSourceName!),
-        if (track.soundtrackSourceUrl?.trim().isNotEmpty == true) _creditRow('Source link', track.soundtrackSourceUrl!),
+        if (track.allGenreTags.isNotEmpty)
+          _creditRow('Genres', track.allGenreTags.join(', ')),
+        for (final credit in track.credits)
+          _creditRow('Indexed credit', credit),
+        if (track.credits.isEmpty)
+          const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text(
+                  'No additional writer, producer, or engineering credits are indexed for this track yet.',
+                  style: TextStyle(color: Colors.white60))),
+        if (track.providerName?.trim().isNotEmpty == true)
+          _creditRow('Metadata source', track.providerName!),
+        if (track.soundtrackSourceName?.trim().isNotEmpty == true)
+          _creditRow('Soundtrack source', track.soundtrackSourceName!),
+        if (track.soundtrackSourceUrl?.trim().isNotEmpty == true)
+          _creditRow('Source link', track.soundtrackSourceUrl!),
       ],
     )),
   );
 }
 
 Widget _creditRow(String label, String value) => Padding(
-  padding: const EdgeInsets.symmetric(vertical: 7),
-  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-    SizedBox(width: 112, child: Text(label, style: const TextStyle(color: Colors.white60))),
-    Expanded(child: Text(value)),
-  ]),
-);
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child:
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+        SizedBox(
+            width: 112,
+            child: Text(label, style: const TextStyle(color: Colors.white60))),
+        Expanded(child: Text(value)),
+      ]),
+    );
 
 class MusicSongDnaScreen extends StatelessWidget {
   const MusicSongDnaScreen({super.key, required this.track});
@@ -1600,37 +1711,102 @@ class MusicSongDnaScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final store = MusicLibraryStore.instance;
     final related = _relatedPlayableTracks(track, store.tracks, limit: 14);
-    final media = <String>{...track.soundtrackForTitles, ...track.relatedMediaTitles}.toList(growable: false);
+    final media = <String>{
+      ...track.soundtrackForTitles,
+      ...track.relatedMediaTitles
+    }.toList(growable: false);
     return Scaffold(
       backgroundColor: const Color(0xFF101010),
-      appBar: AppBar(title: const Text('Explore SongDNA'), backgroundColor: const Color(0xFF101010)),
+      appBar: AppBar(
+          title: const Text('Explore SongDNA'),
+          backgroundColor: const Color(0xFF101010)),
       body: ListView(padding: const EdgeInsets.all(20), children: <Widget>[
-        ListTile(leading: CircleAvatar(backgroundImage: (track.artworkUrl?.startsWith('http') ?? false) ? NetworkImage(track.artworkUrl!) : null, child: const Icon(Icons.music_note_rounded)), title: Text(track.title, style: const TextStyle(fontWeight: FontWeight.w900)), subtitle: Text('${track.artist}${track.album.isEmpty ? '' : ' · ${track.album}'}')),
+        ListTile(
+            leading: CircleAvatar(
+                backgroundImage: (track.artworkUrl?.startsWith('http') ?? false)
+                    ? NetworkImage(track.artworkUrl!)
+                    : null,
+                child: const Icon(Icons.music_note_rounded)),
+            title: Text(track.title,
+                style: const TextStyle(fontWeight: FontWeight.w900)),
+            subtitle: Text(
+                '${track.artist}${track.album.isEmpty ? '' : ' · ${track.album}'}')),
         const SizedBox(height: 18),
-        _dnaSection('Artists & collaborators', <String>{track.artist, ...track.featuredArtists}.where((value) => value.trim().isNotEmpty).toList()),
+        _dnaSection(
+            'Artists & collaborators',
+            <String>{track.artist, ...track.featuredArtists}
+                .where((value) => value.trim().isNotEmpty)
+                .toList()),
         _dnaSection('Genres & styles', track.allGenreTags),
-        _dnaSection('Soundtrack connections', media, emptyHint: 'No verified film/show links are indexed for this song yet.'),
-        if (track.soundtrackSourceName?.trim().isNotEmpty == true) _creditRow('Relationship source', track.soundtrackSourceName!),
+        _dnaSection('Soundtrack connections', media,
+            emptyHint:
+                'No verified film/show links are indexed for this song yet.'),
+        if (track.soundtrackSourceName?.trim().isNotEmpty == true)
+          _creditRow('Relationship source', track.soundtrackSourceName!),
         if (track.soundtrackSourceUrl?.trim().isNotEmpty == true)
-          ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.open_in_new_rounded), title: const Text('Open soundtrack reference'), subtitle: Text(track.soundtrackSourceUrl!), onTap: () { final uri = Uri.tryParse(track.soundtrackSourceUrl!); if (uri != null && (uri.scheme == 'https' || uri.scheme == 'http')) launchUrl(uri, mode: LaunchMode.externalApplication); }),
-        _dnaSection('Track credits', track.credits, emptyHint: 'Additional credits have not been imported for this track.'),
-        const Padding(padding: EdgeInsets.only(top: 20, bottom: 8), child: Text('Related songs in your playable library', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900))),
-        if (related.isEmpty) const Text('Import more tracks with artist, feature, and genre metadata to build this graph.', style: TextStyle(color: Colors.white60)),
-        for (final candidate in related) ListTile(leading: const Icon(Icons.music_note_rounded), title: Text(candidate.title), subtitle: Text('${candidate.artist} · ${candidate.album}'), onTap: () => MusicPlaybackController.instance.play(candidate), trailing: IconButton(icon: const Icon(Icons.more_vert_rounded), onPressed: () => showMusicTrackOptions(context, candidate))),
-        const Padding(padding: EdgeInsets.only(top: 12), child: Text('Connections are based on indexed credits, explicit soundtrack metadata, and shared artist/genre data. The app does not infer soundtrack membership from a title match alone.', style: TextStyle(color: Colors.white54, fontSize: 12))),
+          ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.open_in_new_rounded),
+              title: const Text('Open soundtrack reference'),
+              subtitle: Text(track.soundtrackSourceUrl!),
+              onTap: () {
+                final uri = Uri.tryParse(track.soundtrackSourceUrl!);
+                if (uri != null &&
+                    (uri.scheme == 'https' || uri.scheme == 'http')) {
+                  launchUrl(uri, mode: LaunchMode.externalApplication);
+                }
+              }),
+        _dnaSection('Track credits', track.credits,
+            emptyHint:
+                'Additional credits have not been imported for this track.'),
+        const Padding(
+            padding: EdgeInsets.only(top: 20, bottom: 8),
+            child: Text('Related songs in your playable library',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900))),
+        if (related.isEmpty)
+          const Text(
+              'Import more tracks with artist, feature, and genre metadata to build this graph.',
+              style: TextStyle(color: Colors.white60)),
+        for (final candidate in related)
+          ListTile(
+              leading: const Icon(Icons.music_note_rounded),
+              title: Text(candidate.title),
+              subtitle: Text('${candidate.artist} · ${candidate.album}'),
+              onTap: () => MusicPlaybackController.instance.play(candidate),
+              trailing: IconButton(
+                  icon: const Icon(Icons.more_vert_rounded),
+                  onPressed: () => showMusicTrackOptions(context, candidate))),
+        const Padding(
+            padding: EdgeInsets.only(top: 12),
+            child: Text(
+                'Connections are based on indexed credits, explicit soundtrack metadata, and shared artist/genre data. The app does not infer soundtrack membership from a title match alone.',
+                style: TextStyle(color: Colors.white54, fontSize: 12))),
       ]),
     );
   }
 
-  Widget _dnaSection(String title, List<String> values, {String? emptyHint}) => Padding(
-    padding: const EdgeInsets.only(top: 12),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-      Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-      const SizedBox(height: 7),
-      if (values.isEmpty) Text(emptyHint ?? 'No metadata available yet.', style: const TextStyle(color: Colors.white54))
-      else Wrap(spacing: 8, runSpacing: 8, children: values.map((value) => Chip(label: Text(value))).toList()),
-    ]),
-  );
+  Widget _dnaSection(String title, List<String> values, {String? emptyHint}) =>
+      Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(title,
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 7),
+              if (values.isEmpty)
+                Text(emptyHint ?? 'No metadata available yet.',
+                    style: const TextStyle(color: Colors.white54))
+              else
+                Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: values
+                        .map((value) => Chip(label: Text(value)))
+                        .toList()),
+            ]),
+      );
 }
 
 class MusicSongRadioScreen extends StatelessWidget {
@@ -1639,14 +1815,40 @@ class MusicSongRadioScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final related = _relatedPlayableTracks(seed, MusicLibraryStore.instance.tracks, limit: 50);
+    final related = _relatedPlayableTracks(
+        seed, MusicLibraryStore.instance.tracks,
+        limit: 50);
     return Scaffold(
       backgroundColor: const Color(0xFF101010),
-      appBar: AppBar(title: const Text('Song Radio'), backgroundColor: const Color(0xFF101010)),
+      appBar: AppBar(
+          title: const Text('Song Radio'),
+          backgroundColor: const Color(0xFF101010)),
       body: ListView(children: <Widget>[
-        ListTile(leading: const CircleAvatar(child: Icon(Icons.radio_rounded)), title: Text('Radio based on ${seed.title}', style: const TextStyle(fontWeight: FontWeight.w900)), subtitle: Text('Related tracks from your local library · ${related.length} songs')),
-        if (related.isEmpty) const Padding(padding: EdgeInsets.all(24), child: Text('There are not enough related playable songs yet. Import more tracks with artist and genre metadata.')),
-        for (final track in related) ListTile(leading: const Icon(Icons.music_note_rounded), title: Text(track.title), subtitle: Text('${track.artist} · ${track.album}'), onTap: () => MusicPlaybackController.instance.play(track), trailing: IconButton(tooltip: 'Add to Queue', icon: const Icon(Icons.queue_music_rounded), onPressed: () { MusicLibraryStore.instance.addToQueue(track); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Added to Queue.'))); })),
+        ListTile(
+            leading: const CircleAvatar(child: Icon(Icons.radio_rounded)),
+            title: Text('Radio based on ${seed.title}',
+                style: const TextStyle(fontWeight: FontWeight.w900)),
+            subtitle: Text(
+                'Related tracks from your local library · ${related.length} songs')),
+        if (related.isEmpty)
+          const Padding(
+              padding: EdgeInsets.all(24),
+              child: Text(
+                  'There are not enough related playable songs yet. Import more tracks with artist and genre metadata.')),
+        for (final track in related)
+          ListTile(
+              leading: const Icon(Icons.music_note_rounded),
+              title: Text(track.title),
+              subtitle: Text('${track.artist} · ${track.album}'),
+              onTap: () => MusicPlaybackController.instance.play(track),
+              trailing: IconButton(
+                  tooltip: 'Add to Queue',
+                  icon: const Icon(Icons.queue_music_rounded),
+                  onPressed: () {
+                    MusicLibraryStore.instance.addToQueue(track);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Added to Queue.')));
+                  })),
       ]),
     );
   }
@@ -1657,8 +1859,29 @@ class MusicQueueOverviewScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final store = MusicLibraryStore.instance;
-    final queueTracks = store.queue.map(store.trackById).whereType<MusicTrack>().toList(growable: false);
-    return Scaffold(backgroundColor: const Color(0xFF101010), appBar: AppBar(title: const Text('Queue'), backgroundColor: const Color(0xFF101010)), body: queueTracks.isEmpty ? const Center(child: Text('Your queue is empty.')) : ListView(children: <Widget>[for (final track in queueTracks) ListTile(leading: const Icon(Icons.music_note_rounded), title: Text(track.title), subtitle: Text(track.artist), onTap: () => openMusicSearchTrack(context, track), trailing: IconButton(tooltip: 'Remove from Queue', icon: const Icon(Icons.remove_circle_outline_rounded), onPressed: () => store.removeFromQueue(track.id))) ]));
+    final queueTracks = store.queue
+        .map(store.trackById)
+        .whereType<MusicTrack>()
+        .toList(growable: false);
+    return Scaffold(
+        backgroundColor: const Color(0xFF101010),
+        appBar: AppBar(
+            title: const Text('Queue'),
+            backgroundColor: const Color(0xFF101010)),
+        body: queueTracks.isEmpty
+            ? const Center(child: Text('Your queue is empty.'))
+            : ListView(children: <Widget>[
+                for (final track in queueTracks)
+                  ListTile(
+                      leading: const Icon(Icons.music_note_rounded),
+                      title: Text(track.title),
+                      subtitle: Text(track.artist),
+                      onTap: () => openMusicSearchTrack(context, track),
+                      trailing: IconButton(
+                          tooltip: 'Remove from Queue',
+                          icon: const Icon(Icons.remove_circle_outline_rounded),
+                          onPressed: () => store.removeFromQueue(track.id)))
+              ]));
   }
 }
 
@@ -1690,8 +1913,6 @@ class _MusicScreenState extends State<MusicScreen> {
     unawaited(MusicFavoritesBridge.initializeForProfile(
       AppController.instance.currentProfile?.id,
     ));
-    library.registerShopEntities();
-    ShopCatalog.instance.syncShopEntityIndex();
   }
 
   MusicPageCustomization get customization =>
@@ -1720,33 +1941,15 @@ class _MusicScreenState extends State<MusicScreen> {
                   ),
                   actions: [
                     if (settings.showSearch)
-                      IconButton(
-                        onPressed: _showSearch,
-                        icon: const Icon(Icons.search_rounded),
-                        tooltip: 'Search music',
-                      ),
                     IconButton(
-                      onPressed: _openLyricsSearch,
-                      icon: const Icon(Icons.lyrics_outlined),
-                      tooltip: 'Find a song by lyrics or sound',
-                    ),
-                    IconButton(
-                      onPressed: _openMusicCatalog,
-                      icon: const Icon(Icons.library_music_rounded),
-                      tooltip: 'Search Spotify, MusicBrainz, and cover art',
+                      onPressed: _showSearch,
+                      icon: const Icon(Icons.search_rounded),
+                      tooltip: 'Search everything',
                     ),
                     IconButton(
                       onPressed: _openDiscover,
                       icon: const Icon(Icons.explore_rounded),
                       tooltip: 'Discover music',
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute<void>(
-                              builder: (_) => const NavidromeSetupScreen())),
-                      icon: const Icon(Icons.dns_rounded),
-                      tooltip: 'Connect personal music server',
                     ),
                     IconButton(
                       onPressed: _showCustomization,
@@ -1756,7 +1959,6 @@ class _MusicScreenState extends State<MusicScreen> {
                 ),
                 if (settings.showPlayer && playback.currentTrack != null)
                   SliverToBoxAdapter(child: _buildPlayer(settings)),
-                SliverToBoxAdapter(child: _musicCatalogEntrySection()),
                 ..._homeSlivers(settings),
               ],
             ),
@@ -1861,10 +2063,10 @@ class _MusicScreenState extends State<MusicScreen> {
                 ListTile(
                   leading: const Icon(Icons.music_video_rounded),
                   title: const UniversalText('Play linked music video'),
-                  subtitle: Text((track.musicVideoUrl?.trim().isNotEmpty ??
-                          false)
-                      ? 'Play the matching local or authorized video URL.'
-                      : 'No local video URL is linked to this track.'),
+                  subtitle: Text(
+                      (track.musicVideoUrl?.trim().isNotEmpty ?? false)
+                          ? 'Play the matching local or authorized video URL.'
+                          : 'No local video URL is linked to this track.'),
                   enabled: track.musicVideoUrl?.trim().isNotEmpty ?? false,
                   onTap: () => Navigator.of(sheetContext).push(
                       MaterialPageRoute<void>(
@@ -1892,16 +2094,19 @@ class _MusicScreenState extends State<MusicScreen> {
     final output = <Widget>[];
     for (final section in settings.sectionOrder) {
       if (section == 'Featured Tracks') {
-        final featuredTracks = library.tracks.where((track) =>
-          _isAllowedForCurrentProfile(track) &&
-          track.featuredArtists.any((name) => name.trim().isNotEmpty)).toList(growable: false);
+        final featuredTracks = library.tracks
+            .where((track) =>
+                _isAllowedForCurrentProfile(track) &&
+                track.featuredArtists.any((name) => name.trim().isNotEmpty))
+            .toList(growable: false);
         output.add(_trackSection(
           'Featured Tracks',
           'Songs where an artist appears with or is featured by another artist',
           featuredTracks,
           Icons.people_alt_rounded,
         ));
-      } else if (section == 'Weekly Discovery' && settings.showWeeklyDiscovery) {
+      } else if (section == 'Weekly Discovery' &&
+          settings.showWeeklyDiscovery) {
         output.add(_trackSection(
           'Weekly Discovery',
           'Fresh music selected from artists, genres and listening activity',
@@ -1909,8 +2114,6 @@ class _MusicScreenState extends State<MusicScreen> {
           Icons.auto_awesome_rounded,
         ));
         output.add(_discoverEntrySection());
-      } else if (section == 'AI DJ' && settings.showAIDJ) {
-        output.add(_aiDjSection());
       } else if (section == 'Made For You' && settings.showSystemPlaylists) {
         output.add(_systemPlaylistSection());
       } else if (section == 'Liked Songs' && settings.showLikedSongs) {
@@ -1937,15 +2140,65 @@ class _MusicScreenState extends State<MusicScreen> {
       } else if (section == 'Mood Mixes' && settings.showMoodMixes) {
         output.add(_moodSection());
       } else if (section == 'Artists' && settings.showArtists) {
+        final artistTracks = library.tracks
+            .where(_isAllowedForCurrentProfile)
+            .toList(growable: false);
+        final artistNames = artistTracks
+            .expand((track) => <String>[track.artist, ...track.featuredArtists])
+            .map((name) => name.trim())
+            .where((name) => name.isNotEmpty)
+            .toSet()
+            .toList();
+        int artistPlays(String name) => artistTracks
+            .where((track) =>
+                track.artist.trim().toLowerCase() == name.toLowerCase() ||
+                track.featuredArtists.any((featured) =>
+                    featured.trim().toLowerCase() == name.toLowerCase()))
+            .fold(
+                0,
+                (total, track) =>
+                    total + (library.listenCounts[track.id] ?? 0));
+        DateTime artistLatestAdded(String name) {
+          final dates = artistTracks
+              .where((track) =>
+                  track.artist.trim().toLowerCase() == name.toLowerCase() ||
+                  track.featuredArtists.any((featured) =>
+                      featured.trim().toLowerCase() == name.toLowerCase()))
+              .map((track) => track.modifiedAt)
+              .whereType<DateTime>();
+          return dates.isEmpty
+              ? DateTime.fromMillisecondsSinceEpoch(0)
+              : dates.reduce((a, b) => a.isAfter(b) ? a : b);
+        }
+
+        if (settings.artistSortOrder == 'Z-A') {
+          artistNames
+              .sort((a, b) => b.toLowerCase().compareTo(a.toLowerCase()));
+        } else if (settings.artistSortOrder == 'Most Played') {
+          artistNames.sort((a, b) {
+            final plays = artistPlays(b).compareTo(artistPlays(a));
+            return plays != 0
+                ? plays
+                : a.toLowerCase().compareTo(b.toLowerCase());
+          });
+        } else if (settings.artistSortOrder == 'Recently Added') {
+          artistNames.sort((a, b) {
+            final added = artistLatestAdded(b).compareTo(artistLatestAdded(a));
+            return added != 0
+                ? added
+                : a.toLowerCase().compareTo(b.toLowerCase());
+          });
+        } else {
+          artistNames
+              .sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        }
         output.add(_nameSection(
           'Artists',
-          'Imported artists plus catalog examples you can explore',
-          library.tracks
-              .map((t) => t.artist)
-              .where((x) => x.trim().isNotEmpty)
-              .toSet()
-              .toList(),
+          'Imported artists and featured artists from your music library',
+          artistNames,
           Icons.person_rounded,
+          sortOrder: settings.artistSortOrder,
+          onSortChanged: (value) => _saveSortOrder('artist', value),
           onItemTap: (artist) {
             final normalizedArtist = artist.trim().toLowerCase();
             final seenAlbums = <String>{};
@@ -1983,7 +2236,15 @@ class _MusicScreenState extends State<MusicScreen> {
           },
         ));
       } else if (section == 'Albums' && settings.showAlbums) {
-        output.add(_albumsSection());
+        output.add(_albumsSection(
+          sortOrder: settings.albumSortOrder,
+          onSortChanged: (value) => _saveSortOrder('album', value),
+        ));
+      } else if (section == 'All Songs' && settings.showAllSongs) {
+        output.addAll(_allSongsSection(
+          sortOrder: settings.songSortOrder,
+          onSortChanged: (value) => _saveSortOrder('song', value),
+        ));
       } else if (section == 'Playlists' && settings.showPlaylists) {
         output.add(SliverToBoxAdapter(child: _playlistSliver()));
       } else if (section == 'Soundtrack Universe' &&
@@ -2013,7 +2274,10 @@ class _MusicScreenState extends State<MusicScreen> {
 
   List<MusicTrack> _weeklyDiscovery() {
     final excluded = MusicFavoritesBridge.excludedTracks().toSet();
-    final tracks = library.tracks.where((track) => _isAllowedForCurrentProfile(track) && !excluded.contains(track.id)).toList();
+    final tracks = library.tracks
+        .where((track) =>
+            _isAllowedForCurrentProfile(track) && !excluded.contains(track.id))
+        .toList();
     if (tracks.isEmpty) return const <MusicTrack>[];
 
     // Discover Weekly follows artist relationships, including featured
@@ -2103,155 +2367,10 @@ class _MusicScreenState extends State<MusicScreen> {
     return tracks.take(18).toList();
   }
 
-  Widget _aiDjSection() {
-    final mix = _buildAiDjMix();
-    return SliverToBoxAdapter(
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(16, 18, 16, 0),
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF3B1D5E), Color(0xFF102E42)],
-          ),
-          borderRadius: BorderRadius.circular(22),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
-              children: [
-                Icon(Icons.auto_awesome_rounded),
-                SizedBox(width: 8),
-                UniversalText('AI DJ',
-                    style:
-                        TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
-              ],
-            ),
-            const SizedBox(height: 6),
-            const UniversalText(
-              'A continuous hands-free mix built from your listening history, artists, genres and imported library.',
-              style: TextStyle(color: Colors.white70, height: 1.35),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: mix.isEmpty ? null : _startAiDj,
-                    icon: const Icon(Icons.play_arrow_rounded),
-                    label: const UniversalText('START AI DJ'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                OutlinedButton.icon(
-                  onPressed: mix.isEmpty ? null : _openAiDj,
-                  icon: const Icon(Icons.queue_music_rounded),
-                  label: const UniversalText('VIEW MIX'),
-                ),
-              ],
-            ),
-            if (mix.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Text(
-                  '${mix.length} tracks selected • AI DJ will continue automatically',
-                  style: const TextStyle(color: Colors.white54, fontSize: 12)),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  List<MusicTrack> _buildAiDjMix() {
-    final tracks = List<MusicTrack>.from(_weeklyDiscovery());
-    if (tracks.length < 2) return tracks;
-
-    // Interleave artists where possible so the DJ does not simply replay an album.
-    final result = <MusicTrack>[];
-    final remaining = List<MusicTrack>.from(tracks);
-    String? lastArtist;
-    while (remaining.isNotEmpty) {
-      var index = remaining.indexWhere((track) => track.artist != lastArtist);
-      if (index < 0) index = 0;
-      final track = remaining.removeAt(index);
-      result.add(track);
-      lastArtist = track.artist;
-    }
-    return result;
-  }
-
-  Future<void> _startAiDj() async {
-    final mix = _buildAiDjMix();
-    if (mix.isEmpty) return;
-    library.setQueue(mix, aiDj: true);
-    await playback.play(mix.first);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: UniversalText(
-              'AI DJ started with ${mix.first.title} and queued ${mix.length} tracks.')),
-    );
-  }
-
-  void _openAiDj() {
-    Navigator.push(
-        context, MaterialPageRoute(builder: (_) => const MusicAiDjScreen()));
-  }
-
   void _openDiscover() {
     Navigator.push(context,
         MaterialPageRoute(builder: (_) => const MusicDiscoverScreen()));
   }
-
-  void _openMusicCatalog() {
-    Navigator.push(
-      context,
-      MaterialPageRoute<void>(
-        settings: const RouteSettings(name: '/app/page/music-catalog'),
-        builder: (_) => const MusicCatalogScreen(),
-      ),
-    );
-  }
-
-  Widget _musicCatalogEntrySection() => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-        child: Material(
-          color: Colors.white.withValues(alpha: .055),
-          borderRadius: BorderRadius.circular(18),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(18),
-            onTap: _openMusicCatalog,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: .18),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(Icons.library_music_rounded, color: Colors.lightGreenAccent),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Music Catalog', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
-                        SizedBox(height: 4),
-                        Text('Search Spotify, explore MusicBrainz discographies, and find album artwork', style: TextStyle(color: Colors.white60, height: 1.3, fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                  const Icon(Icons.chevron_right_rounded, color: Colors.white70),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
 
   Widget _systemPlaylistSection() {
     const names = [
@@ -2476,7 +2595,8 @@ class _MusicScreenState extends State<MusicScreen> {
                               IconButton(
                                 tooltip: 'More song options',
                                 visualDensity: VisualDensity.compact,
-                                onPressed: () => showMusicTrackOptions(context, track),
+                                onPressed: () =>
+                                    showMusicTrackOptions(context, track),
                                 icon: const Icon(Icons.more_vert_rounded),
                               ),
                             ],
@@ -2493,7 +2613,53 @@ class _MusicScreenState extends State<MusicScreen> {
     );
   }
 
-  Widget _albumsSection() {
+  void _saveSortOrder(String section, String value) {
+    final profile = AppController.instance.currentProfile;
+    final settings = MusicPageCustomizationStore.settingsFor(profile);
+    switch (section) {
+      case 'album':
+        settings.albumSortOrder = value;
+        break;
+      case 'artist':
+        settings.artistSortOrder = value;
+        break;
+      case 'song':
+        settings.songSortOrder = value;
+        break;
+    }
+    MusicPageCustomizationStore.apply(profile, settings);
+    if (mounted) setState(() {});
+  }
+
+  Widget _sortDropdown(
+    String value,
+    List<String> options,
+    ValueChanged<String> onChanged,
+  ) {
+    return DropdownButtonHideUnderline(
+      child: DropdownButton<String>(
+        value: options.contains(value) ? value : options.first,
+        isDense: true,
+        style: const TextStyle(color: Colors.white70, fontSize: 12),
+        dropdownColor: const Color(0xFF202020),
+        icon: const Icon(Icons.sort_rounded, size: 17),
+        items: options
+            .map((option) => DropdownMenuItem<String>(
+                  value: option,
+                  child: Text(option),
+                ))
+            .toList(growable: false),
+        onChanged: (next) {
+          if (next != null && next != value) onChanged(next);
+        },
+      ),
+    );
+  }
+
+  Widget _albumsSection({
+    required String sortOrder,
+    required ValueChanged<String> onSortChanged,
+  }) {
     final albumTracks = <String, MusicTrack>{};
     for (final track in library.tracks) {
       final title = track.album.trim();
@@ -2501,17 +2667,48 @@ class _MusicScreenState extends State<MusicScreen> {
         albumTracks.putIfAbsent(title.toLowerCase(), () => track);
       }
     }
-    final albumTitles = albumTracks.keys
-        .map((key) => albumTracks[key]!.album.trim())
-        .toList()
-      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final albumTitles =
+        albumTracks.keys.map((key) => albumTracks[key]!.album.trim()).toList();
+    int albumPlays(String title) => library.tracks
+        .where(
+            (track) => track.album.trim().toLowerCase() == title.toLowerCase())
+        .fold(
+            0, (total, track) => total + (library.listenCounts[track.id] ?? 0));
+    DateTime albumModifiedAt(String title) {
+      final dates = library.tracks
+          .where((track) =>
+              track.album.trim().toLowerCase() == title.toLowerCase())
+          .map((track) => track.modifiedAt)
+          .whereType<DateTime>();
+      return dates.isEmpty
+          ? DateTime.fromMillisecondsSinceEpoch(0)
+          : dates.reduce((a, b) => a.isAfter(b) ? a : b);
+    }
+
+    if (sortOrder == 'Z-A') {
+      albumTitles.sort((a, b) => b.toLowerCase().compareTo(a.toLowerCase()));
+    } else if (sortOrder == 'Most Played') {
+      albumTitles.sort((a, b) {
+        final plays = albumPlays(b).compareTo(albumPlays(a));
+        return plays != 0 ? plays : a.toLowerCase().compareTo(b.toLowerCase());
+      });
+    } else if (sortOrder == 'Recently Added') {
+      albumTitles.sort((a, b) {
+        final date = albumModifiedAt(b).compareTo(albumModifiedAt(a));
+        return date != 0 ? date : a.toLowerCase().compareTo(b.toLowerCase());
+      });
+    } else {
+      albumTitles.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    }
 
     final entries = albumTitles.map((albumTitle) {
       final track = albumTracks[albumTitle.toLowerCase()]!;
       final tracksOnAlbum = library.tracks
-          .where((item) => item.album.trim().toLowerCase() == albumTitle.toLowerCase())
+          .where((item) =>
+              item.album.trim().toLowerCase() == albumTitle.toLowerCase())
           .length;
-      final albumCreator = _albumAttribution(library.tracks, albumTitle, track.artist);
+      final albumCreator =
+          _albumAttribution(library.tracks, albumTitle, track.artist);
       return LibraryViewEntry(
         title: albumTitle,
         subtitle: [
@@ -2527,7 +2724,8 @@ class _MusicScreenState extends State<MusicScreen> {
           placeholder: Container(
             color: Colors.white10,
             alignment: Alignment.center,
-            child: const Icon(Icons.album_rounded, color: Colors.white38, size: 32),
+            child: const Icon(Icons.album_rounded,
+                color: Colors.white38, size: 32),
           ),
           errorPlaceholder: Container(
             color: Colors.white10,
@@ -2545,7 +2743,16 @@ class _MusicScreenState extends State<MusicScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Albums', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+            Row(children: [
+              const Expanded(
+                  child: Text('Albums',
+                      style: TextStyle(
+                          fontSize: 20, fontWeight: FontWeight.w900))),
+              _sortDropdown(
+                  sortOrder,
+                  const ['A-Z', 'Z-A', 'Most Played', 'Recently Added'],
+                  onSortChanged),
+            ]),
             const SizedBox(height: 4),
             const Text(
               'Imported albums plus catalog examples; sample entries may not include audio files',
@@ -2583,9 +2790,11 @@ class _MusicScreenState extends State<MusicScreen> {
         .where((track) => normalize(track.artist) == normalizedArtist)
         .toList(growable: false);
     final albumTracks = artistMatches.isNotEmpty ? artistMatches : titleMatches;
-    final match = AppController.instance.library.where((media) =>
-        media.type.toLowerCase().contains('album') &&
-        normalize(media.title) == normalizedTitle).toList();
+    final match = AppController.instance.library
+        .where((media) =>
+            media.type.toLowerCase().contains('album') &&
+            normalize(media.title) == normalizedTitle)
+        .toList();
     MediaItem? media = match.isEmpty ? null : match.first;
     final localTracks = [
       for (var index = 0; index < albumTracks.length; index++)
@@ -2612,16 +2821,26 @@ class _MusicScreenState extends State<MusicScreen> {
 
   Widget _nameSection(
       String title, String subtitle, List<String> values, IconData icon,
-      {ValueChanged<String>? onItemTap}) {
+      {ValueChanged<String>? onItemTap,
+      String? sortOrder,
+      ValueChanged<String>? onSortChanged}) {
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title,
-                style:
-                    const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+            Row(children: [
+              Expanded(
+                  child: Text(title,
+                      style: const TextStyle(
+                          fontSize: 20, fontWeight: FontWeight.w900))),
+              if (sortOrder != null && onSortChanged != null)
+                _sortDropdown(
+                    sortOrder,
+                    const ['A-Z', 'Z-A', 'Most Played', 'Recently Added'],
+                    onSortChanged),
+            ]),
             const SizedBox(height: 4),
             Text(subtitle, style: const TextStyle(color: Colors.white54)),
             const SizedBox(height: 9),
@@ -2663,6 +2882,98 @@ class _MusicScreenState extends State<MusicScreen> {
         ),
       ),
     );
+  }
+
+  List<Widget> _allSongsSection({
+    required String sortOrder,
+    required ValueChanged<String> onSortChanged,
+  }) {
+    final tracks = library.tracks
+        .where(_isAllowedForCurrentProfile)
+        .where((track) =>
+            !track.id.startsWith('demo-catalog-track-') &&
+            !track.id.startsWith('demo-preview-album-track-') &&
+            !track.catalogOnly)
+        .toList();
+    if (sortOrder == 'Z-A') {
+      tracks.sort(
+          (a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()));
+    } else if (sortOrder == 'Most Played') {
+      tracks.sort((a, b) {
+        final plays = (library.listenCounts[b.id] ?? 0)
+            .compareTo(library.listenCounts[a.id] ?? 0);
+        return plays != 0
+            ? plays
+            : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+      });
+    } else if (sortOrder == 'Recently Added') {
+      tracks.sort((a, b) {
+        final date = (b.modifiedAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+            .compareTo(a.modifiedAt ?? DateTime.fromMillisecondsSinceEpoch(0));
+        return date != 0
+            ? date
+            : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+      });
+    } else {
+      tracks.sort(
+          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    }
+    return <Widget>[
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              const Expanded(
+                  child: Text('All Songs',
+                      style: TextStyle(
+                          fontSize: 20, fontWeight: FontWeight.w900))),
+              _sortDropdown(
+                  sortOrder,
+                  const ['A-Z', 'Z-A', 'Most Played', 'Recently Added'],
+                  onSortChanged),
+            ]),
+            const SizedBox(height: 4),
+            Text('${tracks.length} songs in your music library',
+                style: const TextStyle(color: Colors.white54)),
+          ]),
+        ),
+      ),
+      if (tracks.isEmpty)
+        const SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Card(
+                child: ListTile(
+              leading: Icon(Icons.music_off_rounded),
+              title: Text('No songs in your music library yet'),
+              subtitle: Text(
+                  'Import music from your account server to fill this section.'),
+            )),
+          ),
+        )
+      else
+        SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              final track = tracks[index];
+              return ListTile(
+                leading: _artwork(track, size: 46),
+                title: LocalizedMediaText(track.title,
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text(_musicTrackSubtitle(track),
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                trailing: Text('${library.listenCounts[track.id] ?? 0} plays',
+                    style:
+                        const TextStyle(color: Colors.white54, fontSize: 11)),
+                onTap: () => openMusicSearchTrack(context, track),
+              );
+            },
+            childCount: tracks.length,
+          ),
+        ),
+    ];
   }
 
   Future<void> _toggleTrackLike(MusicTrack track) async {
@@ -2713,24 +3024,6 @@ class _MusicScreenState extends State<MusicScreen> {
                           style: const TextStyle(
                               fontSize: 20, fontWeight: FontWeight.w900))),
                   IconButton(
-                    tooltip: 'Share playlist',
-                    icon: const Icon(Icons.share_outlined),
-                    onPressed: () => showSocialShareDialog(
-                      sheetContext,
-                      title: name,
-                      message:
-                          'Shared smart playlist: $name (${tracks.length} songs)',
-                      mediaReference: {
-                        'type': 'playlist',
-                        'mediaType': 'playlist',
-                        'mediaId': name,
-                        'title': name,
-                        'description': '${tracks.length} songs',
-                        'trackIds': tracks.map((track) => track.id).toList()
-                      },
-                    ),
-                  ),
-                  IconButton(
                       onPressed: () => Navigator.pop(sheetContext),
                       icon: const Icon(Icons.close_rounded)),
                 ]),
@@ -2757,11 +3050,11 @@ class _MusicScreenState extends State<MusicScreen> {
                             title: Text(track.title),
                             subtitle: Text(
                               _musicTrackSubtitle(track,
-                                prefix: name == 'On Repeat' ||
-                                        name == 'Top 100 Most Played' ||
-                                        name == 'Most Played'
-                                    ? '${track.artist} • ${library.listenCounts[track.id] ?? 0} plays'
-                                    : track.artist),
+                                  prefix: name == 'On Repeat' ||
+                                          name == 'Top 100 Most Played' ||
+                                          name == 'Most Played'
+                                      ? '${track.artist} • ${library.listenCounts[track.id] ?? 0} plays'
+                                      : track.artist),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -2783,11 +3076,13 @@ class _MusicScreenState extends State<MusicScreen> {
                                   tooltip: 'Play',
                                   icon: const Icon(Icons.play_arrow_rounded),
                                   onPressed: () => unawaited(
-                                      openMusicSearchTrack(sheetContext, track))),
+                                      openMusicSearchTrack(
+                                          sheetContext, track))),
                               IconButton(
                                   tooltip: 'More song options',
                                   icon: const Icon(Icons.more_vert_rounded),
-                                  onPressed: () => showMusicTrackOptions(sheetContext, track)),
+                                  onPressed: () => showMusicTrackOptions(
+                                      sheetContext, track)),
                             ]),
                             onTap: () => unawaited(
                                 MusicPlaybackController.instance.play(track)),
@@ -2874,7 +3169,11 @@ class _MusicScreenState extends State<MusicScreen> {
                 subtitle: Text(
                   <String>[
                     '${entry.value.length} songs',
-                    if (!const <String>{'Favorites', 'Movie Soundtracks', 'TV Soundtracks'}.contains(entry.key))
+                    if (!const <String>{
+                      'Favorites',
+                      'Movie Soundtracks',
+                      'TV Soundtracks'
+                    }.contains(entry.key))
                       'Added by ${(library.playlistAddedByProfileNames[entry.key]?.trim().isNotEmpty ?? false) ? library.playlistAddedByProfileNames[entry.key]!.trim() : 'unknown profile'}',
                   ].join(' • '),
                   maxLines: 2,
@@ -2887,43 +3186,6 @@ class _MusicScreenState extends State<MusicScreen> {
                       icon: const Icon(Icons.playlist_add_rounded),
                       onPressed: () => _editPlaylistSongs(entry.key),
                     ),
-                    IconButton(
-                      tooltip: 'Share playlist to messages',
-                      icon: const Icon(Icons.share_outlined),
-                      onPressed: () => showSocialShareDialog(
-                        context,
-                        title: entry.key,
-                        message:
-                            'Shared playlist: ${entry.key} (${entry.value.length} songs)',
-                        mediaReference: {
-                          'type': 'playlist',
-                          'mediaType': 'playlist',
-                          'mediaId': entry.key,
-                          'title': entry.key,
-                          'description': '${entry.value.length} songs',
-                          'trackIds': entry.value,
-                        },
-                      ),
-                    ),
-                    if (ShopCatalog.instance
-                        .productsForAssociation('playlist', entry.key,
-                            name: entry.key)
-                        .isNotEmpty)
-                      IconButton(
-                        tooltip: 'Shop related products',
-                        icon: const Icon(Icons.storefront_outlined),
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            settings: const RouteSettings(name: '/app/shop'),
-                            builder: (_) => ShopScreen(
-                              contextAssociationType: 'playlist',
-                              contextAssociationId: entry.key,
-                              contextAssociationName: entry.key,
-                            ),
-                          ),
-                        ),
-                      ),
                     IconButton(
                       icon: Icon(
                         MusicFavoritesBridge.likedPlaylists()
@@ -2982,7 +3244,8 @@ class _MusicScreenState extends State<MusicScreen> {
   }
 
   Widget _artwork(MusicTrack track, {double size = 52}) {
-    final albumTitle = track.album.trim().isNotEmpty ? track.album : track.title;
+    final albumTitle =
+        track.album.trim().isNotEmpty ? track.album : track.title;
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: AlbumArtworkImage(
@@ -3011,20 +3274,12 @@ class _MusicScreenState extends State<MusicScreen> {
   }
 
   void _showSearch() {
-    showSearch<MusicTrack?>(
-      context: context,
-      delegate: _MusicSearchDelegate(<MusicTrack>{
-        ...library.tracks,
-        ...library.catalogTracks.values,
-      }.toList(growable: false)),
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: '/app/page/search'),
+        builder: (_) => const SmartSearchScreen(),
+      ),
     );
-  }
-
-  void _openLyricsSearch() {
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      settings: const RouteSettings(name: '/app/page/music-find-song'),
-      builder: (_) => const MusicLyricsSearchScreen(),
-    ));
   }
 
   void _showCustomization() {
@@ -3142,8 +3397,7 @@ class _MusicScreenState extends State<MusicScreen> {
                       Expanded(
                           child: OutlinedButton.icon(
                               onPressed: () {
-                                library.setQueue(_weeklyDiscovery(),
-                                    aiDj: false);
+                                library.setQueue(_weeklyDiscovery());
                                 setSheetState(() {});
                               },
                               icon: const Icon(Icons.explore_rounded),
@@ -3319,7 +3573,6 @@ class _MusicScreenState extends State<MusicScreen> {
     for (final id in result.where((id) => !current.contains(id))) {
       library.toggleTrackInPlaylist(playlistName, id);
     }
-    library.registerShopEntities();
     if (mounted) setState(() {});
   }
 }
@@ -3389,29 +3642,6 @@ class _MusicTrackDisplayScreenState extends State<MusicTrackDisplayScreen> {
             tooltip: 'More song options',
             icon: const Icon(Icons.more_vert_rounded),
             onPressed: () => showMusicTrackOptions(context, widget.track),
-          ),
-          IconButton(
-            tooltip: isVideo ? 'Share music video' : 'Share song to messages',
-            icon: const Icon(Icons.share_outlined),
-            onPressed: () => showSocialShareDialog(
-              context,
-              title: isVideo
-                  ? '${widget.track.title} — Music Video'
-                  : widget.track.title,
-              message:
-                  '${isVideo ? 'Shared music video' : 'Shared song'}: ${widget.track.title} by ${widget.track.artist}',
-              mediaReference: {
-                'type': isVideo ? 'music_video' : 'song',
-                'mediaType': isVideo ? 'music_video' : 'song',
-                'mediaId': widget.track.id,
-                'title': widget.track.title,
-                'description':
-                    '${widget.track.artist}${widget.track.album.trim().isEmpty ? '' : ' · ${widget.track.album}'}',
-                'artist': widget.track.artist,
-                'album': widget.track.album,
-                if (isVideo) 'videoUrl': widget.track.musicVideoUrl,
-              },
-            ),
           ),
         ],
       ),
@@ -3526,21 +3756,26 @@ class MusicArtistProfileScreen extends StatelessWidget {
             .toList(growable: false);
         final featuringCreditsById = <String, MusicTrack>{
           for (final track in featured) track.id: track,
-          for (final track in primary.where((track) => track.featuredArtists.isNotEmpty)) track.id: track,
+          for (final track
+              in primary.where((track) => track.featuredArtists.isNotEmpty))
+            track.id: track,
         };
-        final featuringCredits = featuringCreditsById.values.toList(growable: false);
+        final featuringCredits =
+            featuringCreditsById.values.toList(growable: false);
         bool isCatalogSample(MusicTrack track) =>
             track.id.startsWith('demo-catalog-track-') ||
             track.id.startsWith('demo-preview-album-track-');
         final catalogSampleTracks = primary.where(isCatalogSample).length;
-        final indexedTracks = primary.where((track) => !isCatalogSample(track)).length;
+        final indexedTracks =
+            primary.where((track) => !isCatalogSample(track)).length;
         final catalogSampleAlbums = <String>{
           for (final track in primary)
             if (isCatalogSample(track)) track.album.trim(),
         }.where((album) => album.isNotEmpty).length;
         final indexedAlbums = <String>{
           for (final track in primary)
-            if (!isCatalogSample(track) && track.album.trim().isNotEmpty) track.album.trim(),
+            if (!isCatalogSample(track) && track.album.trim().isNotEmpty)
+              track.album.trim(),
         }.length;
         final playablePrimary = primary
             .where((track) => (track.audioUrl ?? '').trim().isNotEmpty)
@@ -3551,124 +3786,103 @@ class MusicArtistProfileScreen extends StatelessWidget {
             backgroundColor: const Color(0xFF090909),
             title:
                 Text(artistName, maxLines: 1, overflow: TextOverflow.ellipsis),
-            actions: [
-              IconButton(
-                tooltip: 'Share artist',
-                icon: const Icon(Icons.share_outlined),
-                onPressed: () => showSocialShareDialog(
-                  context,
-                  title: artistName,
-                  message: 'Shared artist: $artistName',
-                  mediaReference: {
-                    'type': 'artist',
-                    'mediaType': 'artist',
-                    'mediaId': 'artist:${artistName.toLowerCase()}',
-                    'title': artistName
-                  },
-                ),
-              ),
-            ],
           ),
           body: DefaultTabController(
-                  length: 6,
+            length: 6,
+            child: Column(
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
                   child: Column(
-                    children: [
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
-                        child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(artistName,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineMedium
-                                      ?.copyWith(fontWeight: FontWeight.w800)),
-                              const SizedBox(height: 6),
-                              Text(
-                                  '$indexedTracks indexed tracks • $catalogSampleTracks catalog examples • $indexedAlbums indexed albums • $catalogSampleAlbums sample albums • ${videos.length} music videos',
-                                  style:
-                                      const TextStyle(color: Colors.white60)),
-                              const SizedBox(height: 12),
-                              Wrap(spacing: 8, runSpacing: 8, children: [
-                                FilledButton.icon(
-                                    onPressed: playablePrimary.isEmpty
-                                        ? null
-                                        : () {
-                                            MusicLibraryStore.instance
-                                                .setQueue(playablePrimary);
-                                            unawaited(MusicPlaybackController
-                                                .instance
-                                                .play(playablePrimary.first));
-                                          },
-                                    icon: const Icon(Icons.play_arrow_rounded),
-                                    label: const UniversalText(
-                                        'Play available songs')),
-                                OutlinedButton.icon(
-                                    onPressed: () {
-                                      final following =
-                                          MusicFavoritesBridge.followedArtists()
-                                              .contains(artistName);
-                                      MusicFavoritesBridge.toggleArtist(
-                                          artistName);
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(SnackBar(
-                                              content: Text(following
-                                                  ? 'Unfollowed $artistName.'
-                                                  : 'Following $artistName.')));
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(artistName,
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineMedium
+                                ?.copyWith(fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 6),
+                        Text(
+                            '$indexedTracks indexed tracks • $catalogSampleTracks catalog examples • $indexedAlbums indexed albums • $catalogSampleAlbums sample albums • ${videos.length} music videos',
+                            style: const TextStyle(color: Colors.white60)),
+                        const SizedBox(height: 12),
+                        Wrap(spacing: 8, runSpacing: 8, children: [
+                          FilledButton.icon(
+                              onPressed: playablePrimary.isEmpty
+                                  ? null
+                                  : () {
+                                      MusicLibraryStore.instance
+                                          .setQueue(playablePrimary);
+                                      unawaited(MusicPlaybackController.instance
+                                          .play(playablePrimary.first));
                                     },
-                                    icon: Icon(
-                                        MusicFavoritesBridge.followedArtists()
-                                                .contains(artistName)
-                                            ? Icons.check_rounded
-                                            : Icons.person_add_alt_1_rounded),
-                                    label: Text(
-                                        MusicFavoritesBridge.followedArtists()
-                                                .contains(artistName)
-                                            ? 'Following'
-                                            : 'Follow artist')),
-                                OutlinedButton.icon(
-                                    onPressed: () =>
-                                        _searchArtist(context, artistName),
-                                    icon: const Icon(
-                                        Icons.travel_explore_rounded),
-                                    label:
-                                        const UniversalText('Discover artist')),
-                              ]),
-                            ]),
-                      ),
-                      const TabBar(isScrollable: true, tabs: [
-                        Tab(text: 'Songs'),
-                        Tab(text: 'Discography'),
-                        Tab(text: 'Popular'),
-                        Tab(text: 'Music Videos'),
-                        Tab(text: 'Featuring'),
-                        Tab(text: 'Fans Also Like'),
+                              icon: const Icon(Icons.play_arrow_rounded),
+                              label:
+                                  const UniversalText('Play available songs')),
+                          OutlinedButton.icon(
+                              onPressed: () {
+                                final following =
+                                    MusicFavoritesBridge.followedArtists()
+                                        .contains(artistName);
+                                MusicFavoritesBridge.toggleArtist(artistName);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content: Text(following
+                                            ? 'Unfollowed $artistName.'
+                                            : 'Following $artistName.')));
+                              },
+                              icon: Icon(MusicFavoritesBridge.followedArtists()
+                                      .contains(artistName)
+                                  ? Icons.check_rounded
+                                  : Icons.person_add_alt_1_rounded),
+                              label: Text(MusicFavoritesBridge.followedArtists()
+                                      .contains(artistName)
+                                  ? 'Following'
+                                  : 'Follow artist')),
+                          OutlinedButton.icon(
+                              onPressed: () =>
+                                  _searchArtist(context, artistName),
+                              icon: const Icon(Icons.travel_explore_rounded),
+                              label: const UniversalText('Discover artist')),
+                        ]),
                       ]),
-                      Expanded(
-                          child: TabBarView(children: [
-                        _trackList(context, primary,
-                            emptyMessage: 'No imported tracks or catalog examples found for this artist.'),
-                        _SpotifyArtistDiscographySection(
-                          artistName: artistName,
-                          localTracks: primary,
-                        ),
-                        _SpotifyArtistPopularSection(
-                          artistName: artistName,
-                          localTracks: <MusicTrack>{...primary, ...featured}.toList(growable: false),
-                        ),
-                        _ArtistMusicVideosSection(tracks: videos),
-                        _trackList(context, featuringCredits,
-                            emptyMessage: 'No guest or featured-artist credits are indexed for this artist.',
-                            creditLabel: 'Featured / collaborator'),
-                        _FansAlsoLikeSection(
-                          artistName: artistName,
-                          seedArtists: related.toList(growable: false),
-                        ),
-                      ])),
-                    ],
-                  ),
                 ),
+                const TabBar(isScrollable: true, tabs: [
+                  Tab(text: 'Songs'),
+                  Tab(text: 'Discography'),
+                  Tab(text: 'Popular'),
+                  Tab(text: 'Music Videos'),
+                  Tab(text: 'Featuring'),
+                  Tab(text: 'Fans Also Like'),
+                ]),
+                Expanded(
+                    child: TabBarView(children: [
+                  _trackList(context, primary,
+                      emptyMessage:
+                          'No imported tracks or catalog examples found for this artist.'),
+                  _SpotifyArtistDiscographySection(
+                    artistName: artistName,
+                    localTracks: primary,
+                  ),
+                  _SpotifyArtistPopularSection(
+                    artistName: artistName,
+                    localTracks: <MusicTrack>{...primary, ...featured}
+                        .toList(growable: false),
+                  ),
+                  _ArtistMusicVideosSection(tracks: videos),
+                  _trackList(context, featuringCredits,
+                      emptyMessage:
+                          'No guest or featured-artist credits are indexed for this artist.',
+                      creditLabel: 'Featured / collaborator'),
+                  _FansAlsoLikeSection(
+                    artistName: artistName,
+                    seedArtists: related.toList(growable: false),
+                  ),
+                ])),
+              ],
+            ),
+          ),
         );
       },
     );
@@ -3729,7 +3943,8 @@ class MusicArtistProfileScreen extends StatelessWidget {
                             if ((track.audioUrl ?? '').trim().isEmpty) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                      content: Text('Catalog example only — import this track to add playable audio.')));
+                                      content: Text(
+                                          'Catalog example only — import this track to add playable audio.')));
                               return;
                             }
                             MusicLibraryStore.instance.addToQueue(track);
@@ -3737,26 +3952,12 @@ class MusicArtistProfileScreen extends StatelessWidget {
                                 content: Text(
                                     'Added ${track.title} to the queue.')));
                           }),
-                      IconButton(
-                          tooltip: 'Share song',
-                          icon: const Icon(Icons.share_outlined),
-                          onPressed: () => showSocialShareDialog(context,
-                                  title: track.title,
-                                  message:
-                                      'Shared song: ${track.title} by ${track.artist}',
-                                  mediaReference: {
-                                    'type': 'song',
-                                    'mediaType': 'song',
-                                    'mediaId': track.id,
-                                    'title': track.title,
-                                    'artist': track.artist,
-                                    'album': track.album
-                                  })),
                     ]),
               onTap: () {
                 if ((track.audioUrl ?? '').trim().isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('Catalog example only — no audio file is attached. Import your own copy to play it.'),
+                    content: Text(
+                        'Catalog example only — no audio file is attached. Import your own copy to play it.'),
                   ));
                   return;
                 }
@@ -3767,7 +3968,8 @@ class MusicArtistProfileScreen extends StatelessWidget {
   }
 
   Widget _art(MusicTrack track) {
-    final albumTitle = track.album.trim().isNotEmpty ? track.album : track.title;
+    final albumTitle =
+        track.album.trim().isNotEmpty ? track.album : track.title;
     return SizedBox(
       width: 48,
       height: 48,
@@ -3786,6 +3988,7 @@ class MusicArtistProfileScreen extends StatelessWidget {
       ),
     );
   }
+
   Widget _empty(String message) => Center(
       child: Padding(
           padding: const EdgeInsets.all(24),
@@ -3805,34 +4008,43 @@ class MusicArtistProfileScreen extends StatelessWidget {
   }
 }
 
-
-Map<String, dynamic> _musicCatalogMap(dynamic value) => value is Map
-    ? Map<String, dynamic>.from(value)
-    : <String, dynamic>{};
+Map<String, dynamic> _musicCatalogMap(dynamic value) =>
+    value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
 
 List<Map<String, dynamic>> _musicCatalogRows(dynamic value) => value is List
-    ? value.whereType<Map>().map((row) => Map<String, dynamic>.from(row)).toList()
+    ? value
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList()
     : <Map<String, dynamic>>[];
 
-String _musicLookupKey(String value) => value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+String _musicLookupKey(String value) =>
+    value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
 bool _isMusicDemoTrack(MusicTrack track) =>
-    track.id.startsWith('demo-catalog-track-') || track.id.startsWith('demo-preview-album-track-');
+    track.id.startsWith('demo-catalog-track-') ||
+    track.id.startsWith('demo-preview-album-track-');
 
-List<MusicTrack> _realArtistTracks(Iterable<MusicTrack> tracks) => tracks.where((track) => !_isMusicDemoTrack(track)).toList(growable: false);
+List<MusicTrack> _realArtistTracks(Iterable<MusicTrack> tracks) =>
+    tracks.where((track) => !_isMusicDemoTrack(track)).toList(growable: false);
 
 Future<Map<String, dynamic>?> _findSpotifyArtist(String artistName) async {
   if (!AppController.instance.isBackendAuthenticated) return null;
-  final result = await AppController.instance.backendApi.searchMusicCatalog(artistName, type: 'artist', limit: 5);
+  final result = await AppController.instance.backendApi
+      .searchMusicCatalog(artistName, type: 'artist', limit: 5);
   final spotify = _musicCatalogMap(result['spotify']);
   final candidates = _musicCatalogRows(spotify['artists']);
   for (final candidate in candidates) {
-    if (_musicLookupKey(candidate['name']?.toString() ?? '') == _musicLookupKey(artistName)) return candidate;
+    if (_musicLookupKey(candidate['name']?.toString() ?? '') ==
+        _musicLookupKey(artistName)) {
+      return candidate;
+    }
   }
   return null;
 }
 
-List<Map<String, dynamic>> _localAlbumTrackRows(String artistName, String albumTitle) {
+List<Map<String, dynamic>> _localAlbumTrackRows(
+    String artistName, String albumTitle) {
   final wantedAlbum = _musicLookupKey(albumTitle);
   final wantedArtist = _musicLookupKey(artistName);
   return <Map<String, dynamic>>[
@@ -3855,14 +4067,17 @@ List<Map<String, dynamic>> _localAlbumTrackRows(String artistName, String albumT
 }
 
 class _SpotifyArtistDiscographySection extends StatefulWidget {
-  const _SpotifyArtistDiscographySection({required this.artistName, required this.localTracks});
+  const _SpotifyArtistDiscographySection(
+      {required this.artistName, required this.localTracks});
   final String artistName;
   final List<MusicTrack> localTracks;
   @override
-  State<_SpotifyArtistDiscographySection> createState() => _SpotifyArtistDiscographySectionState();
+  State<_SpotifyArtistDiscographySection> createState() =>
+      _SpotifyArtistDiscographySectionState();
 }
 
-class _SpotifyArtistDiscographySectionState extends State<_SpotifyArtistDiscographySection> {
+class _SpotifyArtistDiscographySectionState
+    extends State<_SpotifyArtistDiscographySection> {
   final List<Map<String, dynamic>> _externalAlbums = <Map<String, dynamic>>[];
   String? _spotifyId;
   String? _error;
@@ -3879,15 +4094,24 @@ class _SpotifyArtistDiscographySectionState extends State<_SpotifyArtistDiscogra
 
   Future<void> _loadFirstPage() async {
     if (!mounted) return;
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final artist = await _findSpotifyArtist(widget.artistName);
       final id = artist?['id']?.toString() ?? '';
       if (id.isEmpty) {
-        if (mounted) setState(() { _error = 'No exact Spotify artist match was found.'; _total = 0; });
+        if (mounted) {
+          setState(() {
+            _error = 'No exact Spotify artist match was found.';
+            _total = 0;
+          });
+        }
         return;
       }
-      final page = await AppController.instance.backendApi.getSpotifyArtistAlbums(id, limit: 10, offset: 0);
+      final page = await AppController.instance.backendApi
+          .getSpotifyArtistAlbums(id, limit: 10, offset: 0);
       final items = _musicCatalogRows(page['items']);
       if (!mounted) return;
       setState(() {
@@ -3900,7 +4124,10 @@ class _SpotifyArtistDiscographySectionState extends State<_SpotifyArtistDiscogra
         _error = null;
       });
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString().replaceFirst('BackendApiException: ', ''));
+      if (mounted) {
+        setState(() => _error =
+            error.toString().replaceFirst('BackendApiException: ', ''));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -3911,18 +4138,25 @@ class _SpotifyArtistDiscographySectionState extends State<_SpotifyArtistDiscogra
     if (id == null || _loadingMore || _offset >= _total) return;
     setState(() => _loadingMore = true);
     try {
-      final page = await AppController.instance.backendApi.getSpotifyArtistAlbums(id, limit: 10, offset: _offset);
+      final page = await AppController.instance.backendApi
+          .getSpotifyArtistAlbums(id, limit: 10, offset: _offset);
       final items = _musicCatalogRows(page['items']);
       if (!mounted) return;
       setState(() {
-        final seen = _externalAlbums.map((row) => row['id']?.toString() ?? '').toSet();
-        _externalAlbums.addAll(items.where((row) => (row['id']?.toString() ?? '').isNotEmpty && !seen.contains(row['id']?.toString())));
+        final seen =
+            _externalAlbums.map((row) => row['id']?.toString() ?? '').toSet();
+        _externalAlbums.addAll(items.where((row) =>
+            (row['id']?.toString() ?? '').isNotEmpty &&
+            !seen.contains(row['id']?.toString())));
         _offset += items.length;
         _total = int.tryParse(page['total']?.toString() ?? '') ?? _total;
         if (items.isEmpty) _total = _offset;
       });
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString().replaceFirst('BackendApiException: ', ''));
+      if (mounted) {
+        setState(() => _error =
+            error.toString().replaceFirst('BackendApiException: ', ''));
+      }
     } finally {
       if (mounted) setState(() => _loadingMore = false);
     }
@@ -3941,25 +4175,63 @@ class _SpotifyArtistDiscographySectionState extends State<_SpotifyArtistDiscogra
       final album = track.album.trim();
       final key = _musicLookupKey(album);
       if (album.isNotEmpty && seen.add(key)) {
-        rows.add(<String, dynamic>{'title': album, 'artist': track.artist, 'imageUrl': track.artworkUrl ?? '', 'releaseDate': '', 'id': '', 'source': 'Local library'});
+        rows.add(<String, dynamic>{
+          'title': album,
+          'artist': track.artist,
+          'imageUrl': track.artworkUrl ?? '',
+          'releaseDate': '',
+          'id': '',
+          'source': 'Local library'
+        });
       }
     }
-    rows.sort((a, b) => (DateTime.tryParse(b['releaseDate']?.toString() ?? '') ?? DateTime(1900)).compareTo(DateTime.tryParse(a['releaseDate']?.toString() ?? '') ?? DateTime(1900)));
-    if (_loading && rows.isEmpty) return const Center(child: CircularProgressIndicator());
-    if (rows.isEmpty) return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_error ?? 'Discography is unavailable. Sign in and configure Spotify in Backend/.env.', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white60))));
+    rows.sort((a, b) =>
+        (DateTime.tryParse(b['releaseDate']?.toString() ?? '') ??
+                DateTime(1900))
+            .compareTo(DateTime.tryParse(a['releaseDate']?.toString() ?? '') ??
+                DateTime(1900)));
+    if (_loading && rows.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (rows.isEmpty) {
+      return Center(
+          child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                  _error ??
+                      'Discography is unavailable. Sign in and configure Spotify in Backend/.env.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white60))));
+    }
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: [
-        const ListTile(title: Text('Discography', style: TextStyle(fontWeight: FontWeight.w900)), subtitle: Text('Spotify releases compared with your imported music library. Missing releases are dimmed; playback requires a local media file.')),
-        if (_error != null) Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 8), child: Text(_error!, style: const TextStyle(color: Colors.orangeAccent, fontSize: 12))),
+        const ListTile(
+            title: Text('Discography',
+                style: TextStyle(fontWeight: FontWeight.w900)),
+            subtitle: Text(
+                'Spotify releases compared with your imported music library. Missing releases are dimmed; playback requires a local media file.')),
+        if (_error != null)
+          Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(_error!,
+                  style: const TextStyle(
+                      color: Colors.orangeAccent, fontSize: 12))),
         for (final album in rows) _albumRow(context, album),
         if (_offset < _total)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
             child: OutlinedButton.icon(
               onPressed: _loadingMore ? null : _loadMore,
-              icon: _loadingMore ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.expand_more_rounded),
-              label: Text(_loadingMore ? 'Loading releases…' : 'Load more discography (${_externalAlbums.length} of $_total)'),
+              icon: _loadingMore
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.expand_more_rounded),
+              label: Text(_loadingMore
+                  ? 'Loading releases…'
+                  : 'Load more discography (${_externalAlbums.length} of $_total)'),
             ),
           ),
       ],
@@ -3996,98 +4268,181 @@ class _SpotifyArtistDiscographySectionState extends State<_SpotifyArtistDiscogra
             height: 52,
             fit: BoxFit.cover,
             placeholder: const SizedBox(
-              width: 52, height: 52,
-              child: ColoredBox(color: Color(0xFF242424), child: Icon(Icons.album_rounded)),
+              width: 52,
+              height: 52,
+              child: ColoredBox(
+                  color: Color(0xFF242424), child: Icon(Icons.album_rounded)),
             ),
           ),
         ),
-        title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: CinematicTitleFonts.captionStyleForTitle(title, type: 'album', baseFontSize: 14, color: Colors.white)),
-        subtitle: Text(<String>[artist, if ((album['releaseDate']?.toString() ?? '').length >= 4) album['releaseDate'].toString().substring(0, 4), owned ? 'In your library' : 'Not in library'].join(' · '), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 11)),
-        trailing: Icon(owned ? Icons.library_add_check_rounded : Icons.lock_outline_rounded, color: owned ? Colors.lightGreenAccent : Colors.white38),
-        onTap: spotifyId.isEmpty ? null : () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SpotifyAlbumDetailsScreen(
-          albumTitle: title,
-          spotifyId: spotifyId,
-          isOwned: owned,
-          localArtistName: widget.artistName,
-          localTracks: local,
-          onPlayLocalTrack: _playLocalTrackRow,
-        ))),
+        title: Text(title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: CinematicTitleFonts.captionStyleForTitle(title,
+                type: 'album', baseFontSize: 14, color: Colors.white)),
+        subtitle: Text(
+            <String>[
+              artist,
+              if ((album['releaseDate']?.toString() ?? '').length >= 4)
+                album['releaseDate'].toString().substring(0, 4),
+              owned ? 'In your library' : 'Not in library'
+            ].join(' · '),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white54, fontSize: 11)),
+        trailing: Icon(
+            owned
+                ? Icons.library_add_check_rounded
+                : Icons.lock_outline_rounded,
+            color: owned ? Colors.lightGreenAccent : Colors.white38),
+        onTap: spotifyId.isEmpty
+            ? null
+            : () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => SpotifyAlbumDetailsScreen(
+                      albumTitle: title,
+                      spotifyId: spotifyId,
+                      isOwned: owned,
+                      localArtistName: widget.artistName,
+                      localTracks: local,
+                      onPlayLocalTrack: _playLocalTrackRow,
+                    ))),
       ),
     );
   }
 }
 
 class _SpotifyArtistPopularSection extends StatefulWidget {
-  const _SpotifyArtistPopularSection({required this.artistName, required this.localTracks});
+  const _SpotifyArtistPopularSection(
+      {required this.artistName, required this.localTracks});
   final String artistName;
   final List<MusicTrack> localTracks;
   @override
-  State<_SpotifyArtistPopularSection> createState() => _SpotifyArtistPopularSectionState();
+  State<_SpotifyArtistPopularSection> createState() =>
+      _SpotifyArtistPopularSectionState();
 }
 
-class _SpotifyArtistPopularSectionState extends State<_SpotifyArtistPopularSection> {
+class _SpotifyArtistPopularSectionState
+    extends State<_SpotifyArtistPopularSection> {
   late Future<Map<String, dynamic>> _future;
   @override
-  void initState() { super.initState(); _future = _load(); }
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
   Future<Map<String, dynamic>> _load() async {
-    try { return await AppController.instance.backendApi.getPopularArtistTracks(widget.artistName); }
-    catch (error) { return <String, dynamic>{'items': <Map<String, dynamic>>[], 'message': error.toString().replaceFirst('BackendApiException: ', '')}; }
+    try {
+      return await AppController.instance.backendApi
+          .getPopularArtistTracks(widget.artistName);
+    } catch (error) {
+      return <String, dynamic>{
+        'items': <Map<String, dynamic>>[],
+        'message': error.toString().replaceFirst('BackendApiException: ', '')
+      };
+    }
   }
 
   @override
   Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
-    future: _future,
-    builder: (context, snapshot) {
-      final external = _musicCatalogRows(snapshot.data?['items']);
-      final locals = _realArtistTracks(widget.localTracks);
-      final usedLocal = <String>{};
-      final rowEntries = <Map<String, dynamic>>[];
-      for (final row in external) {
-        final titleKey = _musicLookupKey(row['title']?.toString() ?? '');
-        MusicTrack? local;
-        for (final candidate in locals) {
-          if (_musicLookupKey(candidate.title) == titleKey &&
-              (candidate.audioUrl?.trim().isNotEmpty ?? false)) { local = candidate; break; }
-        }
-        if (local != null) usedLocal.add(local.id);
-        rowEntries.add(<String, dynamic>{'external': row, 'local': local});
-      }
-      for (final track in locals) {
-        if (usedLocal.contains(track.id)) continue;
-        rowEntries.add(<String, dynamic>{'local': track});
-      }
-      if (snapshot.connectionState == ConnectionState.waiting && rowEntries.isEmpty) return const Center(child: CircularProgressIndicator());
-      if (rowEntries.isEmpty) return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(snapshot.data?['message']?.toString() ?? 'Popular tracks are unavailable until Spotify is configured.', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white60))));
-      return ListView(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        children: [
-          const ListTile(title: Text('Popular & your tracks', style: TextStyle(fontWeight: FontWeight.w900)), subtitle: Text('Spotify catalog-ranked tracks plus all of your imported songs. Songs not in your library cannot be played here.')),
-          for (final entry in rowEntries) _trackRow(context, entry),
-        ],
+        future: _future,
+        builder: (context, snapshot) {
+          final external = _musicCatalogRows(snapshot.data?['items']);
+          final locals = _realArtistTracks(widget.localTracks);
+          final usedLocal = <String>{};
+          final rowEntries = <Map<String, dynamic>>[];
+          for (final row in external) {
+            final titleKey = _musicLookupKey(row['title']?.toString() ?? '');
+            MusicTrack? local;
+            for (final candidate in locals) {
+              if (_musicLookupKey(candidate.title) == titleKey &&
+                  (candidate.audioUrl?.trim().isNotEmpty ?? false)) {
+                local = candidate;
+                break;
+              }
+            }
+            if (local != null) usedLocal.add(local.id);
+            rowEntries.add(<String, dynamic>{'external': row, 'local': local});
+          }
+          for (final track in locals) {
+            if (usedLocal.contains(track.id)) continue;
+            rowEntries.add(<String, dynamic>{'local': track});
+          }
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              rowEntries.isEmpty) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (rowEntries.isEmpty) {
+            return Center(
+                child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                        snapshot.data?['message']?.toString() ??
+                            'Popular tracks are unavailable until Spotify is configured.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white60))));
+          }
+          return ListView(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            children: [
+              const ListTile(
+                  title: Text('Popular & your tracks',
+                      style: TextStyle(fontWeight: FontWeight.w900)),
+                  subtitle: Text(
+                      'Spotify catalog-ranked tracks plus all of your imported songs. Songs not in your library cannot be played here.')),
+              for (final entry in rowEntries) _trackRow(context, entry),
+            ],
+          );
+        },
       );
-    },
-  );
 
   Widget _trackRow(BuildContext context, Map<String, dynamic> entry) {
-    final raw = entry['external'] is Map ? Map<String, dynamic>.from(entry['external'] as Map) : <String, dynamic>{};
-    final local = entry['local'] is MusicTrack ? entry['local'] as MusicTrack : null;
+    final raw = entry['external'] is Map
+        ? Map<String, dynamic>.from(entry['external'] as Map)
+        : <String, dynamic>{};
+    final local =
+        entry['local'] is MusicTrack ? entry['local'] as MusicTrack : null;
     final title = local?.title ?? raw['title']?.toString() ?? 'Track';
-    final artist = local?.artist ?? raw['artist']?.toString() ?? widget.artistName;
+    final artist =
+        local?.artist ?? raw['artist']?.toString() ?? widget.artistName;
     final image = local?.artworkUrl ?? raw['imageUrl']?.toString() ?? '';
-    final canPlay = local != null && (local.audioUrl?.trim().isNotEmpty ?? false);
-    final score = raw['popularity'] is num ? 'Popularity ${raw['popularity']}' : 'Spotify catalog result';
+    final canPlay =
+        local != null && (local.audioUrl?.trim().isNotEmpty ?? false);
+    final score = raw['popularity'] is num
+        ? 'Popularity ${raw['popularity']}'
+        : 'Spotify catalog result';
     return Opacity(
       opacity: canPlay ? 1 : .43,
       child: ListTile(
-        leading: SizedBox(width: 48, height: 48, child: image.trim().startsWith('http') ? Image.network(image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.music_note_rounded)) : const Icon(Icons.music_note_rounded)),
+        leading: SizedBox(
+            width: 48,
+            height: 48,
+            child: image.trim().startsWith('http')
+                ? Image.network(image,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) =>
+                        const Icon(Icons.music_note_rounded))
+                : const Icon(Icons.music_note_rounded)),
         title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Text(canPlay ? '$artist · In your library' : '$artist · $score · Not in library', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+        subtitle: Text(
+            canPlay
+                ? '$artist · In your library'
+                : '$artist · $score · Not in library',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white54, fontSize: 11)),
         trailing: IconButton(
-          tooltip: canPlay ? 'Play imported track' : 'Import this track to enable playback',
-          icon: Icon(canPlay ? Icons.play_arrow_rounded : Icons.lock_outline_rounded),
-          onPressed: canPlay ? () => unawaited(MusicPlaybackController.instance.play(local)) : null,
+          tooltip: canPlay
+              ? 'Play imported track'
+              : 'Import this track to enable playback',
+          icon: Icon(
+              canPlay ? Icons.play_arrow_rounded : Icons.lock_outline_rounded),
+          onPressed: canPlay
+              ? () => unawaited(MusicPlaybackController.instance.play(local))
+              : null,
         ),
-        onTap: canPlay ? () => unawaited(MusicPlaybackController.instance.play(local)) : null,
+        onTap: canPlay
+            ? () => unawaited(MusicPlaybackController.instance.play(local))
+            : null,
       ),
     );
   }
@@ -4097,7 +4452,8 @@ class _ArtistMusicVideosSection extends StatefulWidget {
   const _ArtistMusicVideosSection({required this.tracks});
   final List<MusicTrack> tracks;
   @override
-  State<_ArtistMusicVideosSection> createState() => _ArtistMusicVideosSectionState();
+  State<_ArtistMusicVideosSection> createState() =>
+      _ArtistMusicVideosSectionState();
 }
 
 class _ArtistMusicVideosSectionState extends State<_ArtistMusicVideosSection> {
@@ -4107,23 +4463,34 @@ class _ArtistMusicVideosSectionState extends State<_ArtistMusicVideosSection> {
   final Set<String> _searched = <String>{};
 
   @override
-  void initState() { super.initState(); WidgetsBinding.instance.addPostFrameCallback((_) => _loadVideos()); }
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadVideos());
+  }
+
   Future<void> _loadVideos() async {
     if (_loading) return;
     setState(() => _loading = true);
     final rows = <Map<String, dynamic>>[];
     try {
-      final tracks = _realArtistTracks(widget.tracks).take(8).toList(growable: false);
+      final tracks =
+          _realArtistTracks(widget.tracks).take(8).toList(growable: false);
       for (final track in tracks) {
         if (!AppController.instance.isBackendAuthenticated) break;
         if ((track.musicVideoUrl ?? '').trim().isNotEmpty) {
-          rows.add(<String, dynamic>{'track': track, 'localVideoUrl': track.musicVideoUrl});
+          rows.add(<String, dynamic>{
+            'track': track,
+            'localVideoUrl': track.musicVideoUrl
+          });
           continue;
         }
         if (_searched.contains(track.id)) continue;
         _searched.add(track.id);
         try {
-          final result = await AppController.instance.backendApi.searchMusicVideos('${track.artist} ${track.title} official music video', limit: 1);
+          final result = await AppController.instance.backendApi
+              .searchMusicVideos(
+                  '${track.artist} ${track.title} official music video',
+                  limit: 1);
           final found = _musicCatalogRows(result['items']);
           if (found.isNotEmpty) {
             rows.add(<String, dynamic>{'track': track, 'video': found.first});
@@ -4134,7 +4501,10 @@ class _ArtistMusicVideosSectionState extends State<_ArtistMusicVideosSection> {
       }
       if (mounted) setState(() => _rows = rows);
     } catch (error) {
-      if (mounted) setState(() => _message = error.toString().replaceFirst('BackendApiException: ', ''));
+      if (mounted) {
+        setState(() => _message =
+            error.toString().replaceFirst('BackendApiException: ', ''));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -4147,9 +4517,11 @@ class _ArtistMusicVideosSectionState extends State<_ArtistMusicVideosSection> {
         : null;
     if ((track.musicVideoUrl?.trim().isNotEmpty ?? false)) {
       Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => MusicTrackDisplayScreen(track: track, mode: MusicTrackDisplayMode.video),
+        builder: (_) => MusicTrackDisplayScreen(
+            track: track, mode: MusicTrackDisplayMode.video),
       ));
-    } else if (video != null && (video['videoId']?.toString() ?? '').isNotEmpty) {
+    } else if (video != null &&
+        (video['videoId']?.toString() ?? '').isNotEmpty) {
       Navigator.of(context).push(MaterialPageRoute<void>(
         builder: (_) => MusicVideoSearchScreen(
           title: track.title,
@@ -4159,7 +4531,8 @@ class _ArtistMusicVideosSectionState extends State<_ArtistMusicVideosSection> {
       ));
     } else {
       Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => MusicVideoSearchScreen(title: track.title, artist: track.artist),
+        builder: (_) =>
+            MusicVideoSearchScreen(title: track.title, artist: track.artist),
       ));
     }
   }
@@ -4169,36 +4542,78 @@ class _ArtistMusicVideosSectionState extends State<_ArtistMusicVideosSection> {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: [
-        const ListTile(title: Text('Music Videos', style: TextStyle(fontWeight: FontWeight.w900)), subtitle: Text('Searches for embeddable YouTube matches for songs in your imported library.')),
+        const ListTile(
+            title: Text('Music Videos',
+                style: TextStyle(fontWeight: FontWeight.w900)),
+            subtitle: Text(
+                'Searches for embeddable YouTube matches for songs in your imported library.')),
         if (_loading) const LinearProgressIndicator(minHeight: 2),
-        if ((_message ?? '').isNotEmpty) Padding(padding: const EdgeInsets.all(16), child: Text(_message!, style: const TextStyle(color: Colors.white54, fontSize: 12))),
-        if (_rows.isEmpty && !_loading) Padding(padding: const EdgeInsets.all(20), child: Text(widget.tracks.isEmpty ? 'No imported tracks are indexed for this artist yet.' : 'No matching video was returned. You can search each song manually.', style: const TextStyle(color: Colors.white60))),
+        if ((_message ?? '').isNotEmpty)
+          Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(_message!,
+                  style: const TextStyle(color: Colors.white54, fontSize: 12))),
+        if (_rows.isEmpty && !_loading)
+          Padding(
+              padding: const EdgeInsets.all(20),
+              child: Text(
+                  widget.tracks.isEmpty
+                      ? 'No imported tracks are indexed for this artist yet.'
+                      : 'No matching video was returned. You can search each song manually.',
+                  style: const TextStyle(color: Colors.white60))),
         for (final row in _rows)
           Builder(builder: (context) {
             final track = row['track'] as MusicTrack;
-            final video = row['video'] is Map ? Map<String, dynamic>.from(row['video'] as Map) : <String, dynamic>{};
+            final video = row['video'] is Map
+                ? Map<String, dynamic>.from(row['video'] as Map)
+                : <String, dynamic>{};
             final title = video['title']?.toString() ?? track.title;
-            final thumb = video['thumbnailUrl']?.toString() ?? track.artworkUrl ?? '';
+            final thumb =
+                video['thumbnailUrl']?.toString() ?? track.artworkUrl ?? '';
             return ListTile(
-              leading: SizedBox(width: 64, height: 48, child: thumb.startsWith('http') ? Image.network(thumb, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.music_video_rounded)) : const Icon(Icons.music_video_rounded)),
+              leading: SizedBox(
+                  width: 64,
+                  height: 48,
+                  child: thumb.startsWith('http')
+                      ? Image.network(thumb,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) =>
+                              const Icon(Icons.music_video_rounded))
+                      : const Icon(Icons.music_video_rounded)),
               title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
-              subtitle: Text('${track.title} · ${video['channelTitle']?.toString() ?? track.artist} • ${_musicTrackSubtitle(track)}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+              subtitle: Text(
+                  '${track.title} · ${video['channelTitle']?.toString() ?? track.artist} • ${_musicTrackSubtitle(track)}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white54, fontSize: 11)),
               trailing: IconButton(
-                tooltip: (track.musicVideoUrl?.trim().isNotEmpty ?? false) ? 'Play stored music video' : 'Find music video',
+                tooltip: (track.musicVideoUrl?.trim().isNotEmpty ?? false)
+                    ? 'Play stored music video'
+                    : 'Find music video',
                 icon: const Icon(Icons.play_circle_outline_rounded),
                 onPressed: () => _openTrackVideo(context, row),
               ),
               onTap: () => _openTrackVideo(context, row),
             );
           }),
-        if (!_loading && widget.tracks.isNotEmpty) Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 20), child: OutlinedButton.icon(onPressed: () { _searched.clear(); unawaited(_loadVideos()); }, icon: const Icon(Icons.refresh_rounded), label: const Text('Retry video discovery'))),
+        if (!_loading && widget.tracks.isNotEmpty)
+          Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+              child: OutlinedButton.icon(
+                  onPressed: () {
+                    _searched.clear();
+                    unawaited(_loadVideos());
+                  },
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Retry video discovery'))),
       ],
     );
   }
 }
 
 class _FansAlsoLikeSection extends StatefulWidget {
-  const _FansAlsoLikeSection({required this.artistName, required this.seedArtists});
+  const _FansAlsoLikeSection(
+      {required this.artistName, required this.seedArtists});
   final String artistName;
   final List<String> seedArtists;
   @override
@@ -4208,56 +4623,137 @@ class _FansAlsoLikeSection extends StatefulWidget {
 class _FansAlsoLikeSectionState extends State<_FansAlsoLikeSection> {
   late Future<Map<String, dynamic>> _future;
   @override
-  void initState() { super.initState(); _future = _load(); }
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
 
   Future<Map<String, dynamic>> _load() async {
-    try { return await AppController.instance.backendApi.getRelatedMusicArtists(widget.artistName, limit: 12); }
-    catch (error) { return <String, dynamic>{'items': <Map<String, dynamic>>[], 'message': error.toString().replaceFirst('BackendApiException: ', '')}; }
+    try {
+      return await AppController.instance.backendApi
+          .getRelatedMusicArtists(widget.artistName, limit: 12);
+    } catch (error) {
+      return <String, dynamic>{
+        'items': <Map<String, dynamic>>[],
+        'message': error.toString().replaceFirst('BackendApiException: ', '')
+      };
+    }
   }
 
   List<Map<String, dynamic>> _curatedFallback() {
     final name = _musicLookupKey(widget.artistName);
     const suggestions = <String, List<String>>{
-      'morgan wallen': <String>['Ella Langley', 'Blake Shelton', 'Bailey Zimmerman', 'Post Malone', 'Tate McRae'],
+      'morgan wallen': <String>[
+        'Ella Langley',
+        'Blake Shelton',
+        'Bailey Zimmerman',
+        'Post Malone',
+        'Tate McRae'
+      ],
       'j balvin': <String>['Maluma', 'Bad Bunny', 'Feid'],
       'selena gomez': <String>['Taylor Swift', 'Ariana Grande'],
     };
-    final selected = suggestions.entries.where((entry) => _musicLookupKey(entry.key) == name).expand((entry) => entry.value);
-    return selected.map((value) => <String, dynamic>{'name': value, 'similarityReason': 'Curated discovery suggestion'}).toList(growable: false);
+    final selected = suggestions.entries
+        .where((entry) => _musicLookupKey(entry.key) == name)
+        .expand((entry) => entry.value);
+    return selected
+        .map((value) => <String, dynamic>{
+              'name': value,
+              'similarityReason': 'Curated discovery suggestion'
+            })
+        .toList(growable: false);
   }
 
   @override
   Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
-    future: _future,
-    builder: (context, snapshot) {
-      final byName = <String, Map<String, dynamic>>{};
-      for (final row in [..._musicCatalogRows(snapshot.data?['items']), ..._curatedFallback()]) {
-        final name = row['name']?.toString().trim() ?? '';
-        if (name.isNotEmpty && _musicLookupKey(name) != _musicLookupKey(widget.artistName)) byName.putIfAbsent(_musicLookupKey(name), () => row);
-      }
-      for (final name in widget.seedArtists) {
-        final clean = name.trim();
-        if (clean.isNotEmpty && _musicLookupKey(clean) != _musicLookupKey(widget.artistName)) byName.putIfAbsent(_musicLookupKey(clean), () => <String, dynamic>{'name': clean, 'similarityReason': 'Found on a collaboration in your library'});
-      }
-      final rows = byName.values.toList()..sort((a, b) => (a['name']?.toString() ?? '').toLowerCase().compareTo((b['name']?.toString() ?? '').toLowerCase()));
-      if (snapshot.connectionState == ConnectionState.waiting && rows.isEmpty) return const Center(child: CircularProgressIndicator());
-      if (rows.isEmpty) return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(snapshot.data?['message']?.toString() ?? 'No similar artists were found yet.', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white60))));
-      return ListView(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        children: [
-          const ListTile(title: Text('Fans Also Like', style: TextStyle(fontWeight: FontWeight.w900)), subtitle: Text('Suggestions combine available genre metadata and artists credited on your imported tracks, including cross-genre collaborations.')),
-          for (final artist in rows)
-            ListTile(
-              leading: SizedBox(width: 48, height: 48, child: (artist['imageUrl']?.toString() ?? '').startsWith('http') ? ClipOval(child: Image.network(artist['imageUrl'].toString(), fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded))) : const CircleAvatar(child: Icon(Icons.person_rounded))),
-              title: Text(artist['name']?.toString() ?? 'Artist'),
-              subtitle: Text(artist['similarityReason']?.toString() ?? (artist['genres'] is List ? (artist['genres'] as List).take(3).join(' · ') : 'Explore artist'), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 11)),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => MusicArtistProfileScreen(artistName: artist['name']?.toString() ?? 'Artist'))),
-            ),
-        ],
+        future: _future,
+        builder: (context, snapshot) {
+          final byName = <String, Map<String, dynamic>>{};
+          for (final row in [
+            ..._musicCatalogRows(snapshot.data?['items']),
+            ..._curatedFallback()
+          ]) {
+            final name = row['name']?.toString().trim() ?? '';
+            if (name.isNotEmpty &&
+                _musicLookupKey(name) != _musicLookupKey(widget.artistName)) {
+              byName.putIfAbsent(_musicLookupKey(name), () => row);
+            }
+          }
+          for (final name in widget.seedArtists) {
+            final clean = name.trim();
+            if (clean.isNotEmpty &&
+                _musicLookupKey(clean) != _musicLookupKey(widget.artistName)) {
+              byName.putIfAbsent(
+                  _musicLookupKey(clean),
+                  () => <String, dynamic>{
+                        'name': clean,
+                        'similarityReason':
+                            'Found on a collaboration in your library'
+                      });
+            }
+          }
+          final rows = byName.values.toList()
+            ..sort((a, b) => (a['name']?.toString() ?? '')
+                .toLowerCase()
+                .compareTo((b['name']?.toString() ?? '').toLowerCase()));
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              rows.isEmpty) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (rows.isEmpty) {
+            return Center(
+                child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                        snapshot.data?['message']?.toString() ??
+                            'No similar artists were found yet.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white60))));
+          }
+          return ListView(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            children: [
+              const ListTile(
+                  title: Text('Fans Also Like',
+                      style: TextStyle(fontWeight: FontWeight.w900)),
+                  subtitle: Text(
+                      'Suggestions combine available genre metadata and artists credited on your imported tracks, including cross-genre collaborations.')),
+              for (final artist in rows)
+                ListTile(
+                  leading: SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: (artist['imageUrl']?.toString() ?? '')
+                              .startsWith('http')
+                          ? ClipOval(
+                              child: Image.network(
+                                  artist['imageUrl'].toString(),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) =>
+                                      const Icon(Icons.person_rounded)))
+                          : const CircleAvatar(
+                              child: Icon(Icons.person_rounded))),
+                  title: Text(artist['name']?.toString() ?? 'Artist'),
+                  subtitle: Text(
+                      artist['similarityReason']?.toString() ??
+                          (artist['genres'] is List
+                              ? (artist['genres'] as List).take(3).join(' · ')
+                              : 'Explore artist'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                          const TextStyle(color: Colors.white54, fontSize: 11)),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                          builder: (_) => MusicArtistProfileScreen(
+                              artistName:
+                                  artist['name']?.toString() ?? 'Artist'))),
+                ),
+            ],
+          );
+        },
       );
-    },
-  );
 }
 
 class MusicDiscoverScreen extends StatelessWidget {
@@ -4341,63 +4837,6 @@ class MusicDiscoverScreen extends StatelessWidget {
                 ),
                 trailing: Wrap(
                   children: [
-                    if (ShopCatalog.instance
-                        .productsForAssociation('song', track.id,
-                            name: track.title)
-                        .isNotEmpty)
-                      IconButton(
-                        tooltip: 'Shop song products',
-                        icon: const Icon(Icons.storefront_outlined),
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            settings: const RouteSettings(name: '/app/shop'),
-                            builder: (_) => ShopScreen(
-                              contextAssociationType: 'song',
-                              contextAssociationId: track.id,
-                              contextAssociationName: track.title,
-                            ),
-                          ),
-                        ),
-                      ),
-                    if (ShopCatalog.instance
-                        .productsForAssociation('artist', track.artist,
-                            name: track.artist)
-                        .isNotEmpty)
-                      IconButton(
-                        tooltip: 'Shop artist products',
-                        icon: const Icon(Icons.person_outline_rounded),
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            settings: const RouteSettings(name: '/app/shop'),
-                            builder: (_) => ShopScreen(
-                              contextAssociationType: 'artist',
-                              contextAssociationId: track.artist,
-                              contextAssociationName: track.artist,
-                            ),
-                          ),
-                        ),
-                      ),
-                    if (ShopCatalog.instance
-                        .productsForAssociation('album', track.album,
-                            name: track.album)
-                        .isNotEmpty)
-                      IconButton(
-                        tooltip: 'Shop album products',
-                        icon: const Icon(Icons.album_outlined),
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            settings: const RouteSettings(name: '/app/shop'),
-                            builder: (_) => ShopScreen(
-                              contextAssociationType: 'album',
-                              contextAssociationId: track.album,
-                              contextAssociationName: track.album,
-                            ),
-                          ),
-                        ),
-                      ),
                     IconButton(
                       tooltip: 'Play',
                       icon: const Icon(Icons.play_arrow_rounded),
@@ -4447,111 +4886,14 @@ class _MusicGenreBlendExamplesSection extends StatelessWidget {
   }
 }
 
-/// Dedicated AI DJ queue view for inspecting and starting the generated mix.
-class MusicAiDjScreen extends StatelessWidget {
-  const MusicAiDjScreen({super.key});
-
-  List<MusicTrack> _mix() {
-    final store = MusicLibraryStore.instance;
-    final tracks = store.tracks.where((track) {
-      final profile = AppController.instance.currentProfile;
-      if (profileBlocksExplicitMusic(profile) && track.explicit) return false;
-      if (profileBlocksMatureMusic(profile) && track.matureTheme) return false;
-      return true;
-    }).toList();
-    final likedIds = MusicFavoritesBridge.likedTracks().toSet();
-    final current = store.currentTrack;
-    tracks.sort((a, b) {
-      int score(MusicTrack track) {
-        var value = (store.listenCounts[track.id] ?? 0) * 4;
-        if (likedIds.contains(track.id)) value += 6;
-        if (current != null &&
-            track.genres.any((genre) => current.genres
-                .any((active) => active.toLowerCase() == genre.toLowerCase()))) {
-          value += 3;
-        }
-        if (current != null &&
-            (track.artist.toLowerCase() == current.artist.toLowerCase() ||
-                track.featuredArtists.any((artist) =>
-                    artist.toLowerCase() == current.artist.toLowerCase()))) {
-          value += 2;
-        }
-        return value;
-      }
-
-      final byScore = score(b).compareTo(score(a));
-      return byScore != 0
-          ? byScore
-          : a.title.toLowerCase().compareTo(b.title.toLowerCase());
-    });
-    final selected = <MusicTrack>[];
-    final remaining = List<MusicTrack>.from(tracks);
-    String? lastArtist;
-    while (remaining.isNotEmpty && selected.length < 18) {
-      var index = remaining.indexWhere(
-          (track) => track.artist.toLowerCase() != lastArtist?.toLowerCase());
-      if (index < 0) index = 0;
-      final track = remaining.removeAt(index);
-      selected.add(track);
-      lastArtist = track.artist;
-    }
-    return selected;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final mix = _mix();
-    return Scaffold(
-      appBar: AppBar(title: const UniversalText('AI DJ')),
-      body: ListView(
-        padding: const EdgeInsets.all(18),
-        children: [
-          const UniversalText('Your AI DJ',
-              style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 6),
-          const UniversalText(
-              'A continuous queue assembled from your listening activity and music library. Playback stays on your account server.',
-              style: TextStyle(color: Colors.white60)),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: mix.isEmpty
-                ? null
-                : () async {
-                    MusicLibraryStore.instance.setQueue(mix, aiDj: true);
-                    await MusicPlaybackController.instance.play(mix.first);
-                    if (context.mounted) Navigator.pop(context);
-                  },
-            icon: const Icon(Icons.play_arrow_rounded),
-            label: const UniversalText('START AI DJ'),
-          ),
-          const SizedBox(height: 14),
-          for (var i = 0; i < mix.length; i++)
-            Card(
-              child: ListTile(
-                leading: Text('${i + 1}',
-                    style: const TextStyle(fontWeight: FontWeight.w900)),
-                title: Text(mix[i].title),
-                subtitle: Text(mix[i].artist),
-                trailing: IconButton(
-                  icon: const Icon(Icons.play_arrow_rounded),
-                  onPressed: () =>
-                      MusicPlaybackController.instance.play(mix[i]),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 class _MusicDiscoverArtwork extends StatelessWidget {
   final MusicTrack track;
   const _MusicDiscoverArtwork({required this.track});
 
   @override
   Widget build(BuildContext context) {
-    final albumTitle = track.album.trim().isNotEmpty ? track.album : track.title;
+    final albumTitle =
+        track.album.trim().isNotEmpty ? track.album : track.title;
     return ClipOval(
       child: AlbumArtworkImage(
         title: albumTitle,
@@ -4568,57 +4910,6 @@ class _MusicDiscoverArtwork extends StatelessWidget {
       ),
     );
   }
-}
-
-class _MusicSearchDelegate extends SearchDelegate<MusicTrack?> {
-  final List<MusicTrack> tracks;
-  _MusicSearchDelegate(this.tracks);
-
-  @override
-  List<Widget>? buildActions(BuildContext context) => [
-        IconButton(onPressed: () => query = '', icon: const Icon(Icons.clear)),
-      ];
-
-  @override
-  Widget? buildLeading(BuildContext context) => IconButton(
-        onPressed: () => close(context, null),
-        icon: const Icon(Icons.arrow_back),
-      );
-
-  @override
-  Widget buildResults(BuildContext context) => _results(context);
-
-  @override
-  Widget buildSuggestions(BuildContext context) => _results(context);
-
-  Widget _results(BuildContext context) {
-    final q = query.toLowerCase();
-    return ListView(
-      children: [
-        for (final track in tracks.where((track) => track.matchesSearchQuery(q)))
-          ListTile(
-            leading: const Icon(Icons.music_note_rounded),
-            title: LocalizedMediaText(track.title),
-            subtitle: UniversalText(
-              '${track.artist} • ${track.album}'
-              '${track.soundtrackForTitles.isEmpty && track.relatedMediaTitles.isEmpty ? '' : ' • Soundtrack: ${<String>{...track.soundtrackForTitles, ...track.relatedMediaTitles}.join(', ')}'}'
-              '${track.catalogOnly ? ' • Catalog metadata' : ''}'
-              '${track.allGenreTags.isEmpty ? '' : ' • ${track.genreDisplayLabel}'}',
-            ),
-            trailing: IconButton(
-              tooltip: 'More song options',
-              icon: const Icon(Icons.more_vert_rounded),
-              onPressed: () => showMusicTrackOptions(context, track),
-            ),
-            onTap: () {
-              close(context, track);
-              unawaited(openMusicSearchTrack(context, track));
-            },
-          ),
-      ],
-    );
-  }
-
 }
 
 Future<void> showMusicCustomization(BuildContext context) =>
@@ -4695,8 +4986,6 @@ class _MusicCustomizationState extends State<_MusicCustomization> {
                 'Show your weekly discovery mix.',
                 draft.showWeeklyDiscovery,
                 (v) => setState(() => draft.showWeeklyDiscovery = v)),
-            _toggle('AI DJ', 'Show the AI DJ launcher.', draft.showAIDJ,
-                (v) => setState(() => draft.showAIDJ = v)),
             _toggle(
                 'System playlists',
                 'Show Made For You / Discover Weekly / Daily Mix.',
@@ -4718,6 +5007,11 @@ class _MusicCustomizationState extends State<_MusicCustomization> {
                 (v) => setState(() => draft.showArtists = v)),
             _toggle('Albums', 'Show ripped albums.', draft.showAlbums,
                 (v) => setState(() => draft.showAlbums = v)),
+            _toggle(
+                'All Songs',
+                'Show every song in your music library.',
+                draft.showAllSongs,
+                (v) => setState(() => draft.showAllSongs = v)),
             _toggle('Playlists', 'Show custom playlists.', draft.showPlaylists,
                 (v) => setState(() => draft.showPlaylists = v)),
             _toggle(

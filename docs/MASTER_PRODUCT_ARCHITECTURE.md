@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document is the source of truth for the product architecture. The service is organized by domain rather than by individual Flutter screens so the product can grow without coupling UI, business logic, storage, AI, or device infrastructure.
+This document is the source of truth for the product architecture. The service is organized by domain rather than by individual Flutter screens so the product can grow without coupling UI, business logic, storage, or device infrastructure.
 
 ## Product Domains
 
@@ -12,7 +12,7 @@ This document is the source of truth for the product architecture. The service i
 4. **Server Platform** — logical servers, NAS/storage, agents, health, migration, devices.
 5. **Import Platform** — disc detection, ripping, staging, probing, matching, verification, review, approval, NAS transfer, library registration.
 6. **Commerce Platform** — marketplace, stores, products, inventory, cart, checkout, payments, orders, shipping, returns.
-7. **Intelligence Platform** — Hey Media, AI intents, context, recommendations, user-controlled memory, automation.
+7. **Intelligence Platform** — recommendations, context, and automation.
 8. **Identity & Governance Platform** — accounts, members, profiles, permissions, privacy, security, notifications, recovery, audit.
 
 ## Core Boundaries
@@ -123,27 +123,7 @@ Music imports can produce lossless FLAC from owned CDs according to the configur
 
 ## Universal Playback
 
-A shared playback engine supports movie, TV, music, radio, live TV, sports, trailers, and future user media. Players request short-lived authorized stream descriptors; they do not receive NAS credentials or raw filesystem paths.
-
-## Hey Media / AI
-
-```text
-Voice / Text
- ↓
-Intent + Context
- ↓
-Permission check
- ↓
-Confirmation when required
- ↓
-Capability API
- ↓
-Domain service / job
- ↓
-Event / result
-```
-
-Purchases and destructive operations require confirmation. AI cannot bypass backend authorization.
+A shared playback engine supports movies, series, music, radio, sports, trailers, and future user media. Players request short-lived authorized stream descriptors; they do not receive NAS credentials or raw filesystem paths.
 
 ## Events / Jobs
 

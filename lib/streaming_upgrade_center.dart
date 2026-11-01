@@ -7,19 +7,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_core.dart';
 import 'details.dart';
-import 'collection_details.dart';
 import 'localization.dart';
 import 'music.dart';
 import 'player.dart';
 import 'profiles.dart';
 import 'smart_search.dart';
-import 'jellyfin_plugins_hub.dart';
 import 'streaming_intelligence_hub.dart';
+import 'home_streaming_discovery.dart';
 
 /// Entry point for the streaming features that are useful across the app.
 /// Existing Home customization, playback progress, music details and profiles
 /// remain the source of truth for those features; this screen makes them easy
-/// to find alongside the new local watchlist and real Jellyfin connection.
+/// to find alongside the local watchlist.
 class StreamingUpgradeCenterScreen extends StatelessWidget {
   const StreamingUpgradeCenterScreen({super.key});
 
@@ -30,10 +29,6 @@ class StreamingUpgradeCenterScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = AppController.instance;
-    final unfinished = controller.library
-        .where((item) => controller.getPlaybackProgress(item.id) > 0 &&
-            controller.getPlaybackProgress(item.id) < .95)
-        .length;
     return Scaffold(
       appBar: AppBar(title: const UniversalText('Streaming Upgrade Center')),
       body: ListView(
@@ -44,13 +39,15 @@ class StreamingUpgradeCenterScreen extends StatelessWidget {
           _UpgradeTile(
             icon: Icons.auto_awesome_rounded,
             title: 'Streaming Intelligence Hub',
-            subtitle: 'One place for all nine platform upgrades, library-quality review, X-Ray, franchise browsing, Live TV and operations.',
+            subtitle:
+                'One place for the core platform upgrades, library-quality review, X-Ray, franchise browsing and operations.',
             onTap: () => _open(context, const StreamingIntelligenceHubScreen()),
           ),
           _UpgradeTile(
             icon: Icons.bookmark_add_outlined,
             title: 'Personal Watchlist',
-            subtitle: 'Save titles per profile and track progress when available.',
+            subtitle:
+                'Save titles per profile and track progress when available.',
             onTap: () => _open(context, const PersonalWatchlistScreen()),
           ),
           _UpgradeTile(
@@ -63,25 +60,7 @@ class StreamingUpgradeCenterScreen extends StatelessWidget {
             icon: Icons.collections_bookmark_outlined,
             title: 'Collections',
             subtitle: 'Open the collections already available in your library.',
-            onTap: () => _open(context, const _CollectionsScreen()),
-          ),
-          _UpgradeTile(
-            icon: Icons.dns_outlined,
-            title: 'Connect Jellyfin',
-            subtitle: 'Sign in to your own server, browse its library, and play supported items.',
-            onTap: () => _open(context, const JellyfinConnectionScreen()),
-          ),
-          _UpgradeTile(
-            icon: Icons.extension_rounded,
-            title: 'Jellyfin Plugins',
-            subtitle: 'Connect as a Jellyfin administrator to install, enable, disable, uninstall plugins, and manage server repositories.',
-            onTap: () => _open(context, const JellyfinPluginsHubScreen()),
-          ),
-          _UpgradeTile(
-            icon: Icons.play_circle_outline,
-            title: 'Continue Watching',
-            subtitle: '$unfinished unfinished item(s) tracked in playback progress. Open Home to resume.',
-            onTap: () => Navigator.of(context).popUntil((route) => route.isFirst),
+            onTap: () => _open(context, const DiscoveryAllCollectionsScreen()),
           ),
           _UpgradeTile(
             icon: Icons.search_rounded,
@@ -92,12 +71,17 @@ class StreamingUpgradeCenterScreen extends StatelessWidget {
           _UpgradeTile(
             icon: Icons.movie_filter_outlined,
             title: 'Movie & TV Details',
-            subtitle: 'Open a title from your library to see its details, artwork, trailers and related titles.',
+            subtitle:
+                'Open a title from your library to see its details, artwork, trailers and related titles.',
             onTap: () {
               final items = controller.library;
               if (items.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Your local catalog is empty. Connect a catalog or Jellyfin server first.')),
+                  const SnackBar(
+                    content: Text(
+                      'Your local catalog is empty. Add movies or shows to your library first.',
+                    ),
+                  ),
                 );
                 return;
               }
@@ -107,13 +91,15 @@ class StreamingUpgradeCenterScreen extends StatelessWidget {
           _UpgradeTile(
             icon: Icons.music_note_rounded,
             title: 'Music & Albums',
-            subtitle: 'Open the existing music experience and artist/album pages.',
+            subtitle:
+                'Open the existing music experience and artist/album pages.',
             onTap: () => _open(context, const MusicScreen()),
           ),
           _UpgradeTile(
             icon: Icons.people_alt_outlined,
             title: 'Profiles',
-            subtitle: 'Switch profiles to keep watchlists and preferences separate.',
+            subtitle:
+                'Switch profiles to keep watchlists and preferences separate.',
             onTap: () => _open(context, const ProfileSelectionScreen()),
           ),
           const SizedBox(height: 12),
@@ -121,7 +107,7 @@ class StreamingUpgradeCenterScreen extends StatelessWidget {
             child: Padding(
               padding: EdgeInsets.all(14),
               child: Text(
-                'Home layout and hero-banner settings are available from the existing Home customization controls. Playback progress is recorded by the player. Jellyfin connection credentials are stored using secure device storage; the password is not saved.',
+                'Home layout and hero-banner settings are available from the existing Home customization controls. Playback progress is recorded by the player.',
                 style: TextStyle(fontSize: 12, height: 1.45),
               ),
             ),
@@ -154,7 +140,8 @@ class _UpgradeIntro extends StatelessWidget {
             Text('Your entertainment, in one place',
                 style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
             SizedBox(height: 6),
-            Text('Personalize discovery, organize titles, and connect the media server you control.',
+            Text(
+                'Personalize discovery, organize titles, and connect the media server you control.',
                 style: TextStyle(color: Colors.white70, height: 1.4)),
           ],
         ),
@@ -167,14 +154,19 @@ class _UpgradeTile extends StatelessWidget {
   final String subtitle;
   final VoidCallback onTap;
 
-  const _UpgradeTile({required this.icon, required this.title, required this.subtitle, required this.onTap});
+  const _UpgradeTile(
+      {required this.icon,
+      required this.title,
+      required this.subtitle,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) => Card(
         margin: const EdgeInsets.only(bottom: 9),
         child: ListTile(
           leading: CircleAvatar(child: Icon(icon)),
-          title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+          title:
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
           subtitle: Text(subtitle),
           trailing: const Icon(Icons.chevron_right_rounded),
           onTap: onTap,
@@ -187,7 +179,8 @@ class PersonalWatchlistScreen extends StatefulWidget {
   const PersonalWatchlistScreen({super.key});
 
   @override
-  State<PersonalWatchlistScreen> createState() => _PersonalWatchlistScreenState();
+  State<PersonalWatchlistScreen> createState() =>
+      _PersonalWatchlistScreenState();
 }
 
 class _PersonalWatchlistScreenState extends State<PersonalWatchlistScreen> {
@@ -224,7 +217,10 @@ class _PersonalWatchlistScreenState extends State<PersonalWatchlistScreen> {
       }
     }
     if (!mounted) return;
-    setState(() { _saved = parsed; _loading = false; });
+    setState(() {
+      _saved = parsed;
+      _loading = false;
+    });
   }
 
   Future<void> _persist() async {
@@ -263,13 +259,16 @@ class _PersonalWatchlistScreenState extends State<PersonalWatchlistScreen> {
   Future<void> _add() async {
     final catalog = AppController.instance.library;
     if (catalog.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No catalog titles are available yet.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No catalog titles are available yet.')));
       return;
     }
     final picked = await showModalBottomSheet<MediaItem>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => _AddWatchlistSheet(catalog: catalog, existingIds: _saved.map((e) => e['id'].toString()).toSet()),
+      builder: (ctx) => _AddWatchlistSheet(
+          catalog: catalog,
+          existingIds: _saved.map((e) => e['id'].toString()).toSet()),
     );
     if (picked == null || !mounted) return;
     if (_saved.any((row) => row['id'] == picked.id)) return;
@@ -333,13 +332,15 @@ class _PersonalWatchlistScreenState extends State<PersonalWatchlistScreen> {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.bookmark_border_rounded, size: 48),
+                                const Icon(Icons.bookmark_border_rounded,
+                                    size: 48),
                                 const SizedBox(height: 12),
                                 Text(
                                   _saved.isEmpty
                                       ? 'Your watchlist is empty'
                                       : 'No titles in this filter',
-                                  style: Theme.of(context).textTheme.titleMedium,
+                                  style:
+                                      Theme.of(context).textTheme.titleMedium,
                                 ),
                                 const SizedBox(height: 6),
                                 const Text(
@@ -398,8 +399,10 @@ class _PersonalWatchlistScreenState extends State<PersonalWatchlistScreen> {
                                     Text([
                                       media.releaseYear?.toString(),
                                       media.type,
-                                    ].whereType<String>().where((value) =>
-                                        value.isNotEmpty).join(' • ')),
+                                    ]
+                                        .whereType<String>()
+                                        .where((value) => value.isNotEmpty)
+                                        .join(' • ')),
                                     if (progress > 0 && progress < .95)
                                       Padding(
                                         padding: const EdgeInsets.only(top: 6),
@@ -453,7 +456,6 @@ class _PersonalWatchlistScreenState extends State<PersonalWatchlistScreen> {
       ),
     );
   }
-
 }
 
 class _AddWatchlistSheet extends StatefulWidget {
@@ -468,8 +470,46 @@ class _AddWatchlistSheetState extends State<_AddWatchlistSheet> {
   String _query = '';
   @override
   Widget build(BuildContext context) {
-    final matches = widget.catalog.where((m) => !widget.existingIds.contains(m.id) && ('${m.title} ${m.originalTitle ?? ''} ${m.type}').toLowerCase().contains(_query.toLowerCase())).take(100).toList();
-    return SafeArea(child: Padding(padding: EdgeInsets.only(left: 12, right: 12, top: 16, bottom: MediaQuery.viewInsetsOf(context).bottom + 12), child: SizedBox(height: MediaQuery.sizeOf(context).height * .78, child: Column(children: [const Text('Add from your catalog', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), const SizedBox(height: 12), TextField(decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search titles'), onChanged: (v) => setState(() => _query = v)), const SizedBox(height: 8), Expanded(child: ListView.builder(itemCount: matches.length, itemBuilder: (_, i) { final m = matches[i]; return ListTile(leading: const Icon(Icons.movie_outlined), title: Text(m.title), subtitle: Text(m.type), onTap: () => Navigator.of(context).pop(m)); }))]))));
+    final matches = widget.catalog
+        .where((m) =>
+            !widget.existingIds.contains(m.id) &&
+            ('${m.title} ${m.originalTitle ?? ''} ${m.type}')
+                .toLowerCase()
+                .contains(_query.toLowerCase()))
+        .take(100)
+        .toList();
+    return SafeArea(
+        child: Padding(
+            padding: EdgeInsets.only(
+                left: 12,
+                right: 12,
+                top: 16,
+                bottom: MediaQuery.viewInsetsOf(context).bottom + 12),
+            child: SizedBox(
+                height: MediaQuery.sizeOf(context).height * .78,
+                child: Column(children: [
+                  const Text('Add from your catalog',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  TextField(
+                      decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.search),
+                          hintText: 'Search titles'),
+                      onChanged: (v) => setState(() => _query = v)),
+                  const SizedBox(height: 8),
+                  Expanded(
+                      child: ListView.builder(
+                          itemCount: matches.length,
+                          itemBuilder: (_, i) {
+                            final m = matches[i];
+                            return ListTile(
+                                leading: const Icon(Icons.movie_outlined),
+                                title: Text(m.title),
+                                subtitle: Text(m.type),
+                                onTap: () => Navigator.of(context).pop(m));
+                          }))
+                ]))));
   }
 }
 
@@ -477,7 +517,19 @@ class _CatalogPickerScreen extends StatelessWidget {
   final List<MediaItem> items;
   const _CatalogPickerScreen({required this.items});
   @override
-  Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('Choose a title')), body: ListView.builder(itemCount: items.length, itemBuilder: (_, i) { final media = items[i]; return ListTile(leading: const Icon(Icons.movie_outlined), title: Text(media.title), subtitle: Text(media.type), onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => MediaDetailsScreen(media: media)))); }));
+  Widget build(BuildContext context) => Scaffold(
+      appBar: AppBar(title: const Text('Choose a title')),
+      body: ListView.builder(
+          itemCount: items.length,
+          itemBuilder: (_, i) {
+            final media = items[i];
+            return ListTile(
+                leading: const Icon(Icons.movie_outlined),
+                title: Text(media.title),
+                subtitle: Text(media.type),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => MediaDetailsScreen(media: media))));
+          }));
 }
 
 class _FavoritesScreen extends StatelessWidget {
@@ -489,7 +541,12 @@ class _FavoritesScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Favorites')),
       body: favorites.isEmpty
-          ? const Center(child: Padding(padding: EdgeInsets.all(24), child: Text('No favorites yet. Open a movie or show and use its like/favorite control to save it here.', textAlign: TextAlign.center)))
+          ? const Center(
+              child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text(
+                      'No favorites yet. Open a movie or show and use its like/favorite control to save it here.',
+                      textAlign: TextAlign.center)))
           : ListView.builder(
               itemCount: favorites.length,
               itemBuilder: (context, index) {
@@ -498,34 +555,9 @@ class _FavoritesScreen extends StatelessWidget {
                   leading: const Icon(Icons.favorite_rounded),
                   title: Text(media.title),
                   subtitle: Text(media.type),
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => MediaDetailsScreen(media: media))),
-                );
-              },
-            ),
-    );
-  }
-}
-
-class _CollectionsScreen extends StatelessWidget {
-  const _CollectionsScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    final collections = AppController.instance.collections;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Collections')),
-      body: collections.isEmpty
-          ? const Center(child: Padding(padding: EdgeInsets.all(24), child: Text('No collections are available for this profile yet.', textAlign: TextAlign.center)))
-          : ListView.builder(
-              itemCount: collections.length,
-              itemBuilder: (context, index) {
-                final collection = collections[index];
-                return ListTile(
-                  leading: const Icon(Icons.collections_bookmark_outlined),
-                  title: Text(collection.name),
-                  subtitle: Text('${collection.mediaIds.length} title(s)${collection.description.isEmpty ? '' : ' • ${collection.description}'}', maxLines: 2, overflow: TextOverflow.ellipsis),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => CollectionDetailsScreen(collection: collection))),
+                  onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                          builder: (_) => MediaDetailsScreen(media: media))),
                 );
               },
             ),
@@ -536,7 +568,8 @@ class _CollectionsScreen extends StatelessWidget {
 class JellyfinConnectionScreen extends StatefulWidget {
   const JellyfinConnectionScreen({super.key});
   @override
-  State<JellyfinConnectionScreen> createState() => _JellyfinConnectionScreenState();
+  State<JellyfinConnectionScreen> createState() =>
+      _JellyfinConnectionScreenState();
 }
 
 class _JellyfinConnectionScreenState extends State<JellyfinConnectionScreen> {
@@ -559,6 +592,7 @@ class _JellyfinConnectionScreenState extends State<JellyfinConnectionScreen> {
     final profileId = AppController.instance.currentProfile?.id.trim();
     return profileId != null && profileId.isNotEmpty ? profileId : 'guest';
   }
+
   String get _tokenKey => 'moss_jellyfin_token_$_profileToken';
   String get _userKey => 'moss_jellyfin_user_$_profileToken';
   String get _urlKey => 'moss_jellyfin_url_$_profileToken';
@@ -566,12 +600,17 @@ class _JellyfinConnectionScreenState extends State<JellyfinConnectionScreen> {
 
   String get _baseUrl {
     var value = _serverController.text.trim();
-    while (value.endsWith('/')) { value = value.substring(0, value.length - 1); }
+    while (value.endsWith('/')) {
+      value = value.substring(0, value.length - 1);
+    }
     return value;
   }
 
   @override
-  void initState() { super.initState(); _restore(); }
+  void initState() {
+    super.initState();
+    _restore();
+  }
 
   Future<void> _restore() async {
     final prefs = await SharedPreferences.getInstance();
@@ -596,35 +635,57 @@ class _JellyfinConnectionScreenState extends State<JellyfinConnectionScreen> {
         'X-Emby-Token': _token ?? '',
         'Accept': 'application/json',
         if (json) 'Content-Type': 'application/json',
-        'Authorization': 'MediaBrowser Client="MyOwnStreamingService", Device="Mobile", DeviceId="moss-mobile-client", Version="1.0.0"',
+        'Authorization':
+            'MediaBrowser Client="MyOwnStreamingService", Device="Mobile", DeviceId="moss-mobile-client", Version="1.0.0"',
       };
 
   Future<void> _connect() async {
     final uri = Uri.tryParse(_baseUrl);
-    if (uri == null || !uri.hasAuthority || !{'http', 'https'}.contains(uri.scheme)) {
-      setState(() => _error = 'Enter a valid server URL, such as http://192.168.1.20:8096.');
+    if (uri == null ||
+        !uri.hasAuthority ||
+        !{'http', 'https'}.contains(uri.scheme)) {
+      setState(() => _error =
+          'Enter a valid server URL, such as http://192.168.1.20:8096.');
       return;
     }
-    if (_usernameController.text.trim().isEmpty || _passwordController.text.isEmpty) {
+    if (_usernameController.text.trim().isEmpty ||
+        _passwordController.text.isEmpty) {
       setState(() => _error = 'Enter your Jellyfin username and password.');
       return;
     }
-    setState(() { _busy = true; _error = null; });
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/Users/AuthenticateByName'),
-        headers: _headers(json: true),
-        body: jsonEncode(<String, String>{'Username': _usernameController.text.trim(), 'Pw': _passwordController.text}),
-      ).timeout(const Duration(seconds: 20));
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/Users/AuthenticateByName'),
+            headers: _headers(json: true),
+            body: jsonEncode(<String, String>{
+              'Username': _usernameController.text.trim(),
+              'Pw': _passwordController.text
+            }),
+          )
+          .timeout(const Duration(seconds: 20));
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw Exception(response.statusCode == 401 ? 'Jellyfin rejected the username or password.' : 'Jellyfin returned HTTP ${response.statusCode}. Check the URL and server logs.');
+        throw Exception(response.statusCode == 401
+            ? 'Jellyfin rejected the username or password.'
+            : 'Jellyfin returned HTTP ${response.statusCode}. Check the URL and server logs.');
       }
       final body = jsonDecode(response.body) as Map<String, dynamic>;
       final token = body['AccessToken']?.toString();
-      final user = body['User'] is Map ? Map<String, dynamic>.from(body['User'] as Map) : <String, dynamic>{};
+      final user = body['User'] is Map
+          ? Map<String, dynamic>.from(body['User'] as Map)
+          : <String, dynamic>{};
       final userId = user['Id']?.toString();
-      if (token == null || token.isEmpty || userId == null || userId.isEmpty) throw Exception('The server response did not include a usable user token.');
-      _token = token; _userId = userId; _username = _usernameController.text.trim();
+      if (token == null || token.isEmpty || userId == null || userId.isEmpty) {
+        throw Exception(
+            'The server response did not include a usable user token.');
+      }
+      _token = token;
+      _userId = userId;
+      _username = _usernameController.text.trim();
       await _secure.write(key: _tokenKey, value: token);
       await _secure.write(key: _userKey, value: _username);
       await _secure.write(key: _idKey, value: userId);
@@ -634,19 +695,37 @@ class _JellyfinConnectionScreenState extends State<JellyfinConnectionScreen> {
       await _loadLibrary();
     } catch (error) {
       if (!mounted) return;
-      setState(() { _busy = false; _error = 'Could not connect: ${error.toString().replaceFirst('Exception: ', '')}'; });
+      setState(() {
+        _busy = false;
+        _error =
+            'Could not connect: ${error.toString().replaceFirst('Exception: ', '')}';
+      });
     }
   }
 
   Future<void> _loadLibrary() async {
     if (_token == null || _userId == null || _baseUrl.isEmpty) return;
-    setState(() { _busy = true; _error = null; });
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     try {
-      final uri = Uri.parse('$_baseUrl/Users/$_userId/Items').replace(queryParameters: <String, String>{
-        'Recursive': 'true', 'IncludeItemTypes': 'Movie,Series,Episode', 'Fields': 'Overview,ProductionYear,Genres,RunTimeTicks,CommunityRating', 'SortBy': 'SortName', 'SortOrder': 'Ascending', 'Limit': '500',
+      final uri = Uri.parse('$_baseUrl/Users/$_userId/Items')
+          .replace(queryParameters: <String, String>{
+        'Recursive': 'true',
+        'IncludeItemTypes': 'Movie,Series,Episode',
+        'Fields': 'Overview,ProductionYear,Genres,RunTimeTicks,CommunityRating',
+        'SortBy': 'SortName',
+        'SortOrder': 'Ascending',
+        'Limit': '500',
       });
-      final response = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 25));
-      if (response.statusCode < 200 || response.statusCode >= 300) throw Exception('Library request failed with HTTP ${response.statusCode}.');
+      final response = await http
+          .get(uri, headers: _headers())
+          .timeout(const Duration(seconds: 25));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception(
+            'Library request failed with HTTP ${response.statusCode}.');
+      }
       final json = jsonDecode(response.body) as Map<String, dynamic>;
       final rows = json['Items'] is List ? json['Items'] as List : const [];
       final mapped = <MediaItem>[];
@@ -657,12 +736,18 @@ class _JellyfinConnectionScreenState extends State<JellyfinConnectionScreen> {
         if (id == null || id.isEmpty) continue;
         final kind = row['Type']?.toString() ?? 'Movie';
         final isPlayable = kind == 'Movie' || kind == 'Episode';
-        final imageUri = Uri.parse('$_baseUrl/Items/$id/Images/Primary').replace(queryParameters: {'maxWidth': '500', 'api_key': _token!});
-        final streamUri = Uri.parse('$_baseUrl/Videos/$id/stream').replace(queryParameters: {'static': 'true', 'api_key': _token!});
+        final imageUri = Uri.parse('$_baseUrl/Items/$id/Images/Primary')
+            .replace(queryParameters: {'maxWidth': '500', 'api_key': _token!});
+        final streamUri = Uri.parse('$_baseUrl/Videos/$id/stream')
+            .replace(queryParameters: {'static': 'true', 'api_key': _token!});
         mapped.add(MediaItem(
           id: 'jellyfin_$id',
           title: row['Name']?.toString() ?? 'Untitled',
-          type: kind == 'Series' ? 'tv' : kind == 'Episode' ? 'episode' : 'movie',
+          type: kind == 'Series'
+              ? 'tv'
+              : kind == 'Episode'
+                  ? 'episode'
+                  : 'movie',
           imageUrl: imageUri.toString(),
           description: row['Overview']?.toString(),
           releaseYear: int.tryParse(row['ProductionYear']?.toString() ?? ''),
@@ -672,10 +757,20 @@ class _JellyfinConnectionScreenState extends State<JellyfinConnectionScreen> {
         ));
       }
       if (!mounted) return;
-      setState(() { _items = mapped; _busy = false; _connected = true; _error = null; });
+      setState(() {
+        _items = mapped;
+        _busy = false;
+        _connected = true;
+        _error = null;
+      });
     } catch (error) {
       if (!mounted) return;
-      setState(() { _busy = false; _connected = false; _error = 'Could not load the library: ${error.toString().replaceFirst('Exception: ', '')}'; });
+      setState(() {
+        _busy = false;
+        _connected = false;
+        _error =
+            'Could not load the library: ${error.toString().replaceFirst('Exception: ', '')}';
+      });
     }
   }
 
@@ -686,66 +781,157 @@ class _JellyfinConnectionScreenState extends State<JellyfinConnectionScreen> {
     await _secure.delete(key: _userKey);
     await _secure.delete(key: _idKey);
     if (!mounted) return;
-    setState(() { _token = null; _userId = null; _username = null; _items = []; _connected = false; _serverController.clear(); _usernameController.clear(); _passwordController.clear(); _error = null; });
+    setState(() {
+      _token = null;
+      _userId = null;
+      _username = null;
+      _items = [];
+      _connected = false;
+      _serverController.clear();
+      _usernameController.clear();
+      _passwordController.clear();
+      _error = null;
+    });
   }
 
   @override
-  void dispose() { _serverController.dispose(); _usernameController.dispose(); _passwordController.dispose(); _searchController.dispose(); super.dispose(); }
+  void dispose() {
+    _serverController.dispose();
+    _usernameController.dispose();
+    _passwordController.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final visible = _items.where((m) {
-      final matchesQuery = '${m.title} ${m.description ?? ''}'.toLowerCase().contains(_query.toLowerCase());
-      final matchesType = _type == 'All' || (_type == 'Movies' && m.type == 'movie') || (_type == 'Shows' && (m.type == 'tv' || m.type == 'episode'));
+      final matchesQuery = '${m.title} ${m.description ?? ''}'
+          .toLowerCase()
+          .contains(_query.toLowerCase());
+      final matchesType = _type == 'All' ||
+          (_type == 'Movies' && m.type == 'movie') ||
+          (_type == 'Shows' && (m.type == 'tv' || m.type == 'episode'));
       return matchesQuery && matchesType;
     }).toList();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Jellyfin Library'),
         actions: [
-          IconButton(
-            tooltip: 'Browse Jellyfin plugins',
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
-              builder: (_) => JellyfinPluginsHubScreen(
-                serverUrl: _serverController.text.trim().isEmpty ? null : _baseUrl,
-                accessToken: _token,
-                username: _username,
-              ),
-            )),
-            icon: const Icon(Icons.extension_rounded),
-          ),
-          if (_connected) IconButton(tooltip: 'Refresh library', onPressed: _loadLibrary, icon: const Icon(Icons.refresh_rounded)),
-          if (_connected) IconButton(tooltip: 'Disconnect', onPressed: _disconnect, icon: const Icon(Icons.link_off_rounded)),
+          if (_connected)
+            IconButton(
+                tooltip: 'Refresh library',
+                onPressed: _loadLibrary,
+                icon: const Icon(Icons.refresh_rounded)),
+          if (_connected)
+            IconButton(
+                tooltip: 'Disconnect',
+                onPressed: _disconnect,
+                icon: const Icon(Icons.link_off_rounded)),
         ],
       ),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         if (!_connected) ...[
-          const Card(child: Padding(padding: EdgeInsets.all(14), child: Text('Connect to a Jellyfin server you own or are authorized to use. For a home server, use its LAN URL first, for example http://192.168.1.20:8096. Use HTTPS for remote access; avoid exposing the server directly to the public internet.', style: TextStyle(height: 1.4)))),
-          TextField(controller: _serverController, keyboardType: TextInputType.url, autocorrect: false, decoration: const InputDecoration(labelText: 'Server URL', hintText: 'http://192.168.1.20:8096', prefixIcon: Icon(Icons.dns_outlined))),
+          const Card(
+              child: Padding(
+                  padding: EdgeInsets.all(14),
+                  child: Text(
+                      'Connect to a Jellyfin server you own or are authorized to use. For a home server, use its LAN URL first, for example http://192.168.1.20:8096. Use HTTPS for remote access; avoid exposing the server directly to the public internet.',
+                      style: TextStyle(height: 1.4)))),
+          TextField(
+              controller: _serverController,
+              keyboardType: TextInputType.url,
+              autocorrect: false,
+              decoration: const InputDecoration(
+                  labelText: 'Server URL',
+                  hintText: 'http://192.168.1.20:8096',
+                  prefixIcon: Icon(Icons.dns_outlined))),
           const SizedBox(height: 10),
-          TextField(controller: _usernameController, autocorrect: false, decoration: const InputDecoration(labelText: 'Jellyfin username', prefixIcon: Icon(Icons.person_outline))),
+          TextField(
+              controller: _usernameController,
+              autocorrect: false,
+              decoration: const InputDecoration(
+                  labelText: 'Jellyfin username',
+                  prefixIcon: Icon(Icons.person_outline))),
           const SizedBox(height: 10),
-          TextField(controller: _passwordController, obscureText: true, decoration: const InputDecoration(labelText: 'Password', prefixIcon: Icon(Icons.lock_outline))),
+          TextField(
+              controller: _passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                  labelText: 'Password', prefixIcon: Icon(Icons.lock_outline))),
           const SizedBox(height: 14),
-          FilledButton.icon(onPressed: _busy ? null : _connect, icon: const Icon(Icons.link_rounded), label: Text(_busy ? 'Connecting…' : 'Connect and load library')),
+          FilledButton.icon(
+              onPressed: _busy ? null : _connect,
+              icon: const Icon(Icons.link_rounded),
+              label: Text(_busy ? 'Connecting…' : 'Connect and load library')),
         ] else ...[
-          Card(child: ListTile(leading: const Icon(Icons.check_circle, color: Colors.green), title: Text('Connected to ${_serverController.text}'), subtitle: Text('Signed in as ${_username ?? 'Jellyfin user'} • ${_items.length} items loaded'), trailing: IconButton(onPressed: _loadLibrary, icon: const Icon(Icons.refresh_rounded)))),
-          TextField(controller: _searchController, decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search your Jellyfin library'), onChanged: (v) => setState(() => _query = v)),
+          Card(
+              child: ListTile(
+                  leading: const Icon(Icons.check_circle, color: Colors.green),
+                  title: Text('Connected to ${_serverController.text}'),
+                  subtitle: Text(
+                      'Signed in as ${_username ?? 'Jellyfin user'} • ${_items.length} items loaded'),
+                  trailing: IconButton(
+                      onPressed: _loadLibrary,
+                      icon: const Icon(Icons.refresh_rounded)))),
+          TextField(
+              controller: _searchController,
+              decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search),
+                  hintText: 'Search your Jellyfin library'),
+              onChanged: (v) => setState(() => _query = v)),
           const SizedBox(height: 8),
-          SegmentedButton<String>(segments: const [ButtonSegment(value: 'All', label: Text('All')), ButtonSegment(value: 'Movies', label: Text('Movies')), ButtonSegment(value: 'Shows', label: Text('Shows'))], selected: {_type}, onSelectionChanged: (v) => setState(() => _type = v.first)),
+          SegmentedButton<String>(segments: const [
+            ButtonSegment(value: 'All', label: Text('All')),
+            ButtonSegment(value: 'Movies', label: Text('Movies')),
+            ButtonSegment(value: 'Shows', label: Text('Shows'))
+          ], selected: {
+            _type
+          }, onSelectionChanged: (v) => setState(() => _type = v.first)),
           const SizedBox(height: 8),
           if (_busy) const LinearProgressIndicator(),
-          if (!_busy && visible.isEmpty) const Padding(padding: EdgeInsets.all(28), child: Text('No matching items were returned by Jellyfin.', textAlign: TextAlign.center)),
-          ...visible.map((media) => Card(margin: const EdgeInsets.only(bottom: 8), child: ListTile(
-            leading: ClipRRect(borderRadius: BorderRadius.circular(6), child: Image.network(media.imageUrl!, width: 54, height: 78, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox(width: 54, child: Icon(Icons.movie_outlined)))),
-            title: Text(media.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-            subtitle: Text('${media.type.toUpperCase()}${media.releaseYear == null ? '' : ' • ${media.releaseYear}'}${media.rating == null ? '' : ' • ${media.rating!.toStringAsFixed(1)}'}'),
-            trailing: media.playbackUrl != null ? IconButton(tooltip: 'Play', icon: const Icon(Icons.play_circle_fill_rounded), onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => PlayerScreen(media: media)))) : const Icon(Icons.tv_rounded),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => MediaDetailsScreen(media: media))),
-          ))),
+          if (!_busy && visible.isEmpty)
+            const Padding(
+                padding: EdgeInsets.all(28),
+                child: Text('No matching items were returned by Jellyfin.',
+                    textAlign: TextAlign.center)),
+          ...visible.map((media) => Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                leading: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Image.network(media.imageUrl!,
+                        width: 54,
+                        height: 78,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const SizedBox(
+                            width: 54, child: Icon(Icons.movie_outlined)))),
+                title: Text(media.title,
+                    maxLines: 2, overflow: TextOverflow.ellipsis),
+                subtitle: Text(
+                    '${media.type.toUpperCase()}${media.releaseYear == null ? '' : ' • ${media.releaseYear}'}${media.rating == null ? '' : ' • ${media.rating!.toStringAsFixed(1)}'}'),
+                trailing: media.playbackUrl != null
+                    ? IconButton(
+                        tooltip: 'Play',
+                        icon: const Icon(Icons.play_circle_fill_rounded),
+                        onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                                builder: (_) => PlayerScreen(media: media))))
+                    : const Icon(Icons.tv_rounded),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => MediaDetailsScreen(media: media))),
+              ))),
         ],
-        if (_error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error))),
-        if (_busy && !_connected) const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator())),
+        if (_error != null)
+          Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(_error!,
+                  style:
+                      TextStyle(color: Theme.of(context).colorScheme.error))),
+        if (_busy && !_connected)
+          const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator())),
       ]),
     );
   }

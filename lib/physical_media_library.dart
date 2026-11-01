@@ -11,8 +11,8 @@ class PhysicalMediaLibraryScreen extends StatelessWidget {
   static const formats = <DiscFormat>[
     DiscFormat('DVD', 'DVD', Icons.album_outlined, 'Movies, TV, and extras imported from DVDs'),
     DiscFormat('Blu-ray', 'Blu-ray', Icons.album_rounded, 'HD movies and TV imported from Blu-ray discs'),
-    DiscFormat('CD', 'Audio CD', Icons.music_note_rounded, 'Albums and tracks imported from audio CDs'),
     DiscFormat('4K Ultra', '4K Ultra HD', Icons.high_quality_rounded, '4K UHD editions and their available HDR/audio metadata'),
+    DiscFormat('CDs', 'Audio CD', Icons.music_note_rounded, 'Albums and tracks imported from audio CDs'),
   ];
 
   @override
@@ -56,7 +56,7 @@ class PhysicalMediaLibraryScreen extends StatelessWidget {
               _PhysicalMediaSummaryStat(label: 'DVD', count: dvdTotal),
               _PhysicalMediaSummaryStat(label: 'Blu-ray', count: bluRayTotal),
               _PhysicalMediaSummaryStat(label: '4K Ultra', count: fourKUltraTotal),
-              _PhysicalMediaSummaryStat(label: 'CD', count: cdTotal),
+              _PhysicalMediaSummaryStat(label: 'CDs', count: cdTotal),
             ],
           ),
           const SizedBox(height: 16),
@@ -205,6 +205,8 @@ class _PhysicalMediaFormatScreenState extends State<PhysicalMediaFormatScreen> {
 }
 
 String _discKey(String? value) => (value ?? '').toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+bool matchesDiscType(String? value, String expected) => _matches(value, expected);
 
 bool _matches(String? value, String expected) {
   final actual = _discKey(value);

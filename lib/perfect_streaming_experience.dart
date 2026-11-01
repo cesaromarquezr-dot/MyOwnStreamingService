@@ -26,7 +26,7 @@ class _PerfectStreamingExperienceScreenState
   bool _autoplayNext = true;
   bool _rememberPlayback = true;
   bool _unifiedSeasons = true;
-  bool _liveAndNextDay = false;
+  bool _nextDayContent = false;
   bool _watchParty = true;
   bool _tagSearch = true;
 
@@ -51,7 +51,9 @@ class _PerfectStreamingExperienceScreenState
       _autoplayNext = prefs.getBool(_key('autoplay_next')) ?? true;
       _rememberPlayback = prefs.getBool(_key('remember_playback')) ?? true;
       _unifiedSeasons = prefs.getBool(_key('unified_seasons')) ?? true;
-      _liveAndNextDay = prefs.getBool(_key('live_next_day')) ?? false;
+      _nextDayContent = prefs.getBool(_key('next_day_content')) ??
+          prefs.getBool(_key('live_next_day')) ??
+          false;
       _watchParty = prefs.getBool(_key('watch_party')) ?? true;
       _tagSearch = prefs.getBool(_key('tag_search')) ?? true;
       _loading = false;
@@ -126,11 +128,11 @@ class _PerfectStreamingExperienceScreenState
                 _toggle('Unified seasons and episodes', 'Prefer season and episode navigation without returning to the main menu.', _unifiedSeasons,
                     (v) => _set('unified_seasons', v, () => _unifiedSeasons = v), Icons.video_library_outlined),
                 const SizedBox(height: 12),
-                _section('Shared and live viewing', 'Bring people and more kinds of programming together.'),
+                _section('Shared viewing', 'Bring people together around the media they enjoy.'),
                 _toggle('Watch Party shortcuts', 'Keep synchronized group viewing easy to discover.', _watchParty,
                     (v) => _set('watch_party', v, () => _watchParty = v), Icons.groups_rounded),
-                _toggle('Live TV and next-day content', 'Show interest in live or next-day programming when a connected provider offers it.', _liveAndNextDay,
-                    (v) => _set('live_next_day', v, () => _liveAndNextDay = v), Icons.live_tv_rounded),
+                _toggle('Next-day catalogs', 'Show interest in titles that become available soon through connected providers.', _nextDayContent,
+                    (v) => _set('next_day_content', v, () => _nextDayContent = v), Icons.event_available_rounded),
                 const SizedBox(height: 12),
                 Card(
                   child: Padding(
@@ -142,7 +144,7 @@ class _PerfectStreamingExperienceScreenState
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            'These controls save your experience preferences. Live TV, next-day catalogs, provider recommendations and Watch Party playback still depend on the relevant content source, backend and licensing rights; enabling a preference does not create a provider integration.',
+                            'These controls save your experience preferences. Next-day catalogs, provider recommendations and Watch Party playback still depend on the relevant content source, backend and licensing rights; enabling a preference does not create a provider integration.',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ),

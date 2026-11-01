@@ -11,7 +11,6 @@ import 'backend_api.dart';
 import 'app_core.dart';
 import 'storage_dashboard.dart';
 import 'music.dart';
-import 'shop.dart';
 import 'localization.dart';
 import 'entertainment_studio.dart';
 import 'personal_media_server.dart';
@@ -182,8 +181,6 @@ class _HomeServerScreenState extends State<HomeServerScreen> {
       MusicLibraryStore.instance.tracks
         ..clear()
         ..addAll(music);
-      MusicLibraryStore.instance.registerShopEntities();
-      ShopCatalog.instance.syncShopEntityIndex();
       await AppController.instance.replaceLibraryFromServer(media);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

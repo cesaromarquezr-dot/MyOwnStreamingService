@@ -721,7 +721,6 @@ class ExpandedPlatformCatalog {
   ExpandedPlatformCatalog._();
 
   static const capabilities = <PlatformCapability>[
-    PlatformCapability(id: 'hey_media_agents', title: 'Hey Media Agent Skills', description: 'Permission-aware orchestration across discovery, playback, library, social and commerce.', category: 'Hey Media AI', stage: CapabilityStage.foundation, icon: Icons.auto_awesome),
     PlatformCapability(id: 'scene_navigation', title: 'Smart Scene Navigation', description: 'Searchable scenes, chapter jumps, bookmarks and spoiler-aware results.', category: 'Media', stage: CapabilityStage.planned, icon: Icons.movie_filter),
     PlatformCapability(id: 'multi_room', title: 'Multi-Room Entertainment', description: 'Authorized device discovery, room preferences and playback handoff.', category: 'Devices', stage: CapabilityStage.planned, icon: Icons.speaker_group),
     PlatformCapability(id: 'connection_graph', title: 'Entertainment Connection Graph', description: 'Connect titles, cast, crew, artists, soundtracks and related products.', category: 'Discovery', stage: CapabilityStage.foundation, icon: Icons.hub),
@@ -736,7 +735,7 @@ class ExpandedPlatformCatalog {
     PlatformCapability(id: 'order_center', title: 'Order and Receipt Center', description: 'Food and marketplace receipts, status, support, cancellations and refunds.', category: 'Commerce', stage: CapabilityStage.foundation, icon: Icons.receipt_long),
     PlatformCapability(id: 'creator_collaboration', title: 'Creator Collaboration Workspace', description: 'Shared drafts, assigned reviews, assets, revision history and publishing schedules.', category: 'Creators', stage: CapabilityStage.planned, icon: Icons.groups),
     PlatformCapability(id: 'playback_diagnostics', title: 'Playback Diagnostics', description: 'Explain buffering, codec, network and media-availability problems.', category: 'Reliability', stage: CapabilityStage.foundation, icon: Icons.network_check),
-    PlatformCapability(id: 'privacy_devices', title: 'Privacy and Connected Device Center', description: 'Review sessions, authorized devices, permissions, AI memory and account activity.', category: 'Security', stage: CapabilityStage.foundation, icon: Icons.shield),
+    PlatformCapability(id: 'privacy_devices', title: 'Privacy and Connected Device Center', description: 'Review sessions, authorized devices, permissions, privacy settings and account activity.', category: 'Security', stage: CapabilityStage.foundation, icon: Icons.shield),
     PlatformCapability(id: 'integrations', title: 'Integration Platform', description: 'Scoped, revocable integrations with documented APIs and rate limits.', category: 'Platform', stage: CapabilityStage.planned, icon: Icons.extension),
     PlatformCapability(id: 'feature_flags', title: 'Feature Flags and Staged Rollouts', description: 'Enable capabilities for internal testing or selected cohorts before general release.', category: 'Operations', stage: CapabilityStage.foundation, icon: Icons.flag),
     PlatformCapability(id: 'notifications', title: 'Unified Notification Engine', description: 'One preference center for social, orders, media jobs and reminders.', category: 'Platform', stage: CapabilityStage.foundation, icon: Icons.notifications),
@@ -762,8 +761,6 @@ class ExpandedPlatformCatalog {
     PlatformCapability(id: 'music_studio', title: 'Music Studio', description: 'Artist pages, albums, playlists, lyrics and credits, connected to soundtracks and media titles.', category: 'Music', stage: CapabilityStage.existing, icon: Icons.music_note),
     PlatformCapability(id: 'membership_rewards', title: 'Unified Membership and Rewards', description: 'Transparent points and eligible benefits across platform plans, Shop purchases and food orders.', category: 'Commerce', stage: CapabilityStage.planned, icon: Icons.loyalty),
     PlatformCapability(id: 'trivia_activities', title: 'Fandom Trivia and Watch-Along Activities', description: 'Optional trivia, polls and predictions with spoiler-aware timing and accessibility settings.', category: 'Social', stage: CapabilityStage.planned, icon: Icons.quiz),
-    PlatformCapability(id: 'privacy_ai_memory', title: 'Hey Media Memory Controls', description: 'Review, edit, disable and delete explicitly saved assistant preferences and memories.', category: 'Security', stage: CapabilityStage.foundation, icon: Icons.psychology),
-    PlatformCapability(id: 'proactive_assistant', title: 'Hey Media Proactive Assistant', description: 'Permission-based suggestions for resumes, library fixes, events and watch-party preparation; always dismissible.', category: 'Hey Media AI', stage: CapabilityStage.planned, icon: Icons.lightbulb_outline),
     PlatformCapability(id: 'interactive_entertainment', title: 'Interactive Entertainment', description: 'Support provider-authorized branching stories, polls and interactive playback without changing ordinary video playback.', category: 'Media', stage: CapabilityStage.planned, icon: Icons.account_tree),
     PlatformCapability(id: 'franchise_timeline', title: 'Franchise and Universe Timeline', description: 'Organize connected titles by release, story chronology or recommended order with spoiler-aware warnings.', category: 'Discovery', stage: CapabilityStage.foundation, icon: Icons.timeline),
     PlatformCapability(id: 'custom_media_spaces', title: 'Custom Media Spaces', description: 'Create themed, shareable personal spaces with artwork, filters, curated media and explicit visibility.', category: 'Personal Library', stage: CapabilityStage.foundation, icon: Icons.dashboard_customize),
@@ -826,34 +823,6 @@ class MediaSceneBookmark {
       };
 }
 
-/// Explicitly user-managed assistant memory; do not store secrets or sensitive
-/// profile inferences here. The UI should always support review and deletion.
-@immutable
-class HeyMediaMemoryEntry {
-  const HeyMediaMemoryEntry({
-    required this.id,
-    required this.memoryKey,
-    required this.memoryValue,
-    this.createdAt,
-    this.updatedAt,
-  });
-
-  final String id;
-  final String memoryKey;
-  final String memoryValue;
-  final DateTime? createdAt;
-  final DateTime? updatedAt;
-
-  factory HeyMediaMemoryEntry.fromJson(Map<String, dynamic> json) =>
-      HeyMediaMemoryEntry(
-        id: json['id'] as String,
-        memoryKey: json['memory_key'] as String,
-        memoryValue: json['memory_value'] as String,
-        createdAt: DateTime.tryParse('${json['created_at'] ?? ''}'),
-        updatedAt: DateTime.tryParse('${json['updated_at'] ?? ''}'),
-      );
-}
-
 /// Small persistence facade for new personal-platform features. RLS remains
 /// the authority; callers must never pass or trust a client-supplied user ID.
 class ExpandedPlatformRepository {
@@ -895,69 +864,6 @@ class ExpandedPlatformRepository {
         .select('id,media_key,position_ms,label,note,created_at')
         .single();
     return MediaSceneBookmark.fromJson(Map<String, dynamic>.from(row));
-  }
-
-  Future<List<HeyMediaMemoryEntry>> assistantMemory() async {
-    final client = SupabaseConfig.client;
-    if (client == null || client.auth.currentUser == null) return const [];
-    final rows = await client
-        .from('hey_media_memory_entries')
-        .select('id,memory_key,memory_value,created_at,updated_at')
-        .order('updated_at', ascending: false);
-    return rows.map((row) => HeyMediaMemoryEntry.fromJson(
-        Map<String, dynamic>.from(row))).toList();
-  }
-
-  Future<void> saveAssistantMemory({
-    required String key,
-    required String value,
-  }) async {
-    final client = SupabaseConfig.client;
-    if (client == null || client.auth.currentUser == null) {
-      throw StateError('Sign in before saving Hey Media memory.');
-    }
-    final normalizedKey = key.trim();
-    final normalizedValue = value.trim();
-    if (normalizedKey.isEmpty || normalizedValue.isEmpty) {
-      throw ArgumentError('Memory key and value cannot be empty.');
-    }
-    if (normalizedKey.length > 100 || normalizedValue.length > 2000) {
-      throw ArgumentError('Memory key or value exceeds the allowed length.');
-    }
-    await client.from('hey_media_memory_entries').upsert({
-      'memory_key': normalizedKey,
-      'memory_value': normalizedValue,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }, onConflict: 'user_id,memory_key');
-  }
-
-  Future<void> deleteAssistantMemory(String id) async {
-    final client = SupabaseConfig.client;
-    if (client == null || client.auth.currentUser == null) return;
-    await client.from('hey_media_memory_entries').delete().eq('id', id);
-  }
-
-
-  Future<List<HeyMediaSuggestion>> assistantSuggestions() async {
-    final client = SupabaseConfig.client;
-    if (client == null || client.auth.currentUser == null) return const [];
-    final rows = await client
-        .from('user_hey_media_suggestions')
-        .select('id,suggestion_type,title,body,status,expires_at')
-        .eq('status', 'pending')
-        .order('created_at', ascending: false);
-    return rows.map((row) => HeyMediaSuggestion.fromJson(
-        Map<String, dynamic>.from(row))).toList();
-  }
-
-  Future<void> dismissAssistantSuggestion(String id) async {
-    final client = SupabaseConfig.client;
-    if (client == null || client.auth.currentUser == null) return;
-    if (id.trim().isEmpty) throw ArgumentError('Suggestion id is required.');
-    await client.from('user_hey_media_suggestions').update({
-      'status': 'dismissed',
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', id).eq('status', 'pending');
   }
 
   Future<List<UserMediaSpace>> mediaSpaces() async {
@@ -1067,37 +973,6 @@ class ExpandedPlatformRepository {
 
 }
 
-
-@immutable
-class HeyMediaSuggestion {
-  const HeyMediaSuggestion({
-    required this.id,
-    required this.suggestionType,
-    required this.title,
-    required this.body,
-    this.status = 'pending',
-    this.expiresAt,
-  });
-
-  final String id;
-  final String suggestionType;
-  final String title;
-  final String body;
-  final String status;
-  final DateTime? expiresAt;
-
-  factory HeyMediaSuggestion.fromJson(Map<String, dynamic> json) =>
-      HeyMediaSuggestion(
-        id: json['id'] as String,
-        suggestionType: json['suggestion_type'] as String,
-        title: json['title'] as String,
-        body: json['body'] as String,
-        status: (json['status'] as String?) ?? 'pending',
-        expiresAt: json['expires_at'] == null
-            ? null
-            : DateTime.tryParse('${json['expires_at']}'),
-      );
-}
 
 @immutable
 class UserMediaSpace {
@@ -1426,119 +1301,6 @@ class _UltimateFeaturesScreenState extends State<UltimateFeaturesScreen> {
         ),
       );
   }
-
-  /// Performs `_aiConcierge` for this feature. Update this documentation when its contract changes.
-  Future<void> _aiConcierge() async {
-    final textController = TextEditingController();
-
-    final request = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.auto_awesome_rounded),
-              SizedBox(width: 10),
-              Expanded(
-                child: UniversalText('AI Movie Concierge'),
-              ),
-            ],
-          ),
-          content: SizedBox(
-            width: 500,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const UniversalText(
-                  'Ask about your own library. Describe what you want to watch and the concierge can help narrow it down.',
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: textController,
-                  autofocus: true,
-                  maxLines: 3,
-                  textInputAction: TextInputAction.done,
-                  decoration: InputDecoration(
-                    hintText: tr('What do you want to watch?'),
-                    prefixIcon: const Padding(
-                      padding: EdgeInsets.only(bottom: 40),
-                      child: Icon(Icons.chat_bubble_outline_rounded),
-                    ),
-                    border: const OutlineInputBorder(),
-                  ),
-                  onSubmitted: (_) {
-                    Navigator.pop(
-                      dialogContext,
-                      textController.text.trim(),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const UniversalText('CANCEL'),
-            ),
-            FilledButton.icon(
-              onPressed: () {
-                Navigator.pop(
-                  dialogContext,
-                  textController.text.trim(),
-                );
-              },
-              icon: const Icon(Icons.auto_awesome_rounded),
-              label: const UniversalText('ASK'),
-            ),
-          ],
-        );
-      },
-    );
-
-    textController.dispose();
-
-    if (!mounted || request == null) return;
-
-    final query = request.trim();
-
-    if (controller.library.isEmpty) {
-      _snack(
-        'Add a movie or show first so the concierge has something to work with.',
-        icon: Icons.library_add_outlined,
-      );
-      return;
-    }
-
-    final random = math.Random();
-
-    final matching = query.isEmpty
-        ? <MediaItem>[]
-        : controller.library
-              .where(
-                (media) => media.title.toLowerCase().contains(
-                  query.toLowerCase(),
-                ),
-              )
-              .toList();
-
-    final MediaItem pick;
-
-    if (matching.isNotEmpty) {
-      pick = matching[random.nextInt(matching.length)];
-    } else {
-      pick = controller.library[
-          random.nextInt(controller.library.length)];
-    }
-
-    _snack(
-      'Concierge suggestion: ${pick.title}',
-      icon: Icons.auto_awesome_rounded,
-    );
-  }
-
-  /// Performs `_roulette` for this feature. Update this documentation when its contract changes.
   void _roulette() {
     if (controller.library.isEmpty) {
       _snack(
@@ -1775,15 +1537,6 @@ class _UltimateFeaturesScreenState extends State<UltimateFeaturesScreen> {
         return Scaffold(
           appBar: AppBar(
             title: const UniversalText('Everything'),
-            actions: [
-              IconButton(
-                onPressed: _aiConcierge,
-                icon: const Icon(
-                  Icons.auto_awesome_rounded,
-                ),
-                tooltip: tr('AI Concierge'),
-              ),
-            ],
           ),
           body: LayoutBuilder(
             builder: (context, constraints) {
@@ -1958,17 +1711,11 @@ class _UltimateFeaturesScreenState extends State<UltimateFeaturesScreen> {
                     ],
                   ),
 
-                  // AI & DISCOVERY
+                  // DISCOVERY
                   _section(
-                    'AI & Discovery',
-                    Icons.auto_awesome_outlined,
+                    'Discovery',
+                    Icons.travel_explore_outlined,
                     [
-                      _tile(
-                        Icons.auto_awesome,
-                        'AI Movie Concierge',
-                        'Natural-language recommendations from your library',
-                        _aiConcierge,
-                      ),
                       _tile(
                         Icons.link_rounded,
                         'Because You Watched…',
@@ -1977,17 +1724,6 @@ class _UltimateFeaturesScreenState extends State<UltimateFeaturesScreen> {
                           _openPlaceholderFeature(
                             'Because You Watched…',
                             'A recommendation chain can be generated from your history.',
-                          );
-                        },
-                      ),
-                      _tile(
-                        Icons.account_tree_outlined,
-                        'AI Actor Connections',
-                        'Find connections between actors in your library',
-                        () {
-                          _openPlaceholderFeature(
-                            'AI Actor Connections',
-                            'Actor relationship data can be explored from your library.',
                           );
                         },
                       ),
@@ -3867,7 +3603,6 @@ String _size(int bytes) {
 class UltimatePlatformStore {
   UltimatePlatformStore._();
   static final Map<String, bool> features = <String, bool>{
-    'aiConcierge': true,
     'naturalSearch': true,
     'tasteLearning': true,
     'adaptiveStreaming': true,
@@ -3904,7 +3639,7 @@ class UltimatePlatformScreen extends StatefulWidget {
 class _UltimatePlatformScreenState extends State<UltimatePlatformScreen> {
   int tab = 0;
   final tabs = const [
-    'AI', 'Player', 'Family', 'Social', 'Library', 'Cloud', 'Security',
+    'Player', 'Family', 'Social', 'Library', 'Cloud', 'Security',
     'Devices', 'Studio',
   ];
 
@@ -3944,7 +3679,6 @@ class _UltimatePlatformScreenState extends State<UltimatePlatformScreen> {
             child: IndexedStack(
               index: tab,
               children: const [
-                _AiPanel(),
                 _PlayerPanel(),
                 _FamilyPanel(),
                 _SocialPanel(),
@@ -3974,71 +3708,6 @@ class _UltimatePlatformScreenState extends State<UltimatePlatformScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: items.first)),
-    );
-  }
-}
-
-class _AiPanel extends StatefulWidget {
-  const _AiPanel();
-
-  @override
-  State<_AiPanel> createState() => _AiPanelState();
-}
-
-class _AiPanelState extends State<_AiPanel> {
-  final q = TextEditingController();
-
-  @override
-  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
-  void dispose() {
-    q.dispose();
-    super.dispose();
-  }
-
-  @override
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) {
-    final items = AppController.instance.library;
-    final text = q.text.toLowerCase();
-    final matches = items.where((m) {
-      return text.isEmpty ||
-          m.title.toLowerCase().contains(text) ||
-          m.genres.any((x) => x.toLowerCase().contains(text)) ||
-          m.actors.any((x) => x.toLowerCase().contains(text));
-    }).toList();
-
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        _hero(Icons.auto_awesome, 'AI Personal Concierge',
-            'Search your private library using natural-language preferences.'),
-        const SizedBox(height: 14),
-        TextField(
-          controller: q,
-          onChanged: (_) => setState(() {}),
-          decoration: InputDecoration(
-            prefixIcon: Icon(Icons.psychology),
-            hintText: tr('Try: funny sci-fi with a strong female lead'),
-          ),
-        ),
-        const SizedBox(height: 18),
-        _title('Natural-language discovery'),
-        ...matches.take(10).map(
-          (m) => ListTile(
-            leading: const Icon(Icons.movie_outlined),
-            title: Text(m.title),
-            subtitle: Text(m.genres.take(3).join(' • ')),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: m)),
-            ),
-          ),
-        ),
-        _switch('Taste learning',
-            'Learn from likes, dislikes and completion.', 'tasteLearning'),
-        _switch('AI concierge',
-            'Enable conversational recommendation mode.', 'aiConcierge'),
-      ],
     );
   }
 }
@@ -4287,14 +3956,6 @@ Widget _hero(IconData icon, String title, String subtitle) {
         ),
       ],
     ),
-  );
-}
-
-Widget _title(String text) {
-  return Padding(
-    padding: const EdgeInsets.symmetric(vertical: 8),
-    child: Text(text,
-        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
   );
 }
 

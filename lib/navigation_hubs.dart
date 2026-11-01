@@ -1,7 +1,7 @@
 // FILE: `lib/navigation_hubs.dart`.
-// Purpose: Fixed primary-navigation hubs for Library and Friends.
+// Purpose: Fixed primary-navigation hub for the shared library.
 // The primary navbar stays intentionally small; detailed destinations live
-// inside these hubs or behind More.
+// inside this hub or behind More.
 
 import 'package:flutter/material.dart';
 import 'backend_api.dart';
@@ -13,7 +13,6 @@ import 'library_release.dart';
 import 'movies.dart';
 import 'music.dart';
 import 'series.dart';
-import 'social_center.dart';
 import 'localization.dart';
 
 class LibraryHubScreen extends StatelessWidget {
@@ -216,20 +215,6 @@ class LibraryHubScreen extends StatelessWidget {
       ),
     );
   }
-}
-
-class FriendsAndCommunitiesScreen extends StatelessWidget {
-  final String? initialConversationId;
-
-  const FriendsAndCommunitiesScreen({
-    super.key,
-    this.initialConversationId,
-  });
-
-  @override
-  Widget build(BuildContext context) => SocialCenterScreen(
-        initialConversationId: initialConversationId,
-      );
 }
 
 class _HubScaffold extends StatelessWidget {

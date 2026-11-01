@@ -27,9 +27,6 @@ import 'profiles.dart';
 import 'account_settings.dart';
 import 'device_features.dart';
 import 'how_it_works.dart';
-import 'shop.dart';
-import 'watch_and_enjoy.dart';
-import 'hey_marathon.dart';
 import 'music.dart';
 import 'home_server.dart';
 import 'home_widgets.dart';
@@ -49,14 +46,11 @@ import 'playback_diagnostics_center.dart';
 import 'platform_reliability_center.dart';
 import 'movies.dart';
 import 'series.dart';
-import 'release_order_timeline.dart';
 import 'innovation_features.dart';
 import 'supabase/supabase_service.dart';
 import 'responsive.dart';
 import 'localization.dart';
 import 'media_text_localizer.dart';
-import 'activity_timeline.dart';
-import 'social_home.dart';
 import 'streaming_experience.dart';
 import 'perfect_streaming_experience.dart';
 import 'app_accessibility.dart';
@@ -69,25 +63,20 @@ import 'security_settings.dart';
 import 'navigation_hubs.dart';
 import 'media_universe.dart';
 import 'my_tv.dart';
-import 'public_live_tv.dart';
-import 'marketplace_hub.dart';
-import 'social_story_experience.dart';
 import 'app_customization.dart';
 import 'entertainment_studio.dart';
 import 'page_customization_button.dart';
-import 'social_theme_gallery.dart';
 import 'server_selection.dart';
 import 'tv_controller.dart';
 import 'tv_host.dart';
 import 'entertainment_extensions.dart';
 import 'innovation_hub.dart';
-import 'streaming_upgrade_center.dart';
-import 'jellyfin_plugins_hub.dart';
 import 'core/services/automatic_backup_service.dart';
 import 'library_protection_center.dart';
 import 'media_extras_library.dart';
 import 'profiles_permissions_hub.dart';
 import 'coming_soon_release_screen.dart';
+import 'song_identification_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -111,8 +100,6 @@ Future<void> main() async {
     MusicPageCustomizationStore.initialize(),
     AppController.instance.initializeBadges(),
     PlatformPreferenceStore.initialize(),
-    ShopCatalog.instance.initialize(),
-    StoryPlacementStore.load(AppController.instance.currentProfile),
   ]);
 
   runApp(const MyStreamingService());
@@ -141,9 +128,7 @@ int? _primaryIndexForPage(String pageId) => switch (pageId) {
       'actors' ||
       'artists' ||
       'bands' =>
-        1,
-      'shop' => 3,
-      'friends' => 2,
+        0,
       _ => null,
     };
 
@@ -170,10 +155,12 @@ class _AppPageState extends ChangeNotifier {
     notifyListeners();
     // Route changes update the energy governor and enqueue a small, serialized
     // batch of artwork work for the destination being entered.
-    unawaited(EnergySaverController.instance.pageChanged(
-      value,
-      profileId: AppController.instance.currentProfile?.id,
-    ).then((_) => MediaArtworkAutoResolver.warmForPage(value)));
+    unawaited(EnergySaverController.instance
+        .pageChanged(
+          value,
+          profileId: AppController.instance.currentProfile?.id,
+        )
+        .then((_) => MediaArtworkAutoResolver.warmForPage(value)));
   }
 
   void refresh() => notifyListeners();
@@ -221,8 +208,6 @@ class _AppPageRouteObserver extends NavigatorObserver {
     if (name != null && name.startsWith('/app/page/')) {
       return name.substring('/app/page/'.length);
     }
-    if (name == '/app/shop') return 'shop';
-    if (name == '/app/page/food-delivery') return 'food-delivery';
     if (name == '/app/details') return 'details';
     if (name == '/app/customize' || name == '/app/more') {
       return _appPageState.pageId;
@@ -231,9 +216,7 @@ class _AppPageRouteObserver extends NavigatorObserver {
     if (name == '/app/server-selection') return 'server-selection';
     if (name != null && name.startsWith('/main/')) {
       final destination = name.substring('/main/'.length);
-      if (destination == 'home' ||
-          destination == 'library' ||
-          destination == 'friends') {
+      if (destination == 'home' || destination == 'library') {
         return destination;
       }
     }
@@ -584,7 +567,8 @@ class _AppPageSurface extends StatelessWidget {
         EnergySaverController.instance,
       ]),
       builder: (context, _) {
-        final accessibilityProfileId = AppController.instance.currentProfile?.id;
+        final accessibilityProfileId =
+            AppController.instance.currentProfile?.id;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           AppAccessibilitySettings.instance.ensureLoaded(
             profileId: accessibilityProfileId,
@@ -633,7 +617,9 @@ class _AppPageSurface extends StatelessWidget {
               ? highContrastScheme
               : (oledBlack ? oledBlackScheme : standardScheme),
           appBarTheme: baseTheme.appBarTheme.copyWith(
-            backgroundColor: oledBlack ? Colors.black : baseTheme.appBarTheme.backgroundColor,
+            backgroundColor: oledBlack
+                ? Colors.black
+                : baseTheme.appBarTheme.backgroundColor,
             surfaceTintColor: Colors.transparent,
           ),
           cardTheme: baseTheme.cardTheme.copyWith(
@@ -641,14 +627,20 @@ class _AppPageSurface extends StatelessWidget {
             surfaceTintColor: Colors.transparent,
           ),
           dialogTheme: baseTheme.dialogTheme.copyWith(
-            backgroundColor: oledBlack ? Colors.black : baseTheme.dialogTheme.backgroundColor,
+            backgroundColor: oledBlack
+                ? Colors.black
+                : baseTheme.dialogTheme.backgroundColor,
             surfaceTintColor: Colors.transparent,
           ),
           inputDecorationTheme: baseTheme.inputDecorationTheme.copyWith(
-            fillColor: oledBlack ? const Color(0xFF030303) : baseTheme.inputDecorationTheme.fillColor,
+            fillColor: oledBlack
+                ? const Color(0xFF030303)
+                : baseTheme.inputDecorationTheme.fillColor,
           ),
           navigationBarTheme: baseTheme.navigationBarTheme.copyWith(
-            backgroundColor: oledBlack ? Colors.black : baseTheme.navigationBarTheme.backgroundColor,
+            backgroundColor: oledBlack
+                ? Colors.black
+                : baseTheme.navigationBarTheme.backgroundColor,
             surfaceTintColor: Colors.transparent,
           ),
           textTheme: accessibility.highContrast
@@ -675,21 +667,26 @@ class _AppPageSurface extends StatelessWidget {
         final configuredNav = HomeCustomizationStore.settingsFor(
           AppController.instance.currentProfile,
         ).navbarPosition;
-        final navPosition = const {'Top', 'Bottom', 'Left', 'Right'}.contains(configuredNav)
-            ? configuredNav
-            : 'Bottom';
+        final navPosition =
+            const {'Top', 'Bottom', 'Left', 'Right'}.contains(configuredNav)
+                ? configuredNav
+                : 'Bottom';
         final verticalNav = navPosition == 'Left' || navPosition == 'Right';
         const globalNavigationHeight = 84.0;
         const globalNavigationRailWidth = 88.0;
         final safe = MediaQuery.paddingOf(context);
         final bottomInset = showGlobalNavigation && navPosition == 'Bottom'
-            ? globalNavigationHeight + safe.bottom : 0.0;
+            ? globalNavigationHeight + safe.bottom
+            : 0.0;
         final topInset = showGlobalNavigation && navPosition == 'Top'
-            ? globalNavigationHeight + safe.top : 0.0;
+            ? globalNavigationHeight + safe.top
+            : 0.0;
         final leftInset = showGlobalNavigation && navPosition == 'Left'
-            ? globalNavigationRailWidth + safe.left : 0.0;
+            ? globalNavigationRailWidth + safe.left
+            : 0.0;
         final rightInset = showGlobalNavigation && navPosition == 'Right'
-            ? globalNavigationRailWidth + safe.right : 0.0;
+            ? globalNavigationRailWidth + safe.right
+            : 0.0;
         return MediaQuery(
           data: media.copyWith(
             disableAnimations: accessibility.reduceMotion ||
@@ -713,9 +710,11 @@ class _AppPageSurface extends StatelessWidget {
                 if (showGlobalNavigation)
                   Positioned(
                     left: navPosition == 'Left' ? 0 : (verticalNav ? null : 0),
-                    right: navPosition == 'Right' ? 0 : (verticalNav ? null : 0),
+                    right:
+                        navPosition == 'Right' ? 0 : (verticalNav ? null : 0),
                     top: verticalNav ? 0 : (navPosition == 'Top' ? 0 : null),
-                    bottom: verticalNav ? 0 : (navPosition == 'Bottom' ? 0 : null),
+                    bottom:
+                        verticalNav ? 0 : (navPosition == 'Bottom' ? 0 : null),
                     width: verticalNav ? globalNavigationRailWidth : null,
                     height: verticalNav ? null : globalNavigationHeight,
                     child: SafeArea(
@@ -738,7 +737,6 @@ class _AppPageSurface extends StatelessWidget {
 String _pageTitleFor(String pageId) => switch (pageId) {
       'home' => 'Home',
       'library' => 'Watch',
-      'friends' => 'Friends',
       'movies' => 'Movies',
       'series' => 'TV Shows',
       'music' => 'Music',
@@ -746,15 +744,10 @@ String _pageTitleFor(String pageId) => switch (pageId) {
       'actors' => 'Actors',
       'artists' => 'Artists & Bands',
       'bands' => 'Bands',
-      'shop' => 'Store',
       'details' => 'Details',
       'collections' => 'Collections',
       'my-tv' => 'TV Channels',
-      'hey-marathon' => 'Hey Marathon',
-      'store-creation' => 'Store Creation',
-      'store-settings' => 'Store Settings',
       'power-performance' => 'Power & Performance',
-      'seller-dashboard' => 'Seller Dashboard',
       'favorites' => 'Favorites',
       'coming-soon' => 'Coming Soon',
       'search' => 'Search',
@@ -837,30 +830,13 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
     contentDraft = PageContentCustomizationStore.settingsFor(widget.pageId);
     sectionDraft = AppSectionCustomizationStore.settingsFor(
         AppController.instance.currentProfile);
-    StoryPlacementStore.load(AppController.instance.currentProfile);
-    if (widget.pageId == 'home' || widget.pageId == 'movies' || widget.pageId == 'series') {
+    if (widget.pageId == 'home' ||
+        widget.pageId == 'movies' ||
+        widget.pageId == 'series') {
       unawaited(PageHeroSettingsStore.load(widget.pageId).then((value) {
         if (mounted) setState(() => _heroSettings = value);
       }));
     }
-  }
-
-  Widget _socialThemeDropdown(
-      String label, String value, ValueChanged<String> onChanged) {
-    return SocialThemePickerField(
-      label: label,
-      value: value,
-      onChanged: onChanged,
-    );
-  }
-
-  void _moveSocialNavItem(int from, int to) {
-    setState(() {
-      final order = List<String>.from(sectionDraft.socialNavOrder);
-      final moved = order.removeAt(from);
-      order.insert(to, moved);
-      sectionDraft.socialNavOrder = order;
-    });
   }
 
   @override
@@ -896,9 +872,7 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
             ),
             const SizedBox(height: 12),
           ],
-          if (widget.pageId == 'shop' ||
-              widget.pageId == 'library' ||
-              widget.pageId == 'friends') ...[
+          if (widget.pageId == 'library') ...[
             const SizedBox(height: 4),
             Card(
               child: Padding(
@@ -910,427 +884,101 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
                         style: const TextStyle(
                             fontSize: 18, fontWeight: FontWeight.w900)),
                     const SizedBox(height: 10),
-                    if (widget.pageId == 'shop') ...[
-                      DropdownButtonFormField<String>(
-                        initialValue: sectionDraft.shopCardStyle,
-                        decoration: const InputDecoration(
-                            labelText: 'Product card style'),
-                        items: const ['Compact', 'Comfortable', 'Large']
-                            .map((v) =>
-                                DropdownMenuItem(value: v, child: Text(v)))
-                            .toList(),
-                        onChanged: (v) {
-                          if (v != null) {
-                            setState(() => sectionDraft.shopCardStyle = v);
-                          }
-                        },
-                      ),
+                    DropdownButtonFormField<String>(
+                      initialValue: sectionDraft.libraryViewMode,
+                      decoration:
+                          const InputDecoration(labelText: 'Library layout'),
+                      items: const [
+                        DropdownMenuItem(
+                            value: 'List', child: UniversalText('List view')),
+                        DropdownMenuItem(
+                            value: 'Grid', child: UniversalText('Grid view')),
+                      ],
+                      onChanged: (v) {
+                        if (v != null) {
+                          setState(() => sectionDraft.libraryViewMode = v);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      initialValue: sectionDraft.libraryCardStyle,
+                      decoration: const InputDecoration(
+                          labelText: 'Library card appearance'),
+                      items: const ['Poster', 'Landscape', 'Compact']
+                          .map(
+                              (v) => DropdownMenuItem(value: v, child: Text(v)))
+                          .toList(),
+                      onChanged: (v) {
+                        if (v != null) {
+                          setState(() => sectionDraft.libraryCardStyle = v);
+                        }
+                      },
+                    ),
+                    if (sectionDraft.libraryViewMode == 'Grid') ...[
                       const SizedBox(height: 10),
                       DropdownButtonFormField<int>(
-                        initialValue: sectionDraft.shopColumns,
-                        decoration: const InputDecoration(
-                            labelText: 'Products per row'),
-                        items: const [1, 2, 3, 4]
-                            .map((v) =>
-                                DropdownMenuItem(value: v, child: Text('$v')))
+                        initialValue:
+                            sectionDraft.libraryColumns.clamp(1, 6).toInt(),
+                        decoration:
+                            const InputDecoration(labelText: 'Widgets per row'),
+                        items: const [1, 2, 3, 4, 5, 6]
+                            .map((v) => DropdownMenuItem(
+                                value: v, child: Text('$v per row')))
                             .toList(),
                         onChanged: (v) {
                           if (v != null) {
-                            setState(() => sectionDraft.shopColumns = v);
-                          }
-                        },
-                      ),
-                      SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          value: sectionDraft.showShopPrices,
-                          onChanged: (v) =>
-                              setState(() => sectionDraft.showShopPrices = v),
-                          title: const UniversalText('Show prices')),
-                      SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          value: sectionDraft.showShopInventory,
-                          onChanged: (v) => setState(
-                              () => sectionDraft.showShopInventory = v),
-                          title: const UniversalText('Show inventory counts')),
-                    ] else if (widget.pageId == 'library') ...[
-                      DropdownButtonFormField<String>(
-                        initialValue: sectionDraft.libraryViewMode,
-                        decoration:
-                            const InputDecoration(labelText: 'Library layout'),
-                        items: const [
-                          DropdownMenuItem(
-                              value: 'List', child: UniversalText('List view')),
-                          DropdownMenuItem(
-                              value: 'Grid', child: UniversalText('Grid view')),
-                        ],
-                        onChanged: (v) {
-                          if (v != null) {
-                            setState(() => sectionDraft.libraryViewMode = v);
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      DropdownButtonFormField<String>(
-                        initialValue: sectionDraft.libraryCardStyle,
-                        decoration: const InputDecoration(
-                            labelText: 'Library card appearance'),
-                        items: const ['Poster', 'Landscape', 'Compact']
-                            .map((v) =>
-                                DropdownMenuItem(value: v, child: Text(v)))
-                            .toList(),
-                        onChanged: (v) {
-                          if (v != null) {
-                            setState(() => sectionDraft.libraryCardStyle = v);
-                          }
-                        },
-                      ),
-                      if (sectionDraft.libraryViewMode == 'Grid') ...[
-                        const SizedBox(height: 10),
-                        DropdownButtonFormField<int>(
-                          initialValue:
-                              sectionDraft.libraryColumns.clamp(1, 6).toInt(),
-                          decoration: const InputDecoration(
-                              labelText: 'Widgets per row'),
-                          items: const [1, 2, 3, 4, 5, 6]
-                              .map((v) => DropdownMenuItem(
-                                  value: v, child: Text('$v per row')))
-                              .toList(),
-                          onChanged: (v) {
-                            if (v != null) {
-                              setState(() => sectionDraft.libraryColumns = v);
-                            }
-                          },
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                      const UniversalText('Individual widget sizes',
-                          style: TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w800)),
-                      const SizedBox(height: 4),
-                      const UniversalText(
-                          'Choose the size of each library shortcut independently.',
-                          style: TextStyle(color: Colors.white60)),
-                      const SizedBox(height: 8),
-                      for (final item in const <Map<String, String>>[
-                        {'id': 'movies', 'label': 'Movies'},
-                        {'id': 'tv-shows', 'label': 'TV shows'},
-                        {'id': 'music', 'label': 'Music'},
-                        {'id': 'collections', 'label': 'Collections'},
-                        {'id': 'favorites', 'label': 'Favorites'},
-                        {'id': 'coming-soon', 'label': 'Coming soon'},
-                      ])
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: DropdownButtonFormField<String>(
-                            initialValue: const [
-                              'Small',
-                              'Medium',
-                              'Large'
-                            ].contains(
-                                    sectionDraft.libraryWidgetSizes[item['id']])
-                                ? sectionDraft.libraryWidgetSizes[item['id']]
-                                : 'Medium',
-                            decoration: InputDecoration(
-                                labelText: '${item['label']} widget size'),
-                            items: const ['Small', 'Medium', 'Large']
-                                .map((v) =>
-                                    DropdownMenuItem(value: v, child: Text(v)))
-                                .toList(),
-                            onChanged: (v) {
-                              if (v != null) {
-                                setState(() {
-                                  sectionDraft.libraryWidgetSizes = {
-                                    ...sectionDraft.libraryWidgetSizes,
-                                    item['id']!: v,
-                                  };
-                                });
-                              }
-                            },
-                          ),
-                        ),
-                    ] else ...[
-                      const UniversalText('Customize each social surface',
-                          style: TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w800)),
-                      const SizedBox(height: 4),
-                      const UniversalText(
-                          'Use general design styles for each section. These presets do not use another service’s name, logo, or branded assets.',
-                          style: TextStyle(color: Colors.white60)),
-                      const SizedBox(height: 12),
-                      _socialThemeDropdown('Feed theme', sectionDraft.feedStyle,
-                          (v) => setState(() => sectionDraft.feedStyle = v)),
-                      const SizedBox(height: 10),
-                      _socialThemeDropdown(
-                          'Profile page theme',
-                          sectionDraft.profilePageStyle,
-                          (v) => setState(
-                              () => sectionDraft.profilePageStyle = v)),
-                      const SizedBox(height: 10),
-                      _socialThemeDropdown(
-                          'Communities theme',
-                          sectionDraft.communitiesStyle,
-                          (v) => setState(
-                              () => sectionDraft.communitiesStyle = v)),
-                      const SizedBox(height: 10),
-                      _socialThemeDropdown(
-                          'Friends theme',
-                          sectionDraft.friendsStyle,
-                          (v) => setState(() => sectionDraft.friendsStyle = v)),
-                      const SizedBox(height: 10),
-                      _socialThemeDropdown(
-                          'Messages theme',
-                          sectionDraft.messagesStyle,
-                          (v) =>
-                              setState(() => sectionDraft.messagesStyle = v)),
-                      const SizedBox(height: 10),
-                      _socialThemeDropdown(
-                          'Reels / Shorts / Videos theme',
-                          sectionDraft.reelsStyle,
-                          (v) => setState(() => sectionDraft.reelsStyle = v)),
-                      const SizedBox(height: 18),
-                      DropdownButtonFormField<String>(
-                        initialValue: sectionDraft.socialNavPosition,
-                        decoration: const InputDecoration(
-                            labelText: 'Social navigation position'),
-                        items: const [
-                          DropdownMenuItem(
-                              value: 'Top', child: UniversalText('Top bar')),
-                          DropdownMenuItem(
-                              value: 'Left',
-                              child: UniversalText('Left side rail')),
-                          DropdownMenuItem(
-                              value: 'Right',
-                              child: UniversalText('Right side rail')),
-                        ],
-                        onChanged: (v) {
-                          if (v != null) {
-                            setState(() => sectionDraft.socialNavPosition = v);
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      const UniversalText('Social section order',
-                          style: TextStyle(fontWeight: FontWeight.w800)),
-                      const UniversalText(
-                          'Choose each profile’s preferred order.',
-                          style:
-                              TextStyle(color: Colors.white60, fontSize: 12)),
-                      const SizedBox(height: 6),
-                      for (var index = 0;
-                          index < sectionDraft.socialNavOrder.length;
-                          index++)
-                        Card(
-                          child: ListTile(
-                            title: Text(sectionDraft.socialNavOrder[index]),
-                            leading: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  IconButton(
-                                      visualDensity: VisualDensity.compact,
-                                      tooltip: 'Move up',
-                                      onPressed: index == 0
-                                          ? null
-                                          : () => _moveSocialNavItem(
-                                              index, index - 1),
-                                      icon: const Icon(
-                                          Icons.keyboard_arrow_up_rounded)),
-                                  IconButton(
-                                      visualDensity: VisualDensity.compact,
-                                      tooltip: 'Move down',
-                                      onPressed: index ==
-                                              sectionDraft
-                                                      .socialNavOrder.length -
-                                                  1
-                                          ? null
-                                          : () => _moveSocialNavItem(
-                                              index, index + 1),
-                                      icon: const Icon(
-                                          Icons.keyboard_arrow_down_rounded)),
-                                ]),
-                          ),
-                        ),
-                      const SizedBox(height: 14),
-                      DropdownButtonFormField<String>(
-                        initialValue: sectionDraft.profilePageViewMode,
-                        decoration: const InputDecoration(
-                            labelText: 'Profile posts layout'),
-                        items: const [
-                          DropdownMenuItem(
-                              value: 'Post cards',
-                              child: UniversalText('Post card boxes')),
-                          DropdownMenuItem(
-                              value: 'Timeline',
-                              child: UniversalText('Scrollable timeline'))
-                        ],
-                        onChanged: (v) {
-                          if (v != null) {
-                            setState(
-                                () => sectionDraft.profilePageViewMode = v);
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      DropdownButtonFormField<String>(
-                        initialValue: sectionDraft.profilePostsSortOrder,
-                        decoration: const InputDecoration(
-                            labelText: 'Profile post order'),
-                        items: const [
-                          DropdownMenuItem(
-                              value: 'Newest to Oldest',
-                              child: UniversalText('Newest to Oldest')),
-                          DropdownMenuItem(
-                              value: 'Oldest to Newest',
-                              child: UniversalText('Oldest to Newest'))
-                        ],
-                        onChanged: (v) {
-                          if (v != null) {
-                            setState(
-                                () => sectionDraft.profilePostsSortOrder = v);
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      DropdownButtonFormField<String>(
-                        initialValue: sectionDraft.friendsViewMode,
-                        decoration:
-                            const InputDecoration(labelText: 'Friends layout'),
-                        items: const [
-                          DropdownMenuItem(
-                              value: 'List', child: UniversalText('List view')),
-                          DropdownMenuItem(
-                              value: 'Cards', child: UniversalText('Card view'))
-                        ],
-                        onChanged: (v) {
-                          if (v != null) {
-                            setState(() => sectionDraft.friendsViewMode = v);
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      DropdownButtonFormField<String>(
-                        initialValue: sectionDraft.friendsSortOrder,
-                        decoration:
-                            const InputDecoration(labelText: 'Friends order'),
-                        items: const [
-                          DropdownMenuItem(
-                              value: 'Oldest to Newest',
-                              child: UniversalText('Oldest to Newest')),
-                          DropdownMenuItem(
-                              value: 'Newest to Oldest',
-                              child: UniversalText('Newest to Oldest')),
-                          DropdownMenuItem(
-                              value: 'A-Z',
-                              child: UniversalText('Alphabetical A-Z')),
-                          DropdownMenuItem(
-                              value: 'Z-A',
-                              child: UniversalText('Alphabetical Z-A'))
-                        ],
-                        onChanged: (v) {
-                          if (v != null) {
-                            setState(() => sectionDraft.friendsSortOrder = v);
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      DropdownButtonFormField<String>(
-                        initialValue: sectionDraft.communitiesViewMode,
-                        decoration: const InputDecoration(
-                            labelText: 'Communities layout'),
-                        items: const [
-                          DropdownMenuItem(
-                              value: 'List', child: UniversalText('List view')),
-                          DropdownMenuItem(
-                              value: 'Cards', child: UniversalText('Card view'))
-                        ],
-                        onChanged: (v) {
-                          if (v != null) {
-                            setState(
-                                () => sectionDraft.communitiesViewMode = v);
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      DropdownButtonFormField<String>(
-                        initialValue: sectionDraft.communitiesMembershipFilter,
-                        decoration: const InputDecoration(
-                            labelText: 'Communities to show'),
-                        items: const [
-                          DropdownMenuItem(
-                              value: 'All',
-                              child: UniversalText('All available')),
-                          DropdownMenuItem(
-                              value: 'Joined',
-                              child: UniversalText('Joined communities')),
-                          DropdownMenuItem(
-                              value: 'Created',
-                              child: UniversalText('Communities I created'))
-                        ],
-                        onChanged: (v) {
-                          if (v != null) {
-                            setState(() =>
-                                sectionDraft.communitiesMembershipFilter = v);
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      DropdownButtonFormField<String>(
-                        initialValue: sectionDraft.communitiesSortOrder,
-                        decoration: const InputDecoration(
-                            labelText: 'Communities order'),
-                        items: const [
-                          DropdownMenuItem(
-                              value: 'Newest to Oldest',
-                              child: UniversalText('Newest to Oldest')),
-                          DropdownMenuItem(
-                              value: 'Oldest to Newest',
-                              child: UniversalText('Oldest to Newest')),
-                          DropdownMenuItem(
-                              value: 'Movies', child: UniversalText('Movies')),
-                          DropdownMenuItem(
-                              value: 'Shows', child: UniversalText('Shows')),
-                          DropdownMenuItem(
-                              value: 'Music', child: UniversalText('Music')),
-                          DropdownMenuItem(
-                              value: 'Joined',
-                              child: UniversalText('Recently joined')),
-                          DropdownMenuItem(
-                              value: 'Created',
-                              child: UniversalText('Recently created'))
-                        ],
-                        onChanged: (v) {
-                          if (v != null) {
-                            setState(
-                                () => sectionDraft.communitiesSortOrder = v);
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 14),
-                      DropdownButtonFormField<String>(
-                        initialValue: StoryPlacementStore.forProfile(
-                            AppController.instance.currentProfile),
-                        decoration: const InputDecoration(
-                            labelText: 'Friends’ Stories placement'),
-                        items: const [
-                          DropdownMenuItem(
-                              value: 'none',
-                              child: UniversalText('Don’t show')),
-                          DropdownMenuItem(
-                              value: 'home', child: UniversalText('Home only')),
-                          DropdownMenuItem(
-                              value: 'friends',
-                              child: UniversalText('Friends only')),
-                          DropdownMenuItem(
-                              value: 'both',
-                              child: UniversalText('Home + Friends')),
-                        ],
-                        onChanged: (v) {
-                          if (v != null) {
-                            StoryPlacementStore.setForProfile(
-                                AppController.instance.currentProfile, v);
+                            setState(() => sectionDraft.libraryColumns = v);
                           }
                         },
                       ),
                     ],
+                    const SizedBox(height: 16),
+                    const UniversalText('Individual widget sizes',
+                        style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 4),
+                    const UniversalText(
+                        'Choose the size of each library shortcut independently.',
+                        style: TextStyle(color: Colors.white60)),
+                    const SizedBox(height: 8),
+                    for (final item in const <Map<String, String>>[
+                      {'id': 'movies', 'label': 'Movies'},
+                      {'id': 'tv-shows', 'label': 'TV shows'},
+                      {'id': 'music', 'label': 'Music'},
+                      {'id': 'collections', 'label': 'Collections'},
+                      {'id': 'favorites', 'label': 'Favorites'},
+                      {'id': 'coming-soon', 'label': 'Coming soon'},
+                    ])
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: DropdownButtonFormField<String>(
+                          initialValue: const [
+                            'Small',
+                            'Medium',
+                            'Large'
+                          ].contains(
+                                  sectionDraft.libraryWidgetSizes[item['id']])
+                              ? sectionDraft.libraryWidgetSizes[item['id']]
+                              : 'Medium',
+                          decoration: InputDecoration(
+                              labelText: '${item['label']} widget size'),
+                          items: const ['Small', 'Medium', 'Large']
+                              .map((v) =>
+                                  DropdownMenuItem(value: v, child: Text(v)))
+                              .toList(),
+                          onChanged: (v) {
+                            if (v != null) {
+                              setState(() {
+                                sectionDraft.libraryWidgetSizes = {
+                                  ...sectionDraft.libraryWidgetSizes,
+                                  item['id']!: v,
+                                };
+                              });
+                            }
+                          },
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -1536,17 +1184,10 @@ String _customizationSectionName(String pageId, String id) => switch (id) {
       'products' => 'Products',
       'media' => 'Matching media results',
       'feed' => 'Feed',
-      'reels' => 'Reels',
-      'messages' => 'Messages',
-      'friends' => 'Friends',
-      'communities' => 'Communities',
-      'my-page' => 'My Page',
       _ => '$pageId section',
     };
 
 // ============================================================
-String? _pendingChatInviteToken = Uri.base.queryParameters['chatInvite'];
-
 Future<void> _enterMainHome() => _navigateToMainHome();
 
 Future<void> _enterMainHomeFrom(BuildContext sourceContext) =>
@@ -1563,34 +1204,15 @@ Future<void> _navigateToMainHome([BuildContext? sourceContext]) async {
   navigator ??= _appNavigatorKey.currentState;
   if (navigator == null) return;
 
-  var destination = PrimaryDestination.home;
-  final token = _pendingChatInviteToken?.trim();
-  final profile = AppController.instance.currentProfile;
-  if (token != null && token.isNotEmpty && profile != null) {
-    // Do not let an invite API stall the onboarding flow. If the request fails
-    // or times out, the person still reaches Home and can use the in-community
-    // Join chat action later.
-    _pendingChatInviteToken = null;
-    try {
-      await AppController.instance.backendApi
-          .acceptSocialConversationInvite(
-            profileId: profile.id,
-            token: token,
-          )
-          .timeout(const Duration(seconds: 8));
-      destination = PrimaryDestination.friends;
-    } catch (_) {
-      destination = PrimaryDestination.home;
-    }
-  }
-
   if (!navigator.mounted) return;
   // Keep onboarding active until the first MainScreen frame is rendered.
-  final routeName = '/main/${destination.name}';
   navigator.pushAndRemoveUntil<void>(
-    MaterialPageRoute<void>(
-      settings: RouteSettings(name: routeName),
-      builder: (_) => MainScreen(initialDestination: destination),
+    PageRouteBuilder<void>(
+      settings: const RouteSettings(name: '/main/home'),
+      transitionDuration: Duration.zero,
+      reverseTransitionDuration: Duration.zero,
+      pageBuilder: (_, __, ___) =>
+          const MainScreen(initialDestination: PrimaryDestination.home),
     ),
     (route) => false,
   );
@@ -1632,6 +1254,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   : '/app/profiles'),
           builder: (_) => serverContext.needsServerSelection
               ? ServerSelectionScreen(
+                  initialContext: serverContext,
                   onProfileReady: _enterMainHomeFrom,
                   onOpened: () => _appPageState.setPage('server-selection',
                       selectedPrimaryIndex: 0, customizing: false),
@@ -2068,19 +1691,12 @@ const List<String> _defaultHomeSectionOrder = <String>[
   'Movies by Country',
   'Shows by Country',
   'New Albums',
-  "This Week's Top 10 Movies",
-  "This Week's Top 10 Shows",
-  "This Week's Top 10 Albums",
-  "This Week's Top 10 Songs",
-  "This Week's Top 10 Actors",
-  "This Week's Top 10 Actresses",
-  "This Week's Top 10 Singers",
-  "This Week's Top 10 Bands",
-  'Ranking of All Top 10s',
+  'Global Top 10',
+  'Profile Top 10',
+  'Account Common Top 10',
   'Recommendations & Mood',
   'Franchise Progress',
   'Channels',
-  'Friends Stories',
   'Storage Progress',
   'Continue Watching',
   'Themed Episodes',
@@ -2089,7 +1705,6 @@ const List<String> _defaultHomeSectionOrder = <String>[
   'Because You Watched',
   'People & Cast Recommendations',
   'Library Recommendations',
-  'Friends & Communities',
   'Recently Watched',
   'Movies',
   'TV Shows',
@@ -2106,7 +1721,6 @@ const Map<String, String> _legacyHomeSectionAliases = <String, String>{
   'Recommended': 'Library Recommendations',
   'Recommendations': 'Library Recommendations',
   'Recently Added': 'New Additions',
-  'Friends & Community': 'Friends & Communities',
   'Music': 'Music & Film',
   'Popular': 'Library Recommendations',
 };
@@ -2124,7 +1738,6 @@ class HomeCustomization {
   bool showMusic;
   bool showFilm;
   bool showSeasonalCollections;
-  bool showFriendsCommunity;
   String homeMediaLayout;
   String heroStyle;
   String cardSize;
@@ -2155,7 +1768,6 @@ class HomeCustomization {
     this.showMusic = true,
     this.showFilm = true,
     this.showSeasonalCollections = true,
-    this.showFriendsCommunity = true,
     this.homeMediaLayout = 'Left & Right',
     this.heroStyle = 'Cinematic',
     this.cardSize = 'Medium',
@@ -2173,7 +1785,8 @@ class HomeCustomization {
     List<String>? sectionOrder,
     List<String>? navigationOrder,
     List<String>? hiddenSections,
-  })  : sectionOrder = sectionOrder ?? List<String>.from(_defaultHomeSectionOrder),
+  })  : sectionOrder =
+            sectionOrder ?? List<String>.from(_defaultHomeSectionOrder),
         hiddenSections = hiddenSections ?? <String>[],
         navigationOrder = navigationOrder ??
             [
@@ -2198,7 +1811,6 @@ class HomeCustomization {
       'All Library' => showAllLibrary,
       'Library Recommendations' => showRecommendations,
       'Storage Progress' => storageBarPosition != 'Hidden',
-      'Friends & Communities' => showFriendsCommunity,
       'Music & Film' => showMusic,
       'Seasonal Collections' => showSeasonalCollections,
       _ => true,
@@ -2212,19 +1824,28 @@ class HomeCustomization {
       hiddenSections.add(section);
     }
     switch (section) {
-      case 'Hero Banner': showHero = visible;
-      case 'Continue Watching': showContinueWatching = visible;
-      case 'Recently Watched': showRecentlyWatched = visible;
-      case 'Movies': showMovies = visible;
-      case 'TV Shows': showTvShows = visible;
-      case 'New Additions': showNewAdditions = visible;
-      case 'All Library': showAllLibrary = visible;
-      case 'Library Recommendations': showRecommendations = visible;
+      case 'Hero Banner':
+        showHero = visible;
+      case 'Continue Watching':
+        showContinueWatching = visible;
+      case 'Recently Watched':
+        showRecentlyWatched = visible;
+      case 'Movies':
+        showMovies = visible;
+      case 'TV Shows':
+        showTvShows = visible;
+      case 'New Additions':
+        showNewAdditions = visible;
+      case 'All Library':
+        showAllLibrary = visible;
+      case 'Library Recommendations':
+        showRecommendations = visible;
       case 'Storage Progress':
         storageBarPosition = visible ? 'Bottom' : 'Hidden';
-      case 'Friends & Communities': showFriendsCommunity = visible;
-      case 'Music & Film': showMusic = visible;
-      case 'Seasonal Collections': showSeasonalCollections = visible;
+      case 'Music & Film':
+        showMusic = visible;
+      case 'Seasonal Collections':
+        showSeasonalCollections = visible;
     }
   }
 
@@ -2240,7 +1861,6 @@ class HomeCustomization {
         showMusic: showMusic,
         showFilm: showFilm,
         showSeasonalCollections: showSeasonalCollections,
-        showFriendsCommunity: showFriendsCommunity,
         homeMediaLayout: homeMediaLayout,
         heroStyle: heroStyle,
         cardSize: cardSize,
@@ -2285,9 +1905,6 @@ class HomeCustomizationStore {
           );
           if (!settings.sectionOrder.contains('Music & Film')) {
             settings.sectionOrder.add('Music & Film');
-          }
-          if (!settings.sectionOrder.contains('Friends & Communities')) {
-            settings.sectionOrder.insert(0, 'Friends & Communities');
           }
           settings.navigationOrder.removeWhere(
             (item) =>
@@ -2453,7 +2070,6 @@ class HomeCustomizationStore {
         'showMusic': v.showMusic,
         'showFilm': v.showFilm,
         'showSeasonalCollections': v.showSeasonalCollections,
-        'showFriendsCommunity': v.showFriendsCommunity,
         'homeMediaLayout': v.homeMediaLayout,
         'heroStyle': v.heroStyle,
         'cardSize': v.cardSize,
@@ -2513,13 +2129,13 @@ class HomeCustomizationStore {
         showFilm: m['showFilm'] == false ? false : true,
         showSeasonalCollections:
             m['showSeasonalCollections'] == false ? false : true,
-        showFriendsCommunity: m['showFriendsCommunity'] == false ? false : true,
         homeMediaLayout: m['homeMediaLayout']?.toString() == 'Top & Bottom'
             ? 'Under Banner'
             : (m['homeMediaLayout']?.toString() ?? 'Left & Right'),
         heroStyle: m['heroStyle']?.toString() ?? 'Cinematic',
         cardSize: m['cardSize']?.toString() ?? 'Medium',
-        heroItemCount: ((m['heroItemCount'] as num?)?.toInt() ?? 8).clamp(1, 40).toInt(),
+        heroItemCount:
+            ((m['heroItemCount'] as num?)?.toInt() ?? 8).clamp(1, 40).toInt(),
         navbarPosition: m['navbarPosition']?.toString() ?? 'Bottom',
         storageBarPosition: m['storageBarPosition']?.toString() ?? 'Bottom',
         storageBarThickness: (m['storageBarThickness'] is num
@@ -2547,7 +2163,6 @@ class HomeCustomizationStore {
                       'Collections',
                       'Movies',
                       'TV Shows',
-                      'Friends',
                       'Library',
                     }.contains(item))
                 .toList()
@@ -2696,7 +2311,6 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   bool detailsPreviewTvShow = true;
   _PreviewDeviceCategory _previewCategory = _PreviewDeviceCategory.phone;
   String _previewDeviceName = 'iPhone';
-  String storyPlacement = 'friends';
 
   // Prevent repeated taps while an async save/navigation operation is in
   // progress. This avoids Flutter Navigator's !_debugLocked assertion.
@@ -2724,9 +2338,6 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       AppController.instance.currentProfile,
     );
     unawaited(_loadHomeHeroSettings());
-    storyPlacement =
-        StoryPlacementStore.forProfile(AppController.instance.currentProfile);
-    unawaited(_loadStoryPlacementPreference());
     _normalizeHomePositions();
   }
 
@@ -2737,16 +2348,6 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       _homeHeroSettings = loaded;
       draft.heroItemCount = loaded.itemCount;
     });
-  }
-
-  Future<void> _loadStoryPlacementPreference() async {
-    await StoryPlacementStore.load(AppController.instance.currentProfile);
-    if (mounted) {
-      setState(() {
-        storyPlacement = StoryPlacementStore.forProfile(
-            AppController.instance.currentProfile);
-      });
-    }
   }
 
   void _normalizeHomePositions() {
@@ -2774,7 +2375,6 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
 
     final profile = AppController.instance.currentProfile;
     await AppSectionCustomizationStore.save(profile, _artworkSectionDraft);
-    await StoryPlacementStore.setForProfile(profile, storyPlacement);
     if (selectedPage == CustomizationPage.home) {
       draft.heroItemCount = _homeHeroSettings.itemCount;
       await PageHeroSettingsStore.save('home', _homeHeroSettings);
@@ -3190,7 +2790,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           values: const ['Bottom', 'Top', 'Left', 'Right'],
           onChanged: (value) => setState(() {
             draft.navbarPosition = value;
-            HomeCustomizationStore.apply(draft, AppController.instance.currentProfile);
+            HomeCustomizationStore.apply(
+                draft, AppController.instance.currentProfile);
           }),
         ),
         const SizedBox(height: 24),
@@ -3258,50 +2859,10 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           _toggle(
             section,
             _homeSectionDescription(section),
-            section == 'Friends Stories'
-                ? (storyPlacement == 'home' || storyPlacement == 'both')
-                : draft.isSectionVisible(section),
-            (visible) => setState(() {
-              draft.setSectionVisible(section, visible);
-              if (section == 'Friends Stories') {
-                if (visible) {
-                  if (storyPlacement == 'none') storyPlacement = 'home';
-                  if (storyPlacement == 'friends') storyPlacement = 'both';
-                } else {
-                  if (storyPlacement == 'both') storyPlacement = 'friends';
-                  if (storyPlacement == 'home') storyPlacement = 'none';
-                }
-              }
-            }),
+            draft.isSectionVisible(section),
+            (visible) =>
+                setState(() => draft.setSectionVisible(section, visible)),
           ),
-        const SizedBox(height: 24),
-        const UniversalText(
-          'FRIENDS STORIES',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.4,
-            color: Colors.white54,
-          ),
-        ),
-        const SizedBox(height: 10),
-        _dropdown(
-          label: 'Show friends’ Stories',
-          value: storyPlacement,
-          values: const ['none', 'home', 'friends', 'both'],
-          labels: const [
-            "Don't show",
-            'Home only',
-            'Friends only',
-            'Home + Friends'
-          ],
-          onChanged: (value) => setState(() {
-            storyPlacement = value;
-            final showOnHome = value == 'home' || value == 'both';
-            draft.setSectionVisible('Friends Stories', showOnHome);
-          }),
-        ),
-        const SizedBox(height: 24),
         _sectionOrder(
           title: tr('SECTION ORDER'),
           subtitle: tr('Drag Home sections to change their order.'),
@@ -3363,8 +2924,6 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             'Show the weekly discovery mix.',
             musicDraft.showWeeklyDiscovery,
             (v) => setState(() => musicDraft.showWeeklyDiscovery = v)),
-        _toggle('AI DJ', 'Show the AI DJ launcher.', musicDraft.showAIDJ,
-            (v) => setState(() => musicDraft.showAIDJ = v)),
         _toggle(
             'System-created playlists',
             'Show Made For You, Discover Weekly and Daily Mix.',
@@ -3403,6 +2962,11 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             (v) => setState(() => musicDraft.showArtists = v)),
         _toggle('Albums', 'Show ripped albums.', musicDraft.showAlbums,
             (v) => setState(() => musicDraft.showAlbums = v)),
+        _toggle(
+            'All Songs',
+            'Show every song in the music library.',
+            musicDraft.showAllSongs,
+            (v) => setState(() => musicDraft.showAllSongs = v)),
         _toggle('Playlists', 'Show custom playlists.', musicDraft.showPlaylists,
             (v) => setState(() => musicDraft.showPlaylists = v)),
         _toggle(
@@ -3537,22 +3101,10 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           (v) => setState(() => detailsDraft.showTrailer = v),
         ),
         _toggle(
-          'Group Watch',
-          'Show Group Watch controls.',
-          detailsDraft.showGroupWatch,
-          (v) => setState(() => detailsDraft.showGroupWatch = v),
-        ),
-        _toggle(
           'Audio & Subtitles',
           'Show language and subtitle controls.',
           detailsDraft.showAudioSubtitles,
           (v) => setState(() => detailsDraft.showAudioSubtitles = v),
-        ),
-        _toggle(
-          'Reactions',
-          'Show Like and Dislike controls.',
-          detailsDraft.showReactions,
-          (v) => setState(() => detailsDraft.showReactions = v),
         ),
         _toggle(
           'Information',
@@ -3905,7 +3457,6 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           children: [
             _PreviewNavItem(Icons.home_rounded, 'Home', true),
             _PreviewNavItem(Icons.video_library_rounded, 'Library', false),
-            _PreviewNavItem(Icons.people_rounded, 'Friends', false),
             _PreviewNavItem(Icons.more_horiz_rounded, 'More', false),
           ],
         ),
@@ -3932,10 +3483,6 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
 
     for (final section in draft.sectionOrder) {
       if (!draft.isSectionVisible(section)) continue;
-      if (section == 'Friends Stories' &&
-          storyPlacement != 'home' && storyPlacement != 'both') {
-        continue;
-      }
 
       switch (section) {
         case 'Hero Banner':
@@ -3957,7 +3504,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         case 'Continue Watching':
           sections.add(_homePreviewMediaSection(
             'CONTINUE WATCHING',
-            'Movies & shows in progress',
+            'Unfinished movies and shows',
             Icons.play_circle_outline_rounded,
             isTvShow: false,
             progress: true,
@@ -3992,60 +3539,63 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           ));
         case 'Movies by Country':
           sections.add(_homePreviewMediaSection(
-            'MOVIES FROM COUNTRY', "Grouped by each title's recorded country of origin",
-            Icons.public_rounded, isTvShow: false));
+              'MOVIES FROM COUNTRY',
+              "Grouped by each title's recorded country of origin",
+              Icons.public_rounded,
+              isTvShow: false));
         case 'Shows by Country':
           sections.add(_homePreviewMediaSection(
-            'SHOWS FROM COUNTRY', "Grouped by each title's recorded country of origin",
-            Icons.public_rounded, isTvShow: true));
+              'SHOWS FROM COUNTRY',
+              "Grouped by each title's recorded country of origin",
+              Icons.public_rounded,
+              isTvShow: true));
         case 'New Albums':
           sections.add(_homePreviewBar('NEW ALBUMS', Icons.album_rounded));
-        case "This Week's Top 10 Movies":
-          sections.add(_homePreviewBar("YOUR TOP 10 OWNED MOVIES", Icons.movie_rounded));
-        case "This Week's Top 10 Shows":
-          sections.add(_homePreviewBar("YOUR TOP 10 OWNED SHOWS", Icons.tv_rounded));
-        case "This Week's Top 10 Albums":
-          sections.add(_homePreviewBar("YOUR TOP 10 OWNED ALBUMS", Icons.album_rounded));
-        case "This Week's Top 10 Songs":
-          sections.add(_homePreviewBar("YOUR TOP 10 OWNED SONGS", Icons.music_note_rounded));
-        case "This Week's Top 10 Actors":
-          sections.add(_homePreviewBar("YOUR TOP 10 ACTORS FROM OWNED TITLES", Icons.face_rounded));
-        case "This Week's Top 10 Actresses":
-          sections.add(_homePreviewBar("YOUR TOP 10 ACTRESSES FROM OWNED TITLES", Icons.face_3_rounded));
-        case "This Week's Top 10 Singers":
-          sections.add(_homePreviewBar("YOUR TOP 10 SINGERS FROM OWNED TRACKS", Icons.mic_rounded));
-        case "This Week's Top 10 Bands":
-          sections.add(_homePreviewBar("YOUR TOP 10 BANDS FROM OWNED TRACKS", Icons.groups_rounded));
-        case 'Ranking of All Top 10s':
-          sections.add(_homePreviewBar('RANKING OF ALL TOP 10S', Icons.leaderboard_rounded));
+        case 'Global Top 10':
+          sections.add(_homePreviewBar(
+              'GLOBAL TOP 10 • TMDB + MUSIC CHARTS', Icons.public_rounded));
+        case 'Profile Top 10':
+          sections.add(
+              _homePreviewBar('THIS PROFILE TOP 10', Icons.person_rounded));
+        case 'Account Common Top 10':
+          sections.add(_homePreviewBar(
+              'COMMON TO EVERY ACCOUNT PROFILE', Icons.groups_rounded));
         case 'Recommendations & Mood':
-          sections.add(_homePreviewBar('RECOMMENDATIONS & MOOD', Icons.auto_awesome_outlined));
+          sections.add(_homePreviewBar(
+              'RECOMMENDATIONS & MOOD', Icons.auto_awesome_outlined));
         case 'Franchise Progress':
-          sections.add(_homePreviewBar('FRANCHISE & SAGA PROGRESS', Icons.timeline_rounded));
+          sections.add(_homePreviewBar(
+              'FRANCHISE & SAGA PROGRESS', Icons.timeline_rounded));
         case 'Channels':
-          sections.add(_homePreviewBar('CHANNELS', Icons.live_tv_rounded));
-        case 'Friends Stories':
-          sections.add(_homePreviewBar('FRIENDS STORIES', Icons.auto_stories_rounded));
+          sections
+              .add(_homePreviewBar('CHANNELS', Icons.video_library_rounded));
         case 'Storage Progress':
-          sections.add(_homePreviewBar('STORAGE PROGRESS', Icons.storage_rounded));
+          sections
+              .add(_homePreviewBar('STORAGE PROGRESS', Icons.storage_rounded));
         case 'Themed Episodes':
-          sections.add(_homePreviewBar('THEMED EPISODES', Icons.theater_comedy_rounded));
+          sections.add(_homePreviewBar(
+              'HOLIDAY MOVIES & EPISODES', Icons.celebration_rounded));
         case 'You Might Also Like':
-          sections.add(_homePreviewBar('YOU MIGHT ALSO LIKE', Icons.thumb_up_alt_outlined));
+          sections.add(_homePreviewBar(
+              'YOU MIGHT ALSO LIKE', Icons.thumb_up_alt_outlined));
         case 'Collections':
-          sections.add(_homePreviewBar('COLLECTIONS', Icons.collections_bookmark_outlined));
+          sections.add(_homePreviewBar(
+              'COLLECTIONS', Icons.collections_bookmark_outlined));
         case 'Because You Watched':
-          sections.add(_homePreviewBar('BECAUSE YOU WATCHED', Icons.movie_filter_outlined));
+          sections.add(_homePreviewBar(
+              'BECAUSE YOU WATCHED', Icons.movie_filter_outlined));
         case 'People & Cast Recommendations':
-          sections.add(_homePreviewBar('PEOPLE & CAST RECOMMENDATIONS', Icons.person_search_rounded));
-        case 'Friends & Communities':
-          sections.add(_homePreviewBar('FRIENDS & COMMUNITIES', Icons.groups_rounded));
+          sections.add(_homePreviewBar(
+              'PEOPLE & CAST RECOMMENDATIONS', Icons.person_search_rounded));
         case 'Media Intelligence Tools':
-          sections.add(_homePreviewBar('MEDIA INTELLIGENCE TOOLS', Icons.auto_awesome_rounded));
+          sections.add(_homePreviewBar(
+              'MEDIA INTELLIGENCE TOOLS', Icons.auto_awesome_rounded));
         case 'Music & Film':
-          sections.add(_homePreviewBar('MUSIC & FILM', Icons.headphones_rounded));
+          sections
+              .add(_homePreviewBar('MUSIC & FILM', Icons.headphones_rounded));
         case 'Seasonal Collections':
-          sections.add(_homePreviewBar('SEASONAL COLLECTIONS', Icons.calendar_month_rounded));
+          sections.add(_homePreviewBar(
+              'SEASONAL COLLECTIONS', Icons.calendar_month_rounded));
       }
     }
 
@@ -4278,13 +3828,13 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     for (final section in musicDraft.sectionOrder) {
       final enabled = switch (section) {
         'Weekly Discovery' => musicDraft.showWeeklyDiscovery,
-        'AI DJ' => musicDraft.showAIDJ,
         'Made For You' => musicDraft.showSystemPlaylists,
         'Liked Songs' => musicDraft.showLikedSongs,
         'Recently Played' => musicDraft.showRecentlyPlayed,
         'Mood Mixes' => musicDraft.showMoodMixes,
         'Artists' => musicDraft.showArtists,
         'Albums' => musicDraft.showAlbums,
+        'All Songs' => musicDraft.showAllSongs,
         'Playlists' => musicDraft.showPlaylists,
         'Soundtrack Universe' => musicDraft.showSoundtrackUniverse,
         _ => false,
@@ -4293,16 +3843,12 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       sections.add(
         _musicPreviewSection(
           section.toUpperCase(),
-          section == 'AI DJ'
-              ? 'SMART DJ / MIX CONTROLS'
-              : section == 'Made For You'
-                  ? 'MADE FOR YOU • DISCOVER WEEKLY • DAILY MIX'
-                  : 'MUSIC SECTION',
-          section == 'AI DJ'
+          section == 'Made For You'
+              ? 'MADE FOR YOU • DISCOVER WEEKLY • DAILY MIX'
+              : 'MUSIC SECTION',
+          section == 'Weekly Discovery'
               ? Icons.auto_awesome_rounded
-              : section == 'Weekly Discovery'
-                  ? Icons.auto_awesome_rounded
-                  : Icons.music_note_rounded,
+              : Icons.music_note_rounded,
         ),
       );
     }
@@ -4464,10 +4010,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       'Collection Items' => true,
       'Play' => detailsDraft.showPlay,
       'Trailer' => detailsDraft.showTrailer,
-      'Group Watch' => detailsDraft.showGroupWatch,
-      'Reviews' => true,
       'Audio & Subtitles' => detailsDraft.showAudioSubtitles,
-      'Reactions' => detailsDraft.showReactions,
       'Information' => detailsDraft.showInformation,
       'Library' => detailsDraft.showLibrary,
       _ => false,
@@ -4487,12 +4030,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       'Play' => _detailsOutlineButton(Icons.play_arrow_rounded, 'PLAY'),
       'Trailer' => _detailsOutlineButton(
           Icons.play_circle_outline_rounded, 'WATCH TRAILER'),
-      'Group Watch' => _detailsOutlineButton(
-          Icons.groups_outlined, 'GROUP WATCH / WATCH TOGETHER'),
-      'Reviews' => _detailsOutlineButton(Icons.rate_review_outlined, 'REVIEWS'),
       'Audio & Subtitles' => _detailsOutlineButton(
           Icons.closed_caption_outlined, 'AUDIO & SUBTITLES'),
-      'Reactions' => _detailsOutlineReactions(),
       'Information' => _detailsOutlineInformation(),
       'Library' => _detailsOutlineLibrary(),
       _ => null,
@@ -4728,20 +4267,6 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     );
   }
 
-  Widget _detailsOutlineReactions() {
-    return _detailsOutlineCard(
-      'REACTIONS',
-      child: Row(
-        children: [
-          Expanded(child: _detailsMiniButton(Icons.thumb_up_outlined, 'LIKE')),
-          const SizedBox(width: 8),
-          Expanded(
-              child: _detailsMiniButton(Icons.thumb_down_outlined, 'DISLIKE')),
-        ],
-      ),
-    );
-  }
-
   Widget _detailsOutlineLibrary() {
     return _detailsOutlineCard(
       'LIBRARY',
@@ -4771,18 +4296,6 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             foregroundColor: Colors.white54,
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _detailsMiniButton(IconData icon, String label) {
-    return OutlinedButton.icon(
-      onPressed: null,
-      icon: Icon(icon, size: 18),
-      label: Text(label),
-      style: OutlinedButton.styleFrom(
-        side: BorderSide(color: Colors.white.withValues(alpha: .14)),
-        foregroundColor: Colors.white54,
       ),
     );
   }
@@ -5121,12 +4634,10 @@ class _PreviewNavItem extends StatelessWidget {
 
 class MainScreen extends StatefulWidget {
   final PrimaryDestination initialDestination;
-  final String? initialConversationId;
 
   const MainScreen({
     super.key,
     this.initialDestination = PrimaryDestination.home,
-    this.initialConversationId,
   });
 
   @override
@@ -5136,11 +4647,10 @@ class MainScreen extends StatefulWidget {
 enum PrimaryDestination {
   home,
   library,
-  friends,
 }
 
 // Keep the active main shell alive when primary destinations change. This
-// avoids reconstructing Home/library/Friends and repeating their entry work.
+// avoids reconstructing Home/library and repeating their entry work.
 _MainScreenState? _activeMainScreenState;
 
 class _GlobalPrimaryNavigationBar extends StatelessWidget {
@@ -5148,31 +4658,24 @@ class _GlobalPrimaryNavigationBar extends StatelessWidget {
   final bool vertical;
 
   void _select(BuildContext context, int index) {
-    if (index == 3) {
+    if (index == 1) {
       _showGlobalMore();
       return;
     }
-    if (index == 4) {
+    if (index == 2) {
       final navigator = _appNavigatorKey.currentState;
       if (navigator == null) return;
       navigator.push<void>(MaterialPageRoute<void>(
         settings: const RouteSettings(name: '/app/profiles'),
         builder: (_) => ProfileSelectionScreen(
-          onOpened: () => _appPageState.setPage('profiles', selectedPrimaryIndex: 0, customizing: false),
-          onProfileSelected: (selectionContext) {
-            Navigator.of(selectionContext, rootNavigator: true).pushAndRemoveUntil<void>(
-              MaterialPageRoute<void>(
-                settings: const RouteSettings(name: '/main/home'),
-                builder: (_) => const MainScreen(initialDestination: PrimaryDestination.home),
-              ),
-              (route) => false,
-            );
-          },
+          onOpened: () => _appPageState.setPage('profiles',
+              selectedPrimaryIndex: 0, customizing: false),
+          onProfileSelected: _enterMainHomeFrom,
         ),
       ));
       return;
     }
-    final destination = PrimaryDestination.values[index];
+    final destination = PrimaryDestination.home;
     final navigator = _appNavigatorKey.currentState;
     if (navigator == null) return;
 
@@ -5200,7 +4703,8 @@ class _GlobalPrimaryNavigationBar extends StatelessWidget {
 
     // Safe fallback for unusual entry flows that do not have a named main
     // route yet (for example, app links or a reset during onboarding).
-    _appPageState.setPage(destination.name, selectedPrimaryIndex: index, customizing: false);
+    _appPageState.setPage(destination.name,
+        selectedPrimaryIndex: index, customizing: false);
     navigator.pushAndRemoveUntil<void>(
       MaterialPageRoute<void>(
         settings: RouteSettings(name: '/main/${destination.name}'),
@@ -5213,12 +4717,14 @@ class _GlobalPrimaryNavigationBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: Listenable.merge(<Listenable>[_appPageState, AppController.instance]),
+      animation:
+          Listenable.merge(<Listenable>[_appPageState, AppController.instance]),
       builder: (context, _) {
-        final selectedIndex = _appPageState.primaryIndex.clamp(0, 2).toInt();
+        const selectedIndex = 0;
         final profile = AppController.instance.currentProfile;
         final rawProfileName = profile?.name.trim() ?? '';
-        final profileLabel = rawProfileName.isEmpty ? 'Profile' : rawProfileName;
+        final profileLabel =
+            rawProfileName.isEmpty ? 'Profile' : rawProfileName;
         final profileAvatar = profile == null
             ? const Icon(Icons.person_outline_rounded)
             : _MainProfileAvatar(profile: profile, size: 30);
@@ -5230,11 +4736,18 @@ class _GlobalPrimaryNavigationBar extends StatelessWidget {
               selectedIndex: selectedIndex,
               labelType: NavigationRailLabelType.all,
               destinations: <NavigationRailDestination>[
-                const NavigationRailDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: Text('Home')),
-                const NavigationRailDestination(icon: Icon(Icons.video_library_outlined), selectedIcon: Icon(Icons.video_library_rounded), label: Text('Watch')),
-                const NavigationRailDestination(icon: Icon(Icons.people_outline_rounded), selectedIcon: Icon(Icons.people_rounded), label: Text('Friends')),
-                const NavigationRailDestination(icon: Icon(Icons.more_horiz_rounded), selectedIcon: Icon(Icons.more_horiz_rounded), label: Text('More')),
-                NavigationRailDestination(icon: profileAvatar, selectedIcon: profileAvatar, label: Text(profileLabel)),
+                const NavigationRailDestination(
+                    icon: Icon(Icons.home_outlined),
+                    selectedIcon: Icon(Icons.home_rounded),
+                    label: Text('Home')),
+                const NavigationRailDestination(
+                    icon: Icon(Icons.more_horiz_rounded),
+                    selectedIcon: Icon(Icons.more_horiz_rounded),
+                    label: Text('More')),
+                NavigationRailDestination(
+                    icon: profileAvatar,
+                    selectedIcon: profileAvatar,
+                    label: Text(profileLabel)),
               ],
               onDestinationSelected: (index) => _select(context, index),
             ),
@@ -5244,11 +4757,24 @@ class _GlobalPrimaryNavigationBar extends StatelessWidget {
           height: 84,
           selectedIndex: selectedIndex,
           destinations: <NavigationDestination>[
-            const NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Home'),
-            const NavigationDestination(icon: Icon(Icons.video_library_outlined), selectedIcon: Icon(Icons.video_library_rounded), label: 'Watch'),
-            const NavigationDestination(icon: Icon(Icons.people_outline_rounded), selectedIcon: Icon(Icons.people_rounded), label: 'Friends'),
-            const NavigationDestination(icon: Icon(Icons.more_horiz_rounded), selectedIcon: Icon(Icons.more_horiz_rounded), label: 'More'),
-            NavigationDestination(icon: profileAvatar, selectedIcon: profileAvatar, label: profileLabel),
+            const NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home_rounded),
+              label: 'Home',
+              tooltip: '',
+            ),
+            const NavigationDestination(
+              icon: Icon(Icons.more_horiz_rounded),
+              selectedIcon: Icon(Icons.more_horiz_rounded),
+              label: 'More',
+              tooltip: '',
+            ),
+            NavigationDestination(
+              icon: profileAvatar,
+              selectedIcon: profileAvatar,
+              label: profileLabel,
+              tooltip: '',
+            ),
           ],
           onDestinationSelected: (index) => _select(context, index),
         );
@@ -5311,14 +4837,6 @@ void _showGlobalMore() {
           routeName: '/app/page/home-server',
         );
       },
-      onStreamingUpgrades: () {
-        Navigator.of(sheetContext).pop();
-        push(const StreamingUpgradeCenterScreen(), routeName: '/app/page/streaming-upgrades');
-      },
-      onJellyfinPlugins: () {
-        Navigator.of(sheetContext).pop();
-        push(const JellyfinPluginsHubScreen(), routeName: '/app/page/jellyfin-plugins');
-      },
       onImport: () {
         Navigator.of(sheetContext).pop();
         push(const ImportMediaScreen(), routeName: '/app/page/import');
@@ -5327,36 +4845,9 @@ void _showGlobalMore() {
         Navigator.of(sheetContext).pop();
         push(const AccountInviteScreen(), routeName: '/app/page/members');
       },
-      onWatchAndEnjoy: () {
-        Navigator.of(sheetContext).pop();
-        push(const WatchAndEnjoyScreen(),
-            routeName: '/app/page/watch-and-enjoy');
-      },
-      onShop: () {
-        Navigator.of(sheetContext).pop();
-        push(
-          const MarketplaceHubScreen(initialMode: MarketplaceMode.shop),
-          routeName: '/app/marketplace/shop',
-        );
-      },
-      onFoodDelivery: () {
-        Navigator.of(sheetContext).pop();
-        push(
-          const MarketplaceHubScreen(initialMode: MarketplaceMode.food),
-          routeName: '/app/marketplace/food',
-        );
-      },
-      onHeyMarathon: () {
-        Navigator.of(sheetContext).pop();
-        push(const HeyMarathonScreen(), routeName: '/app/page/hey-marathon');
-      },
       onMyTv: () {
         Navigator.of(sheetContext).pop();
         push(const MyTvScreen(), routeName: '/app/watch/my-tv');
-      },
-      onPublicLiveTv: () {
-        Navigator.of(sheetContext).pop();
-        push(const PublicLiveTvScreen(), routeName: '/app/watch/live-tv');
       },
       onTvController: () {
         Navigator.of(sheetContext).pop();
@@ -5390,16 +4881,6 @@ void _showGlobalMore() {
         Navigator.of(sheetContext).pop();
         push(const InnovationHubScreen(), routeName: '/app/innovation');
       },
-      onWrapped: () {
-        Navigator.of(sheetContext).pop();
-        push(const MediaWrappedCollectionsScreen(),
-            routeName: '/app/page/wrapped');
-      },
-      onSpecialEvents: () {
-        Navigator.of(sheetContext).pop();
-        push(const MyTvSpecialEventsScreen(),
-            routeName: '/app/page/special-events');
-      },
       onInterruptionMode: () {
         Navigator.of(sheetContext).pop();
         push(const RealLifeInterruptionModeScreen(),
@@ -5419,10 +4900,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   String get _pageTitle => switch (selected) {
         PrimaryDestination.home => 'Home',
-        PrimaryDestination.library => 'Watch',
-        PrimaryDestination.friends => 'Friends',
+        PrimaryDestination.library => 'Library',
       };
-
 
   Widget _pageFor(PrimaryDestination destination) {
     switch (destination) {
@@ -5430,14 +4909,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         return HomeScreen(
           showAppBar: false,
           onRefresh: () => setState(() {}),
-          onNotifications: null,
         );
       case PrimaryDestination.library:
         return const LibraryHubScreen();
-      case PrimaryDestination.friends:
-        return FriendsAndCommunitiesScreen(
-          initialConversationId: widget.initialConversationId,
-        );
     }
   }
 
@@ -5450,16 +4924,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       ),
     );
   }
-
-  Timer? _presenceHeartbeat;
-  EnergySaverMode? _presenceEnergyMode;
-
-  Duration get _presenceHeartbeatInterval =>
-      switch (EnergySaverController.instance.mode) {
-        EnergySaverMode.eco => const Duration(minutes: 5),
-        EnergySaverMode.balanced => const Duration(minutes: 3),
-        EnergySaverMode.cinema => const Duration(minutes: 1),
-      };
 
   final Set<PrimaryDestination> _visitedDestinations = <PrimaryDestination>{};
 
@@ -5476,72 +4940,14 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     super.initState();
     _visitedDestinations.add(selected);
     _activeMainScreenState = this;
-    WidgetsBinding.instance.addObserver(this);
-    _presenceEnergyMode = EnergySaverController.instance.mode;
-    EnergySaverController.instance.addListener(_onPresenceEnergyChanged);
     unawaited(EnergySaverController.instance.ensureLoaded(
       profileId: AppController.instance.currentProfile?.id,
     ));
     LanguageController.instance.loadForCurrentProfile();
-    unawaited(AppController.instance.loadActivity());
-    _startPresenceHeartbeat();
-  }
-
-  void _onPresenceEnergyChanged() {
-    final mode = EnergySaverController.instance.mode;
-    if (_presenceEnergyMode == mode) return;
-    _presenceEnergyMode = mode;
-    // Only restart an active timer. Lifecycle resume owns restarting it after
-    // the app has been backgrounded, and mode changes should not send an
-    // extra network heartbeat immediately.
-    if (_presenceHeartbeat != null) {
-      _startPresenceHeartbeat(sendImmediately: false);
-    }
-  }
-
-  void _startPresenceHeartbeat({bool sendImmediately = true}) {
-    _presenceHeartbeat?.cancel();
-    if (sendImmediately) unawaited(_touchSocialPresence());
-    _presenceHeartbeat = Timer.periodic(
-      _presenceHeartbeatInterval,
-      (_) => unawaited(_touchSocialPresence()),
-    );
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _startPresenceHeartbeat();
-    } else {
-      _presenceHeartbeat?.cancel();
-      _presenceHeartbeat = null;
-    }
-  }
-
-  Future<void> _touchSocialPresence() async {
-    if (!mounted ||
-        <String>{'boot', 'profiles', 'server-selection'}
-            .contains(_appPageState.pageId)) {
-      return;
-    }
-    final controller = AppController.instance;
-    final profile = controller.currentProfile;
-    if (profile == null || !controller.backendApi.isAuthenticated) return;
-    try {
-      // A heartbeat updates last-seen without overriding the current
-      // availability or the watching/listening activity set by the player.
-      await controller.backendApi
-          .setSocialProfilePresence(profileId: profile.id);
-    } catch (_) {
-      // Presence is advisory and must never interrupt playback or navigation.
-    }
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    EnergySaverController.instance.removeListener(_onPresenceEnergyChanged);
-    _presenceHeartbeat?.cancel();
     if (identical(_activeMainScreenState, this)) {
       _activeMainScreenState = null;
     }
@@ -5610,8 +5016,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 }
 
-/// Fixed primary navigation. Secondary features belong behind More or within
-/// the Library / Friends hubs rather than occupying the navbar.
+/// Fixed primary navigation. Secondary features belong behind More.
 class SimplePrimaryNavigationBar extends StatelessWidget {
   final PrimaryDestination? selected;
   final ValueChanged<PrimaryDestination?> onSelected;
@@ -5633,36 +5038,21 @@ class SimplePrimaryNavigationBar extends StatelessWidget {
         label: 'Home',
       ),
       const NavigationDestination(
-        icon: Icon(Icons.video_library_outlined),
-        selectedIcon: Icon(Icons.video_library_rounded),
-        label: 'Watch',
-      ),
-      const NavigationDestination(
-        icon: Icon(Icons.people_outline_rounded),
-        selectedIcon: Icon(Icons.people_rounded),
-        label: 'Friends',
-      ),
-      const NavigationDestination(
         icon: Icon(Icons.more_horiz_rounded),
         selectedIcon: Icon(Icons.more_horiz_rounded),
         label: 'More',
       ),
     ];
 
-    final index = switch (selected) {
-      PrimaryDestination.home => 0,
-      PrimaryDestination.library => 1,
-      PrimaryDestination.friends => 2,
-      null => 0,
-    };
+    const index = 0;
 
     return NavigationBar(
       selectedIndex: index,
       onDestinationSelected: (value) {
-        if (value == 3) {
+        if (value == 1) {
           onMore();
         } else {
-          onSelected(PrimaryDestination.values[value]);
+          onSelected(PrimaryDestination.home);
         }
       },
       destinations: items,
@@ -5741,7 +5131,7 @@ class _AppShellHeaderState extends State<AppShellHeader> {
                           child: Text(
                             compact
                                 ? 'Search everything…'
-                                : 'Search movies, TV, music, people, communities…',
+                                : 'Search movies, TV, music and people…',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -5776,7 +5166,6 @@ class _AppShellHeaderState extends State<AppShellHeader> {
               onPressed: widget.onSurpriseMe,
               icon: const Icon(Icons.shuffle_rounded),
             ),
-          ActivityButton(),
           PageCustomizeButton(pageId: widget.pageId),
         ],
       ),
@@ -5800,16 +5189,9 @@ class _MoreActionsSheet extends StatelessWidget {
   final VoidCallback onPerfectStreaming;
   final VoidCallback onDevices;
   final VoidCallback onHomeServer;
-  final VoidCallback onStreamingUpgrades;
-  final VoidCallback onJellyfinPlugins;
   final VoidCallback onImport;
   final VoidCallback onMembers;
-  final VoidCallback onShop;
-  final VoidCallback onFoodDelivery;
-  final VoidCallback onWatchAndEnjoy;
-  final VoidCallback onHeyMarathon;
   final VoidCallback onMyTv;
-  final VoidCallback onPublicLiveTv;
   final VoidCallback onTvController;
   final VoidCallback onTvHost;
   final VoidCallback onProductionReadiness;
@@ -5817,8 +5199,6 @@ class _MoreActionsSheet extends StatelessWidget {
   final VoidCallback onAccessibilityOffline;
   final VoidCallback onEntertainmentStudio;
   final VoidCallback onInnovationHub;
-  final VoidCallback onWrapped;
-  final VoidCallback onSpecialEvents;
   final VoidCallback onInterruptionMode;
   final VoidCallback onSecurityBots;
 
@@ -5829,16 +5209,9 @@ class _MoreActionsSheet extends StatelessWidget {
     required this.onPerfectStreaming,
     required this.onDevices,
     required this.onHomeServer,
-    required this.onStreamingUpgrades,
-    required this.onJellyfinPlugins,
     required this.onImport,
     required this.onMembers,
-    required this.onShop,
-    required this.onFoodDelivery,
-    required this.onWatchAndEnjoy,
-    required this.onHeyMarathon,
     required this.onMyTv,
-    required this.onPublicLiveTv,
     required this.onTvController,
     required this.onTvHost,
     required this.onProductionReadiness,
@@ -5846,8 +5219,6 @@ class _MoreActionsSheet extends StatelessWidget {
     required this.onAccessibilityOffline,
     required this.onEntertainmentStudio,
     required this.onInnovationHub,
-    required this.onWrapped,
-    required this.onSpecialEvents,
     required this.onInterruptionMode,
     required this.onSecurityBots,
   });
@@ -5877,13 +5248,6 @@ class _MoreActionsSheet extends StatelessWidget {
                   Icons.dns_rounded, onHomeServer),
             ],
           ),
-          _moreCard(Icons.auto_awesome_rounded, 'Streaming Upgrade Center',
-              'Watchlist, Jellyfin, search, profiles and media shortcuts', onStreamingUpgrades),
-          _moreCard(
-              Icons.extension_rounded,
-              'Jellyfin Plugins',
-              'Browse plugin catalog, copy repository URLs and follow installation guides',
-              onJellyfinPlugins),
           _moreCard(Icons.album_rounded, 'Import / Rip',
               'Import media and run the ARM disc-import workflow', onImport),
           _moreCard(
@@ -5897,23 +5261,13 @@ class _MoreActionsSheet extends StatelessWidget {
               'Eco mode, preview power, background work and electricity estimates',
               onPowerPerformance),
           _moreCard(
-              Icons.auto_awesome_rounded,
-              'My Entertainment Wrapped',
-              'Monthly/yearly recaps and archived Wrapped Collections',
-              onWrapped),
-          _moreCard(
-              Icons.event_available_rounded,
-              'My TV Special Events',
-              'Stable, randomized theme weeks spread throughout the year',
-              onSpecialEvents),
-          _moreCard(
               Icons.pause_circle_outline_rounded,
               'Interruption Mode',
               'Pause, save playback position and resume with explicit controls',
               onInterruptionMode),
           _moreCard(
               Icons.health_and_safety_outlined,
-              'Security & Database Bots',
+              'Security & Database Checks',
               'Run owner-only read-only security and integrity checks',
               onSecurityBots),
           _moreCard(
@@ -6025,14 +5379,12 @@ class _MoreActionsSheet extends StatelessWidget {
 
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onRefresh;
-  final VoidCallback? onNotifications;
   final HomeCustomization? previewSettings;
   final bool showAppBar;
 
   const HomeScreen({
     super.key,
     this.onRefresh,
-    this.onNotifications,
     this.previewSettings,
     this.showAppBar = true,
   });
@@ -6063,10 +5415,8 @@ class _HomeScreenState extends State<HomeScreen>
     if (AppController.instance.backendApi.isAuthenticated) {
       unawaited(_syncHomeServerMedia());
     }
-    StoryPlacementStore.revision.addListener(_onStoryPlacementChanged);
     HomeCustomizationStore.revision.addListener(_onHomeCustomizationChanged);
     PageHeroSettingsStore.revision.addListener(_onHomePageHeroSettingsChanged);
-    unawaited(_loadStoryPlacement());
     unawaited(_reloadHomePageHeroSettings());
     _heroController = AnimationController(
       vsync: this,
@@ -6080,15 +5430,6 @@ class _HomeScreenState extends State<HomeScreen>
     } catch (_) {
       // Local preview media stays available even when the server is offline.
     }
-    if (mounted) setState(() {});
-  }
-
-  Future<void> _loadStoryPlacement() async {
-    await StoryPlacementStore.load(AppController.instance.currentProfile);
-    if (mounted) setState(() {});
-  }
-
-  void _onStoryPlacementChanged() {
     if (mounted) setState(() {});
   }
 
@@ -6110,64 +5451,11 @@ class _HomeScreenState extends State<HomeScreen>
 
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
-    StoryPlacementStore.revision.removeListener(_onStoryPlacementChanged);
     HomeCustomizationStore.revision.removeListener(_onHomeCustomizationChanged);
-    PageHeroSettingsStore.revision.removeListener(_onHomePageHeroSettingsChanged);
+    PageHeroSettingsStore.revision
+        .removeListener(_onHomePageHeroSettingsChanged);
     _heroController.dispose();
     super.dispose();
-  }
-
-  void _showHomeExploreMenu() {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (sheetContext) => _PremiumSheet(
-        title: 'Explore',
-        subtitle:
-            'More ways to discover your movies, shows, music and collections.',
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.timeline_rounded),
-              title: const UniversalText('Release Order'),
-              subtitle: const UniversalText(
-                  'Browse movies, shows and albums grouped by release year.'),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    settings:
-                        const RouteSettings(name: '/app/page/release-order'),
-                    builder: (_) => const ReleaseOrderTimelineScreen(),
-                  ),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.hub_rounded),
-              title: const UniversalText('Media Universe'),
-              subtitle: const UniversalText(
-                  'Explore titles, connected franchises, people and artwork.'),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    settings: const RouteSettings(name: '/app/media-universe'),
-                    builder: (_) => const MediaUniverseScreen(),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   /// Performs `_refresh` for this feature. Update this documentation when its contract changes.
@@ -6175,8 +5463,6 @@ class _HomeScreenState extends State<HomeScreen>
     final controller = AppController.instance;
     if (controller.backendApi.isAuthenticated) {
       await controller.loadRecommendations();
-      await controller.loadGroupWishlist();
-      await controller.loadGroupRecommendations();
     }
     widget.onRefresh?.call();
     if (mounted) setState(() {});
@@ -6207,6 +5493,13 @@ class _HomeScreenState extends State<HomeScreen>
     final watched = controller.watched
         .where((media) => media.isAccessibleTo(profile))
         .toList(growable: false);
+    final continueWatching = library.where((media) {
+      final progress = controller.getPlaybackProgress(media.id);
+      return progress > 0 && progress < .95;
+    }).toList()
+      ..sort((a, b) => controller
+          .getPlaybackProgress(b.id)
+          .compareTo(controller.getPlaybackProgress(a.id)));
     final movies = internationalCatalogFirst(
       library.where((media) => media.type.toLowerCase() == 'movie'),
     );
@@ -6261,19 +5554,27 @@ class _HomeScreenState extends State<HomeScreen>
             final appBarHeight = widget.showAppBar ? kToolbarHeight : 0.0;
             const browseNavigationHeight = 58.0; // 48px row + 10px padding.
             const heroGap = 14.0;
-            final topChromeHeight = appBarHeight + browseNavigationHeight +
+            final topChromeHeight = appBarHeight +
+                browseNavigationHeight +
                 (showHero ? heroGap : 0.0);
             final targetUpperPaneHeight = constraints.maxHeight * 0.58;
             final desiredHeroHeight = targetUpperPaneHeight - topChromeHeight;
-            final maxHeroHeight = math.max(
-              0.0,
-              constraints.maxHeight - topChromeHeight - (showHero ? 110.0 : 0.0),
-            ).toDouble();
+            final maxHeroHeight = math
+                .max(
+                  0.0,
+                  constraints.maxHeight -
+                      topChromeHeight -
+                      (showHero ? 110.0 : 0.0),
+                )
+                .toDouble();
             final heroPaneHeight = showHero
-                ? math.min(
-                    maxHeroHeight,
-                    math.max(math.min(180.0, maxHeroHeight), desiredHeroHeight),
-                  ).toDouble()
+                ? math
+                    .min(
+                      maxHeroHeight,
+                      math.max(
+                          math.min(180.0, maxHeroHeight), desiredHeroHeight),
+                    )
+                    .toDouble()
                 : 0.0;
             final homeAppBar = SizedBox(
               height: kToolbarHeight,
@@ -6293,14 +5594,12 @@ class _HomeScreenState extends State<HomeScreen>
                       ),
                     ),
                     PageCustomizeButton(pageId: 'home'),
-                    ActivityButton(onPressed: widget.onNotifications),
                     const SizedBox(width: 8),
                   ],
                 ),
               ),
             );
             final browseNavigation = HomeBrowseNavigation(
-              onExplore: _showHomeExploreMenu,
               onMovies: () => Navigator.push(
                 context,
                 MaterialPageRoute<void>(
@@ -6322,18 +5621,14 @@ class _HomeScreenState extends State<HomeScreen>
                   builder: (_) => const MusicScreen(),
                 ),
               ),
-              onPhysicalMedia: () => Navigator.push(
+              onDiscFormat: (format) => Navigator.push(
                 context,
                 MaterialPageRoute<void>(
-                  settings: const RouteSettings(name: '/app/physical-media'),
-                  builder: (_) => const PhysicalMediaLibraryScreen(),
-                ),
-              ),
-              onLiveTv: () => Navigator.push(
-                context,
-                MaterialPageRoute<void>(
-                  settings: const RouteSettings(name: '/app/watch/live-tv'),
-                  builder: (_) => const PublicLiveTvScreen(),
+                  settings: RouteSettings(
+                    name:
+                        '/app/physical-media/${format.sourceType.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')}',
+                  ),
+                  builder: (_) => PhysicalMediaFormatScreen(format: format),
                 ),
               ),
               onMyTv: () => Navigator.push(
@@ -6348,6 +5643,20 @@ class _HomeScreenState extends State<HomeScreen>
                 MaterialPageRoute<void>(
                   settings: const RouteSettings(name: '/app/coming-soon'),
                   builder: (_) => const ComingSoonReleaseScreen(),
+                ),
+              ),
+              onIdentifySong: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  settings: const RouteSettings(name: '/app/music/identify'),
+                  builder: (_) => const SongIdentificationScreen(),
+                ),
+              ),
+              onWrapped: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  settings: const RouteSettings(name: '/app/page/wrapped'),
+                  builder: (_) => const MediaWrappedCollectionsScreen(),
                 ),
               ),
             );
@@ -6427,6 +5736,7 @@ class _HomeScreenState extends State<HomeScreen>
                               section,
                               settings,
                               watched,
+                              continueWatching,
                               movies,
                               tvShows,
                               library,
@@ -6449,17 +5759,20 @@ class _HomeScreenState extends State<HomeScreen>
   }
 }
 
-String _normalizeOwnedAlbumLookup(String value) => value.toLowerCase().trim().replaceAll(
-      RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"),
-      '',
-    );
+String _normalizeOwnedAlbumLookup(String value) =>
+    value.toLowerCase().trim().replaceAll(
+          RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"),
+          '',
+        );
 
-List<Map<String, dynamic>> _localTracksForHomeAlbum(String title, String artist) {
+List<Map<String, dynamic>> _localTracksForHomeAlbum(
+    String title, String artist) {
   final wantedTitle = _normalizeOwnedAlbumLookup(title);
   final wantedArtist = _normalizeOwnedAlbumLookup(artist);
   if (wantedTitle.isEmpty) return <Map<String, dynamic>>[];
   final titleMatches = MusicLibraryStore.instance.tracks
-      .where((track) => !track.id.startsWith('demo-catalog-track-') &&
+      .where((track) =>
+          !track.id.startsWith('demo-catalog-track-') &&
           !track.id.startsWith('demo-preview-album-track-') &&
           _normalizeOwnedAlbumLookup(track.album) == wantedTitle)
       .toList(growable: false);
@@ -6506,25 +5819,34 @@ void _playHomeAlbumLocalTrack(Map<String, dynamic> row) {
 
 final Map<String, String> _homeAlbumHoverPreviewTrackIds = <String, String>{};
 
-void _handleHomeAlbumHover(String albumTitle, String artistName, bool hovering) {
-  final key = '${_normalizeOwnedAlbumLookup(artistName)}|${_normalizeOwnedAlbumLookup(albumTitle)}';
+void _handleHomeAlbumHover(
+    String albumTitle, String artistName, bool hovering) {
+  final key =
+      '${_normalizeOwnedAlbumLookup(artistName)}|${_normalizeOwnedAlbumLookup(albumTitle)}';
   final playback = MusicPlaybackController.instance;
   if (hovering) {
-    final candidates = MusicLibraryStore.instance.tracks.where((track) =>
-      !track.id.startsWith('demo-catalog-track-') &&
-      !track.id.startsWith('demo-preview-album-track-') &&
-      (track.audioUrl?.trim().isNotEmpty ?? false) &&
-      _normalizeOwnedAlbumLookup(track.album) == _normalizeOwnedAlbumLookup(albumTitle) &&
-      _normalizeOwnedAlbumLookup(track.artist) == _normalizeOwnedAlbumLookup(artistName)).toList(growable: false);
+    final candidates = MusicLibraryStore.instance.tracks
+        .where((track) =>
+            !track.id.startsWith('demo-catalog-track-') &&
+            !track.id.startsWith('demo-preview-album-track-') &&
+            (track.audioUrl?.trim().isNotEmpty ?? false) &&
+            _normalizeOwnedAlbumLookup(track.album) ==
+                _normalizeOwnedAlbumLookup(albumTitle) &&
+            _normalizeOwnedAlbumLookup(track.artist) ==
+                _normalizeOwnedAlbumLookup(artistName))
+        .toList(growable: false);
     if (candidates.isEmpty) return;
-    final index = DateTime.now().microsecondsSinceEpoch.abs() % candidates.length;
+    final index =
+        DateTime.now().microsecondsSinceEpoch.abs() % candidates.length;
     final track = candidates[index];
     _homeAlbumHoverPreviewTrackIds[key] = track.id;
     unawaited(playback.play(track));
     return;
   }
   final previewId = _homeAlbumHoverPreviewTrackIds.remove(key);
-  if (previewId != null && playback.currentTrack?.id == previewId && playback.isPlaying) {
+  if (previewId != null &&
+      playback.currentTrack?.id == previewId &&
+      playback.isPlaying) {
     unawaited(playback.toggle());
   }
 }
@@ -6534,6 +5856,7 @@ List<Widget> _buildHomeSectionSlivers(
   String section,
   HomeCustomization settings,
   List<MediaItem> watched,
+  List<MediaItem> continueWatching,
   List<MediaItem> movies,
   List<MediaItem> tvShows,
   List<MediaItem> library,
@@ -6590,15 +5913,9 @@ List<Widget> _buildHomeSectionSlivers(
     case 'Channels':
       return const <Widget>[SliverToBoxAdapter(child: HomeChannelsSection())];
     case 'Media Intelligence Tools':
-      return const <Widget>[SliverToBoxAdapter(child: HomeMediaIntelligenceToolsShelf())];
-    case 'Friends Stories':
-      return profile != null && StoryPlacementStore.showsOnHome(profile)
-          ? <Widget>[
-              SliverToBoxAdapter(
-                child: FriendsStoriesStrip(profileId: profile.id),
-              ),
-            ]
-          : const <Widget>[];
+      return const <Widget>[
+        SliverToBoxAdapter(child: HomeMediaIntelligenceToolsShelf())
+      ];
     case 'Storage Progress':
       return settings.storageBarPosition != 'Hidden'
           ? <Widget>[
@@ -6614,37 +5931,37 @@ List<Widget> _buildHomeSectionSlivers(
       return _countryShelfSlivers(items: movies, sectionLabel: 'Movies');
     case 'Shows by Country':
       return _countryShelfSlivers(items: tvShows, sectionLabel: 'Shows');
-    case "This Week's Top 10 Movies":
-      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'movies', title: "YOUR TOP 10 OWNED MOVIES"))];
-    case "This Week's Top 10 Shows":
-      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'shows', title: "YOUR TOP 10 OWNED SHOWS"))];
-    case "This Week's Top 10 Albums":
-      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'albums', title: "YOUR TOP 10 OWNED ALBUMS"))];
-    case "This Week's Top 10 Songs":
-      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'songs', title: "YOUR TOP 10 OWNED SONGS"))];
-    case "This Week's Top 10 Actors":
-      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'actors', title: "YOUR TOP 10 ACTORS FROM OWNED TITLES"))];
-    case "This Week's Top 10 Actresses":
-      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'actresses', title: "YOUR TOP 10 ACTRESSES FROM OWNED TITLES"))];
-    case "This Week's Top 10 Singers":
-      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'singers', title: "YOUR TOP 10 SINGERS FROM OWNED TRACKS"))];
-    case "This Week's Top 10 Bands":
-      return <Widget>[SliverToBoxAdapter(child: WeeklyTop10Shelf(chartKey: 'bands', title: "YOUR TOP 10 BANDS FROM OWNED TRACKS"))];
-    case 'Ranking of All Top 10s':
-      return const <Widget>[SliverToBoxAdapter(child: WeeklyTop10LeaderboardShelf())];
+    case 'Global Top 10':
+      return const <Widget>[
+        SliverToBoxAdapter(
+            child: Top10ScopeShelf(scopeKey: 'global', title: 'Global Top 10'))
+      ];
+    case 'Profile Top 10':
+      return const <Widget>[
+        SliverToBoxAdapter(
+            child:
+                Top10ScopeShelf(scopeKey: 'profile', title: 'Profile Top 10'))
+      ];
+    case 'Account Common Top 10':
+      return const <Widget>[
+        SliverToBoxAdapter(
+            child: Top10ScopeShelf(
+                scopeKey: 'account', title: 'Account Common Top 10'))
+      ];
     case 'New Albums':
       return <Widget>[
         SliverToBoxAdapter(
           child: SpotifyHomeAlbumsShelf(
             isOwnedAlbum: _isAlbumInLocalMusicLibrary,
             localTracksForAlbum: _localTracksForHomeAlbum,
-            prepareMusicLibrary: () => MusicLibraryStore.instance.initializeForProfile(
+            prepareMusicLibrary: () =>
+                MusicLibraryStore.instance.initializeForProfile(
               AppController.instance.currentProfile?.id,
             ),
             ownedArtistNames: () {
-              final tracks = MusicLibraryStore.instance.tracks
-                  .where((track) => !track.id.startsWith('demo-catalog-track-') &&
-                      !track.id.startsWith('demo-preview-album-track-'));
+              final tracks = MusicLibraryStore.instance.tracks.where((track) =>
+                  !track.id.startsWith('demo-catalog-track-') &&
+                  !track.id.startsWith('demo-preview-album-track-'));
               final names = <String>{};
               for (final track in tracks) {
                 final primary = track.artist.trim();
@@ -6661,7 +5978,8 @@ List<Widget> _buildHomeSectionSlivers(
         ),
       ];
     case 'Continue Watching':
-      return _homeMediaRail(section, watched, 'Pick up where you left off');
+      return _homeMediaRail(
+          section, continueWatching, 'Pick up where you left off');
     case 'Recently Watched':
       return _homeMediaRail(section, watched, 'What you watched recently');
     case 'Movies':
@@ -6675,9 +5993,12 @@ List<Widget> _buildHomeSectionSlivers(
     case 'All Library':
       return _homeMediaRail(section, library, 'Everything in your library');
     case 'Library Recommendations':
-      return _homeMediaRail(section, recommendations, 'Picked for your profile');
+      return _homeMediaRail(
+          section, recommendations, 'Picked for your profile');
     case 'Themed Episodes':
-      return const <Widget>[SliverToBoxAdapter(child: HomeThemedEpisodesSection())];
+      return const <Widget>[
+        SliverToBoxAdapter(child: HomeThemedEpisodesSection())
+      ];
     case 'You Might Also Like':
       return <Widget>[
         SliverToBoxAdapter(
@@ -6689,7 +6010,8 @@ List<Widget> _buildHomeSectionSlivers(
     case 'Because You Watched':
       return <Widget>[
         SliverToBoxAdapter(
-          child: HomeReasonedRecommendationShelves(library: library, watched: watched),
+          child: HomeReasonedRecommendationShelves(
+              library: library, watched: watched),
         ),
       ];
     case 'People & Cast Recommendations':
@@ -6698,17 +6020,10 @@ List<Widget> _buildHomeSectionSlivers(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              HomeBecauseYouWatchedPeopleShelves(library: library, watched: watched),
+              HomeBecauseYouWatchedPeopleShelves(
+                  library: library, watched: watched),
               HomeExternalPeopleRecommendationShelves(watched: watched),
             ],
-          ),
-        ),
-      ];
-    case 'Friends & Communities':
-      return <Widget>[
-        SliverToBoxAdapter(
-          child: SocialHomeSection(
-            key: ValueKey(AppController.instance.currentProfile?.id),
           ),
         ),
       ];
@@ -6732,7 +6047,8 @@ List<Widget> _homeMediaRail(
   return <Widget>[
     SliverToBoxAdapter(
       child: _PremiumSectionHeader(
-        title: title == 'Library Recommendations' ? 'Recommended for You' : title,
+        title:
+            title == 'Library Recommendations' ? 'Recommended for You' : title,
         subtitle: subtitle,
       ),
     ),
@@ -6760,7 +6076,9 @@ List<Widget> _countryShelfSlivers({
   final countries = grouped.keys.toList()
     ..sort((a, b) {
       final byCount = grouped[b]!.length.compareTo(grouped[a]!.length);
-      return byCount != 0 ? byCount : a.toLowerCase().compareTo(b.toLowerCase());
+      return byCount != 0
+          ? byCount
+          : a.toLowerCase().compareTo(b.toLowerCase());
     });
   final result = <Widget>[];
   for (final country in countries) {
@@ -6771,7 +6089,8 @@ List<Widget> _countryShelfSlivers({
     result.add(SliverToBoxAdapter(
       child: _PremiumSectionHeader(
         title: '$sectionLabel from $displayCountry',
-        subtitle: '${titles.length} ${titles.length == 1 ? 'title' : 'titles'} • Country of origin',
+        subtitle:
+            '${titles.length} ${titles.length == 1 ? 'title' : 'titles'} • Country of origin',
       ),
     ));
     result.add(SliverToBoxAdapter(
@@ -6783,44 +6102,47 @@ List<Widget> _countryShelfSlivers({
 
 String _homeSectionDescription(String section) => switch (section) {
       'Hero Banner' => 'Featured movie/show artwork near the top of Home.',
-      'Recommendations & Mood' => 'TMDB recommendations and mood-based discovery.',
-      'Franchise Progress' => 'Saga timelines and franchise completion progress.',
-      'Channels' => 'Channel shortcuts, including live TV and curated channels.',
-      'Friends Stories' => 'Stories shared by friends on the Home page.',
+      'Recommendations & Mood' =>
+        'TMDB recommendations and mood-based discovery.',
+      'Franchise Progress' =>
+        'Saga timelines and franchise completion progress.',
+      'Channels' => 'Shortcuts to curated channels from your library.',
       'Storage Progress' => 'Local/server storage progress bar.',
       'Continue Watching' => 'Resume movies and episodes you started.',
-      'Themed Episodes' => 'Seasonal and themed episode recommendations.',
+      'Themed Episodes' =>
+        'Holiday-themed movies, shows, and episodes from your accessible library.',
       'You Might Also Like' => 'Suggestions based on your viewing history.',
       'Collections' => 'Curated, automatic, and personal collection shelves.',
-      'Because You Watched' => 'Explainable recommendations related to recent viewing.',
-      'People & Cast Recommendations' => 'More titles connected by known cast and creators.',
-      'Library Recommendations' => 'Recommendations already available in your catalog.',
-      'Friends & Communities' => 'Friend feed, suggestions, and communities.',
+      'Because You Watched' =>
+        'Explainable recommendations related to recent viewing.',
+      'People & Cast Recommendations' =>
+        'More titles connected by known cast and creators.',
+      'Library Recommendations' =>
+        'Recommendations already available in your catalog.',
       'Recently Watched' => 'Titles you watched most recently.',
       'Movies' => 'Your movie collection.',
       'TV Shows' => 'Your TV collection.',
       'New Additions' => 'Recently imported movies and shows.',
       'All Library' => 'Every title in your library in one shelf.',
-      'Movies by Country' => 'Separate movie shelves grouped by the recorded country of origin.',
-      'Shows by Country' => 'Separate show shelves grouped by the recorded country of origin.',
+      'Movies by Country' =>
+        'Separate movie shelves grouped by the recorded country of origin.',
+      'Shows by Country' =>
+        'Separate show shelves grouped by the recorded country of origin.',
       'New Albums' => 'New album covers from Spotify.',
-      "This Week's Top 10 Movies" => "Your owned movies, ranked by personal ratings, favorites and playback progress.",
-      "This Week's Top 10 Shows" => "Your owned shows, ranked by personal ratings, favorites and playback progress.",
-      "This Week's Top 10 Albums" => "Albums grouped from tracks in your library, with listening activity as a tie-breaker.",
-      "This Week's Top 10 Songs" => "Songs present in your owned music library, ranked with listening activity as a tie-breaker.",
-      "This Week's Top 10 Actors" => 'Cast members credited on your owned movies and shows.',
-      "This Week's Top 10 Actresses" => 'Cast members explicitly classified as actresses in your owned catalogue.',
-      "This Week's Top 10 Singers" => "Singers credited on tracks in your music library.",
-      "This Week's Top 10 Bands" => "Bands inferred from artists credited on tracks in your music library.",
-      'Ranking of All Top 10s' => 'Open the leaderboard for all eight library Top 10 charts.',
+      'Global Top 10' =>
+        'Global people rankings from TMDB and music rankings from ListenBrainz.',
+      'Profile Top 10' =>
+        'Ranked people and music based on this profile’s library and listening activity.',
+      'Account Common Top 10' =>
+        'People and music shared by completed activity across every profile in this account.',
       'Music & Film' => 'Resume locally playable music.',
-      'Seasonal Collections' => 'Calendar-based collections for the current season.',
+      'Seasonal Collections' =>
+        'Calendar-based collections for the current season.',
       'Media Intelligence Tools' => 'Discovery, insight, and media tools.',
       _ => 'Show or hide this section on Home.',
     };
 
-/// Personalized Home rail for tracks the active profile can resume or replay.
-/// Only tracks with a server-provided audio URL are offered for direct playback.
+/// Shows the active profile's unfinished track when its playback position is available.
 class _HomeContinueListeningSection extends StatefulWidget {
   @override
   State<_HomeContinueListeningSection> createState() =>
@@ -6845,19 +6167,18 @@ class _HomeContinueListeningSectionState
         return AnimatedBuilder(
           animation: MusicPlaybackController.instance,
           builder: (context, _) {
-            final store = MusicLibraryStore.instance;
-            final current = MusicPlaybackController.instance.currentTrack;
-            final tracks = store.tracks
-                .where((track) => track.audioUrl?.trim().isNotEmpty == true)
-                .toList()
-              ..sort((a, b) => (store.listenCounts[b.id] ?? 0)
-                  .compareTo(store.listenCounts[a.id] ?? 0));
-            if (current != null &&
-                current.audioUrl?.trim().isNotEmpty == true) {
-              tracks.removeWhere((track) => track.id == current.id);
-              tracks.insert(0, current);
+            final playback = MusicPlaybackController.instance;
+            final current = playback.currentTrack;
+            final player = playback.videoController;
+            if (current == null ||
+                current.audioUrl?.trim().isNotEmpty != true ||
+                !playback.isReady ||
+                player == null ||
+                player.value.isCompleted ||
+                player.value.position <= Duration.zero ||
+                player.value.position >= player.value.duration) {
+              return const SizedBox.shrink();
             }
-            if (tracks.isEmpty) return const SizedBox.shrink();
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -6868,19 +6189,17 @@ class _HomeContinueListeningSectionState
                 ),
                 HomeArrowRail(
                   height: 176,
-                  itemCount: tracks.take(12).length,
+                  itemCount: 1,
                   separatorExtent: 12,
                   padding: const EdgeInsets.symmetric(horizontal: 48),
                   itemBuilder: (context, index) {
-                    final track = tracks[index];
-                    final playing = current?.id == track.id &&
-                        MusicPlaybackController.instance.isPlaying;
+                    final track = current;
+                    final playing = playback.isPlaying;
                     return _HomeMusicPreviewCard(
                       key: ValueKey<String>(track.id),
                       track: track,
                       playing: playing,
                       onTap: () {
-                        final playback = MusicPlaybackController.instance;
                         if (playback.currentTrack?.id == track.id &&
                             playback.isReady) {
                           unawaited(playback.toggle());
@@ -6984,14 +6303,16 @@ class _HomeMusicPreviewCardState extends State<_HomeMusicPreviewCard> {
                                 errorBuilder: (_, __, ___) => const ColoredBox(
                                   color: Color(0xFF252525),
                                   child: Center(
-                                    child: Icon(Icons.music_note_rounded, size: 36),
+                                    child: Icon(Icons.music_note_rounded,
+                                        size: 36),
                                   ),
                                 ),
                               )
                             : const ColoredBox(
                                 color: Color(0xFF252525),
                                 child: Center(
-                                  child: Icon(Icons.music_note_rounded, size: 36),
+                                  child:
+                                      Icon(Icons.music_note_rounded, size: 36),
                                 ),
                               ),
                       ),
@@ -7145,10 +6466,13 @@ class _PremiumSectionHeader extends StatelessWidget {
   const _PremiumSectionHeader({required this.title, required this.subtitle});
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
-    final countryMatch = RegExp(r'^(Movies|Shows) from (.+)$').firstMatch(title);
-    final titleStyle = const TextStyle(fontSize: 22, fontWeight: FontWeight.w800);
+    final countryMatch =
+        RegExp(r'^(Movies|Shows) from (.+)$').firstMatch(title);
+    final titleStyle =
+        const TextStyle(fontSize: 22, fontWeight: FontWeight.w800);
     final Widget titleWidget;
     if (countryMatch == null) {
       titleWidget = Text(title, style: titleStyle);
@@ -7156,7 +6480,9 @@ class _PremiumSectionHeader extends StatelessWidget {
       final mediaKind = countryMatch.group(1)!;
       final country = countryMatch.group(2)!.trim();
       final palette = countryFlagColorsForName(country);
-      final gradientColors = palette.length >= 2 ? palette : const <Color>[Colors.white, Colors.white];
+      final gradientColors = palette.length >= 2
+          ? palette
+          : const <Color>[Colors.white, Colors.white];
       titleWidget = Wrap(
         crossAxisAlignment: WrapCrossAlignment.center,
         spacing: 6,
@@ -7182,7 +6508,8 @@ class _PremiumSectionHeader extends StatelessWidget {
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
             ).createShader(bounds),
-            child: Text(country, style: titleStyle.copyWith(color: Colors.white)),
+            child:
+                Text(country, style: titleStyle.copyWith(color: Colors.white)),
           ),
         ],
       );
@@ -7391,8 +6718,7 @@ class _ActivitySheetState extends State<_ActivitySheet> {
                   UniversalText('No activity yet.',
                       style: TextStyle(color: Colors.white60)),
                   SizedBox(height: 6),
-                  UniversalText(
-                      'Messages, likes, playback, and other activity will appear here.',
+                  UniversalText('Library and account updates will appear here.',
                       style: TextStyle(color: Colors.white38),
                       textAlign: TextAlign.center),
                 ],
@@ -7595,7 +6921,12 @@ class _MediaCardState extends State<MediaCard> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           boxShadow: _hovering && widget.enableHomePreview
-              ? [BoxShadow(color: Colors.black.withValues(alpha: .55), blurRadius: 26, offset: const Offset(0, 8))]
+              ? [
+                  BoxShadow(
+                      color: Colors.black.withValues(alpha: .55),
+                      blurRadius: 26,
+                      offset: const Offset(0, 8))
+                ]
               : const [],
         ),
         child: InkWell(
@@ -7603,7 +6934,8 @@ class _MediaCardState extends State<MediaCard> {
           onTap: () {
             if (widget.enableHomePreview) HomeHoverPreviewStore.clear(media.id);
             final normalizedType = media.type.trim().toLowerCase();
-            final isAlbum = normalizedType.contains('album') || normalizedType == 'soundtrack';
+            final isAlbum = normalizedType.contains('album') ||
+                normalizedType == 'soundtrack';
             Navigator.push(
               context,
               MaterialPageRoute<void>(
@@ -7623,7 +6955,8 @@ class _MediaCardState extends State<MediaCard> {
                     fit: StackFit.expand,
                     children: [
                       AnimatedScale(
-                        scale: _hovering && widget.enableHomePreview ? 1.045 : 1,
+                        scale:
+                            _hovering && widget.enableHomePreview ? 1.045 : 1,
                         duration: const Duration(milliseconds: 220),
                         curve: Curves.easeOutCubic,
                         child: CatalogPosterImage(
@@ -7644,12 +6977,18 @@ class _MediaCardState extends State<MediaCard> {
                         ),
                       ),
                       if (media.addedByProfileName?.trim().isNotEmpty == true ||
-                          const <String>{'home-server-scanner', 'import/rip', 'disc_ingestion_center', 'approved-arm-import', 'arm-import'}
-                              .contains(media.addedSource.trim().toLowerCase()))
+                          const <String>{
+                            'home-server-scanner',
+                            'import/rip',
+                            'disc_ingestion_center',
+                            'approved-arm-import',
+                            'arm-import'
+                          }.contains(media.addedSource.trim().toLowerCase()))
                         Positioned(
                           left: 7,
                           bottom: 7,
-                          child: AddedByProfileLabel.forMedia(media, onArtwork: true),
+                          child: AddedByProfileLabel.forMedia(media,
+                              onArtwork: true),
                         ),
                       if (_hovering && widget.enableHomePreview)
                         Positioned.fill(
@@ -7658,7 +6997,10 @@ class _MediaCardState extends State<MediaCard> {
                               gradient: LinearGradient(
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
-                                colors: [Colors.black.withValues(alpha: .05), Colors.black.withValues(alpha: .84)],
+                                colors: [
+                                  Colors.black.withValues(alpha: .05),
+                                  Colors.black.withValues(alpha: .84)
+                                ],
                               ),
                             ),
                           ),
@@ -7666,29 +7008,45 @@ class _MediaCardState extends State<MediaCard> {
                       if (_hovering && widget.enableHomePreview)
                         Center(
                           child: Container(
-                            width: 48, height: 48,
-                            decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                            child: const Icon(Icons.play_arrow_rounded, color: Colors.black, size: 30),
+                            width: 48,
+                            height: 48,
+                            decoration: const BoxDecoration(
+                                color: Colors.white, shape: BoxShape.circle),
+                            child: const Icon(Icons.play_arrow_rounded,
+                                color: Colors.black, size: 30),
                           ),
                         ),
                       if (_hovering && widget.enableHomePreview)
                         Positioned(
-                          left: 10, right: 10, bottom: 10,
+                          left: 10,
+                          right: 10,
+                          bottom: 10,
                           child: Text(
                             media.title,
-                            maxLines: 2, overflow: TextOverflow.ellipsis,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: CinematicTitleFonts.captionStyle(
-                              media, baseFontSize: 15, color: Colors.white,
-                            ).copyWith(fontWeight: FontWeight.w900, shadows: const [Shadow(color: Colors.black87, blurRadius: 12)]),
+                              media,
+                              baseFontSize: 15,
+                              color: Colors.white,
+                            ).copyWith(
+                                fontWeight: FontWeight.w900,
+                                shadows: const [
+                                  Shadow(color: Colors.black87, blurRadius: 12)
+                                ]),
                           ),
                         ),
                       if (widget.showOwnership)
                         Positioned(
-                          top: 6, left: 6,
+                          top: 6,
+                          left: 6,
                           child: RecommendationOwnershipBadge(
                             isOwned: AppController.instance.isOwned(media.id),
-                            isWatched: AppController.instance.isWatched(media.id) ||
-                                AppController.instance.getPlaybackProgress(media.id) >= 0.95,
+                            isWatched:
+                                AppController.instance.isWatched(media.id) ||
+                                    AppController.instance
+                                            .getPlaybackProgress(media.id) >=
+                                        0.95,
                             compact: true,
                           ),
                         ),
@@ -7699,18 +7057,28 @@ class _MediaCardState extends State<MediaCard> {
               const SizedBox(height: 7),
               Text(
                 media.title,
-                maxLines: 2, overflow: TextOverflow.ellipsis,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: CinematicTitleFonts.captionStyle(
-                  media, baseFontSize: 13.2, color: Theme.of(context).colorScheme.onSurface,
+                  media,
+                  baseFontSize: 13.2,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
               if (media.displayYearLabel != null)
                 Text(
-                  [media.displayYearLabel!, if (media.displayEditionLabel != null) media.displayEditionLabel!].join(' • '),
-                  maxLines: 2, overflow: TextOverflow.ellipsis,
+                  [
+                    media.displayYearLabel!,
+                    if (media.displayEditionLabel != null)
+                      media.displayEditionLabel!
+                  ].join(' • '),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
                 ),
-              if (media.isSeries || const <String>{'movie', 'film'}.contains(media.type.trim().toLowerCase()))
+              if (media.isSeries ||
+                  const <String>{'movie', 'film'}
+                      .contains(media.type.trim().toLowerCase()))
                 Text(
                   'Origin: ${mediaCountryOriginLabel(media)}',
                   maxLines: 1,
@@ -7742,17 +7110,19 @@ class _CatalogAlbumDetailsEntryScreenState
     extends State<CatalogAlbumDetailsEntryScreen> {
   late final Future<String?> _spotifyAlbumId = _resolveAlbumId();
 
-  static String _normalize(String value) => value.toLowerCase().trim().replaceAll(
-        RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"),
-        '',
-      );
+  static String _normalize(String value) =>
+      value.toLowerCase().trim().replaceAll(
+            RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"),
+            '',
+          );
 
   Future<String?> _resolveAlbumId() async {
     if (!AppController.instance.isBackendAuthenticated) return null;
     final title = widget.media.title.trim();
     if (title.isEmpty) return null;
     try {
-      final payload = await AppController.instance.backendApi.searchMusicCatalog(
+      final payload =
+          await AppController.instance.backendApi.searchMusicCatalog(
         title,
         type: 'album',
         limit: 10,
@@ -7770,7 +7140,8 @@ class _CatalogAlbumDetailsEntryScreenState
       final matches = raw
           .whereType<Map>()
           .map((value) => Map<String, dynamic>.from(value))
-          .where((value) => _normalize(value['title']?.toString() ?? '') == wantedTitle)
+          .where((value) =>
+              _normalize(value['title']?.toString() ?? '') == wantedTitle)
           .toList();
       if (matches.isEmpty) return null;
       matches.sort((a, b) {
@@ -7784,6 +7155,7 @@ class _CatalogAlbumDetailsEntryScreenState
                   release.startsWith(widget.media.releaseYear.toString()));
           return (hasArtist ? 0 : 2) + (yearMatch ? 0 : 1);
         }
+
         return score(a).compareTo(score(b));
       });
       final selected = matches.first;
@@ -7803,13 +7175,17 @@ class _CatalogAlbumDetailsEntryScreenState
 
   List<Map<String, dynamic>> _localTracksForAlbum() {
     final title = _normalize(widget.media.title);
-    final artistNames = widget.media.music.map(_normalize).where((v) => v.isNotEmpty).toSet();
+    final artistNames =
+        widget.media.music.map(_normalize).where((v) => v.isNotEmpty).toSet();
     var local = MusicLibraryStore.instance.tracks
         .where((track) => _normalize(track.album) == title)
         .toList(growable: false);
     if (artistNames.isNotEmpty) {
-      final artistMatches = local.where((track) => artistNames.any((artist) =>
-          _normalize(track.artist).contains(artist) || artist.contains(_normalize(track.artist)))).toList();
+      final artistMatches = local
+          .where((track) => artistNames.any((artist) =>
+              _normalize(track.artist).contains(artist) ||
+              artist.contains(_normalize(track.artist))))
+          .toList();
       if (artistMatches.isNotEmpty) local = artistMatches;
     }
     return [
@@ -7871,9 +7247,7 @@ class _CatalogAlbumDetailsEntryScreenState
       },
     );
   }
-
 }
-
 
 // ============================================================
 // ACTORS
@@ -9162,7 +8536,8 @@ class TrailersScreen extends StatelessWidget {
                 return Card(
                     child: ListTile(
                         leading: const Icon(Icons.play_circle_fill_rounded),
-                        title: LocalizedMediaText(media.title, preserveOriginal: true,
+                        title: LocalizedMediaText(media.title,
+                            preserveOriginal: true,
                             style:
                                 const TextStyle(fontWeight: FontWeight.w800)),
                         subtitle: Text(media.type),
@@ -9261,19 +8636,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
             ),
-          if (controller.currentProfile != null) ...[
-            const SizedBox(height: 24),
-            const UniversalText('Recent media activity',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 10),
-            SizedBox(
-              height: 300,
-              child: ActivityTimeline(
-                profileId: controller.currentProfile!.id,
-                limit: 10,
-              ),
-            ),
-          ],
           const SizedBox(height: 30),
           Container(
             padding: const EdgeInsets.all(16),
@@ -9453,8 +8815,11 @@ class _MainProfileAvatar extends StatelessWidget {
         Icons.smart_toy_rounded,
         Icons.verified_user_rounded,
       ];
-      if (parsedIndex != null && parsedIndex >= 0 && parsedIndex < icons.length) {
-        final label = parsedIndex == 18 ? 'G' : (parsedIndex == 19 ? '007' : null);
+      if (parsedIndex != null &&
+          parsedIndex >= 0 &&
+          parsedIndex < icons.length) {
+        final label =
+            parsedIndex == 18 ? 'G' : (parsedIndex == 19 ? '007' : null);
         return Container(
           width: size,
           height: size,
@@ -9502,7 +8867,8 @@ class _MainProfileAvatar extends StatelessWidget {
                         fontWeight: FontWeight.w900,
                       ),
                     )
-                  : Icon(icons[parsedIndex], size: size * .48, color: Colors.white70),
+                  : Icon(icons[parsedIndex],
+                      size: size * .48, color: Colors.white70),
         );
       }
       return _fallback();
@@ -10123,7 +9489,8 @@ class _GroupWatchDialogState extends State<GroupWatchDialog> {
                   left: 18,
                   right: 18,
                   bottom: 18,
-                  child: LocalizedMediaText(widget.media.title, preserveOriginal: true,
+                  child: LocalizedMediaText(widget.media.title,
+                      preserveOriginal: true,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -10250,7 +9617,8 @@ class _GroupWatchPreferencesScreenState
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                    LocalizedMediaText(widget.media.title, preserveOriginal: true,
+                    LocalizedMediaText(widget.media.title,
+                        preserveOriginal: true,
                         style: const TextStyle(
                             fontSize: 19, fontWeight: FontWeight.w900)),
                     const SizedBox(height: 3),
@@ -11072,12 +10440,6 @@ class SmartCollectionsWatchPlannerScreen extends StatelessWidget {
                           const SmartCollectionsScreen(),
                           '/app/smart-collections')),
                   _SystemActionCard(
-                      icon: Icons.movie_filter_rounded,
-                      title: 'Plan a Marathon',
-                      subtitle: 'Build a saga or themed watch session.',
-                      onTap: () => _open(context, const HeyMarathonScreen(),
-                          '/app/marathon-planner')),
-                  _SystemActionCard(
                       icon: Icons.account_tree_rounded,
                       title: 'Browse Franchise Navigator',
                       subtitle: 'Review release order and title relationships.',
@@ -11291,7 +10653,8 @@ class VerifiedBackupRecoveryCenterScreen extends StatelessWidget {
               const SizedBox(height: 8),
               const _RecoveryReadinessRow(
                   title: 'Server/off-site backup target configured',
-                  detail: 'Not verified; separate from local settings snapshots'),
+                  detail:
+                      'Not verified; separate from local settings snapshots'),
               const _RecoveryReadinessRow(
                   title: 'Latest backup manifest/checksum validated',
                   detail: 'Not verified from this client'),

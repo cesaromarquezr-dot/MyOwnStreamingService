@@ -201,7 +201,7 @@ class BackendApi {
         Uri.parse('$baseUrl/security-bots/status'),
         headers: _headers,
       ),
-      'Unable to load the Security Bot Control Center.',
+      'Unable to load the Security Diagnostics Center.',
     );
   }
 
@@ -279,6 +279,18 @@ class BackendApi {
     );
   }
 
+  /// Returns public sitewide ListenBrainz charts for artists, albums, and songs.
+  Future<Map<String, dynamic>> getGlobalMusicCharts() async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await _networkClient.get(
+        Uri.parse('$baseUrl/music-catalog/global-charts'),
+        headers: _headers,
+      ),
+      'Unable to load global music charts.',
+    );
+  }
+
   /// Finds YouTube music-video matches for a song title and artist.
   /// The YouTube key stays in the backend; no key is shipped in the app.
   Future<Map<String, dynamic>> searchMusicVideos(
@@ -322,7 +334,10 @@ class BackendApi {
   Future<Map<String, dynamic>> getPopularArtistTracks(String artistName) async {
     _requireAuthentication();
     final endpoint = Uri.parse('$baseUrl/music-catalog/artist-popular').replace(
-      queryParameters: <String, String>{'name': artistName.trim(), 'limit': '10'},
+      queryParameters: <String, String>{
+        'name': artistName.trim(),
+        'limit': '10'
+      },
     );
     return _requireSuccess(
       await _networkClient.get(endpoint, headers: _headers),
@@ -351,11 +366,15 @@ class BackendApi {
   }) async {
     _requireAuthentication();
     if (audioBytes.isEmpty || audioBytes.length > 5 * 1024 * 1024) {
-      throw ArgumentError('Audio sample must be non-empty and no larger than 5 MB.');
+      throw ArgumentError(
+          'Audio sample must be non-empty and no larger than 5 MB.');
     }
     final response = await _networkClient.post(
       Uri.parse('$baseUrl/music-catalog/recognize'),
-      headers: <String, String>{..._headers, 'Content-Type': 'application/json'},
+      headers: <String, String>{
+        ..._headers,
+        'Content-Type': 'application/json'
+      },
       body: jsonEncode(<String, dynamic>{
         'audioBase64': base64Encode(audioBytes),
         'mimeType': mimeType,
@@ -438,7 +457,8 @@ class BackendApi {
   /// and caches the provider request; no music-provider credential reaches Flutter.
   Future<Map<String, dynamic>> getUpcomingMusicAlbums({int limit = 60}) async {
     _requireAuthentication();
-    final endpoint = Uri.parse('$baseUrl/music-catalog/upcoming-albums').replace(
+    final endpoint =
+        Uri.parse('$baseUrl/music-catalog/upcoming-albums').replace(
       queryParameters: <String, String>{
         'limit': '${limit.clamp(1, 100)}',
       },
@@ -455,7 +475,8 @@ class BackendApi {
     int offset = 0,
   }) async {
     _requireAuthentication();
-    final endpoint = Uri.parse('$baseUrl/music-catalog/featured-albums').replace(
+    final endpoint =
+        Uri.parse('$baseUrl/music-catalog/featured-albums').replace(
       queryParameters: <String, String>{
         'limit': '${limit.clamp(1, 20)}',
         'offset': '${offset.clamp(0, 1000)}',
@@ -490,7 +511,8 @@ class BackendApi {
       Uri.parse('$baseUrl/media-metadata/status'),
       headers: _headers,
     );
-    return _requireSuccess(response, 'Unable to check TMDB metadata configuration.');
+    return _requireSuccess(
+        response, 'Unable to check TMDB metadata configuration.');
   }
 
   /// Makes a bounded request through the authenticated backend's allow-listed

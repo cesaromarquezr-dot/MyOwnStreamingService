@@ -11,8 +11,6 @@ import 'details.dart';
 import 'player.dart';
 import 'localization.dart';
 import 'media_actions.dart';
-import 'social_sharing.dart';
-import 'food_delivery.dart';
 import 'catalog_poster_image.dart';
 import 'library_view_modes.dart';
 
@@ -175,28 +173,6 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
                       tooltip: collection.isLikedByCurrentProfile ? 'Remove from favorite collections' : 'Add to favorite collections',
                       icon: Icon(collection.isLikedByCurrentProfile ? Icons.favorite : Icons.favorite_border),
                       onPressed: () => controller.toggleCollectionLike(collection.id),
-                    ),
-                    IconButton(
-                      tooltip: 'Share collection to messages',
-                      icon: const Icon(Icons.share_outlined),
-                      onPressed: () => showSocialShareDialog(
-                        context,
-                        title: collection.name,
-                        message: 'Shared collection: ${collection.name}',
-                        mediaReference: {
-                          'type': 'collection',
-                          'mediaType': 'collection',
-                          'mediaId': collection.id,
-                          'title': collection.name,
-                          'description': '${collection.mediaIds.length} items',
-                          'itemIds': collection.mediaIds,
-                        },
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Food & Delivery',
-                      icon: const Icon(Icons.delivery_dining_rounded),
-                      onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const FoodOrderingScreen())),
                     ),
                   ],
                 ),
@@ -834,7 +810,6 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
         settings: const RouteSettings(name: '/app/player'),
         builder: (_) => PlayerScreen(
           media: media[index],
-          activityLabel: 'Watching collection ${collection.name}, item ${index + 1}: ${media[index].title}',
         ),
       ),
     );

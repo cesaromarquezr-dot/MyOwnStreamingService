@@ -9,7 +9,6 @@ This document tracks the additions consolidated into this project snapshot. The 
 - **Localization:** the root Flutter app listens for language changes; selected locale resources update immediately. `UniversalText` can use local phrase translations and a configured translation Edge Function fallback. Imported metadata translations are cached separately from original titles/descriptions. The Edge Function needs to be deployed and configured; a systematic sweep is still required to migrate every remaining literal `Text` and every dynamic backend message.
 - **Social:** keep the existing social/profile/community/messaging components and shared account/profile navigation.
 - **Market:** keep the existing shop/catalog and order-related feature entry points. Real production checkout still depends on a configured payment provider, webhooks, and market-specific tax/refund policy.
-- **Hey Media AI:** use one user-facing assistant with scoped feature tools for media search, recommendations, metadata assistance and other authorized operations. High-impact actions (deleting/replacing files, purchases, orders, public posts) must require explicit confirmation. Separate AI models per screen are not required.
 - **TrueNAS/Supabase:** store large source and converted media on TrueNAS; keep profiles, catalog/index data, import jobs and application state in Supabase/backend services. Clients must never receive the Supabase service-role key or unrestricted NAS credentials.
 
 ## Food & Delivery additions in this snapshot

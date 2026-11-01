@@ -25,7 +25,6 @@ class _PersonalMediaServerScreenState extends State<PersonalMediaServerScreen> {
   static const _servers = <String, String>{
     'built_in': 'MyOwnStreamingService library',
     'jellyfin': 'Jellyfin',
-    'navidrome': 'Navidrome (music server)',
     'plex': 'Plex',
     'dlna': 'DLNA media server',
   };
@@ -60,7 +59,8 @@ class _PersonalMediaServerScreenState extends State<PersonalMediaServerScreen> {
     if (!mounted) return;
     setState(() {
       _host = prefs.getString('${_keyPrefix}_host') ?? _host;
-      _server = prefs.getString('${_keyPrefix}_software') ?? _server;
+      final savedServer = prefs.getString('${_keyPrefix}_software');
+      _server = _servers.containsKey(savedServer) ? savedServer! : _server;
       _remoteMode = prefs.getString('${_keyPrefix}_remote') ?? _remoteMode;
       _autoScan = prefs.getBool('${_keyPrefix}_auto_scan') ?? _autoScan;
       _transcoding = prefs.getBool('${_keyPrefix}_transcoding') ?? _transcoding;
@@ -107,7 +107,6 @@ class _PersonalMediaServerScreenState extends State<PersonalMediaServerScreen> {
     };
     final serverStep = switch (_server) {
       'jellyfin' => '2. Install Jellyfin on the host, add read-only media library paths first, and verify playback locally.',
-      'navidrome' => '2. Deploy Navidrome on the host, map your authorized music folder read-only where practical, and test a Subsonic-compatible client on your home network.',
       'plex' => '2. Install Plex Media Server on the host, create libraries, and test playback on your home network.',
       'dlna' => '2. Enable the host’s DLNA server and check that your TV or player can discover it on the same home network. DLNA is a simple local-network option; it may offer less library organization than Jellyfin or Plex.',
       _ => '2. Use the MyOwnStreamingService server agent and library APIs; media files remain on your configured home storage.',
@@ -174,7 +173,7 @@ class _PersonalMediaServerScreenState extends State<PersonalMediaServerScreen> {
             onChanged: (value) => setState(() => _server = value ?? _server),
           ),
           const SizedBox(height: 8),
-          const Text('Plex and Jellyfin offer a poster-rich library interface; Navidrome is designed for music; DLNA is a simpler option for compatible devices. Selecting an option here records your plan—it does not install or connect that software.'),
+          const Text('Plex and Jellyfin offer a poster-rich library interface; DLNA is a simpler option for compatible devices. Selecting an option here records your plan—it does not install or connect that software.'),
           const SizedBox(height: 12),
           Card(
             child: Padding(

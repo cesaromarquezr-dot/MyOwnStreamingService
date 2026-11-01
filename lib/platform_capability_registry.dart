@@ -270,17 +270,6 @@ class PlatformCapabilityCatalog {
           'Separate continuities stay separate; spoilers respect user progress and manual watched-state corrections.',
     ),
     PlatformCapability(
-      id: 'hey-media-ai',
-      title: 'Hey Media AI Concierge and safe actions',
-      area: 'Discovery',
-      phase: CapabilityPhase.discovery,
-      readiness: CapabilityReadiness.foundationExists,
-      summary:
-          'Natural-language discovery and controlled actions use profile-scoped catalog access and backend authorization.',
-      acceptanceCriteria:
-          'AI cannot bypass permissions, reveal another profile’s private data, or perform sensitive actions without required confirmation.',
-    ),
-    PlatformCapability(
       id: 'smart-queue',
       title: 'My Next Up Queue and Smart Double Feature',
       area: 'Discovery',
@@ -450,7 +439,7 @@ class PlatformCapabilityCatalog {
       phase: CapabilityPhase.platformSafety,
       readiness: CapabilityReadiness.setupRequired,
       summary:
-          'Expose only intentional public entry points; keep database and raw AI/model ports private.',
+          'Expose only intentional public entry points; keep database and raw model-service ports private.',
       acceptanceCriteria:
           'TLS, forwarded-header trust, proxy authentication, firewall rules, and WAF policy are reviewed on the real deployment.',
       dependencies: <String>[
@@ -631,42 +620,6 @@ class PlatformCapabilityCatalog {
       ],
     ),
     PlatformCapability(
-      id: 'mindscape-ai-team',
-      title: 'Mindscape AI Team — Steward, Moxie, and Fixer',
-      area: 'Platform safety',
-      phase: CapabilityPhase.platformSafety,
-      readiness: CapabilityReadiness.setupRequired,
-      summary:
-          'Three scoped AI roles for security/housekeeping/encryption posture, socialization/humor/coordination, and maintenance/incident triage/authorized video analysis.',
-      acceptanceCriteria:
-          'Each agent has backend-enforced least privilege, prompt-injection protections, redacted audit logs, and human approval for sensitive actions. Models and workers are verified before activation.',
-      dependencies: <String>[
-        'approved model connector',
-        'per-agent identity and scopes',
-        'audit persistence',
-        'approval API',
-        'authorized video pipeline'
-      ],
-    ),
-    PlatformCapability(
-      id: 'mindscape-ai-orchestrator',
-      title: 'Mindscape AI Orchestrator',
-      area: 'AI and automation',
-      phase: CapabilityPhase.platformSafety,
-      readiness: CapabilityReadiness.roadmap,
-      summary:
-          'Coordinate role-based task proposals with risk classifications, bounded queues, traceable handoffs, and explicit approval boundaries.',
-      acceptanceCriteria:
-          'Every tool call is authorized in the backend, proposals are persisted with redacted audit trails, retries are bounded, and high-impact actions cannot execute without approval.',
-      dependencies: <String>[
-        'agent scheduler',
-        'tool router',
-        'approval persistence',
-        'prompt-injection tests',
-        'kill switch'
-      ],
-    ),
-    PlatformCapability(
       id: 'worldwide-family-safety',
       title: 'Worldwide Access and Family Safety Center',
       area: 'Accounts and remote access',
@@ -675,7 +628,7 @@ class PlatformCapabilityCatalog {
       summary:
           'Review external HTTPS access, devices/sessions, profile boundaries, Kids policy coverage, and emergency remote-access disablement.',
       acceptanceCriteria:
-          'External tests validate revocation, expiry, profile isolation, and server-side restrictions across search, media, music, social, commerce, and AI endpoints.',
+          'External tests validate revocation, expiry, profile isolation, and server-side restrictions across search, media, music, social, and commerce endpoints.',
       dependencies: <String>[
         'secure HTTPS gateway',
         'session/device API',

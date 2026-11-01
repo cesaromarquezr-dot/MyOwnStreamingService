@@ -1,7 +1,15 @@
 $ErrorActionPreference = "Stop"
 
-$url = [Environment]::GetEnvironmentVariable("SUPABASE_URL", "User")
-$key = [Environment]::GetEnvironmentVariable("SUPABASE_SERVICE_ROLE_KEY", "User")
+. (Join-Path $PSScriptRoot 'load_env.ps1')
+
+$url = [Environment]::GetEnvironmentVariable("SUPABASE_URL", "Process")
+$key = [Environment]::GetEnvironmentVariable("SUPABASE_SERVICE_ROLE_KEY", "Process")
+if ([string]::IsNullOrWhiteSpace($url)) {
+    $url = [Environment]::GetEnvironmentVariable("SUPABASE_URL", "User")
+}
+if ([string]::IsNullOrWhiteSpace($key)) {
+    $key = [Environment]::GetEnvironmentVariable("SUPABASE_SERVICE_ROLE_KEY", "User")
+}
 
 if ([string]::IsNullOrWhiteSpace($url)) {
     throw "SUPABASE_URL is not configured."
@@ -13,7 +21,13 @@ if ([string]::IsNullOrWhiteSpace($key)) {
 
 $env:SUPABASE_URL = $url
 $env:SUPABASE_SERVICE_ROLE_KEY = $key
-$publishableKey = [Environment]::GetEnvironmentVariable("SUPABASE_PUBLISHABLE_KEY", "User")
+$publishableKey = [Environment]::GetEnvironmentVariable("SUPABASE_PUBLISHABLE_KEY", "Process")
+if ([string]::IsNullOrWhiteSpace($publishableKey)) {
+    $publishableKey = [Environment]::GetEnvironmentVariable("SUPABASE_PUBLISHABLE_KEY", "User")
+}
+if ([string]::IsNullOrWhiteSpace($publishableKey)) {
+    $publishableKey = [Environment]::GetEnvironmentVariable("SUPABASE_ANON_KEY", "Process")
+}
 if ([string]::IsNullOrWhiteSpace($publishableKey)) {
     $publishableKey = [Environment]::GetEnvironmentVariable("SUPABASE_ANON_KEY", "User")
 }

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'mindscape_ai_orchestrator.dart';
-import 'mindscape_ai_team.dart';
 import 'platform_reliability_models.dart';
 import 'self_driving_network_center.dart';
 import 'worldwide_access_family_safety.dart';
@@ -52,7 +50,8 @@ class _PlatformReliabilityCenterScreenState
     final bitrate = double.tryParse(_streamBitrateController.text.trim());
     if (upload == null || bitrate == null || upload < 0 || bitrate <= 0) {
       setState(() {
-        _inputError = 'Enter a non-negative sustained upload speed and a stream bitrate greater than zero.';
+        _inputError =
+            'Enter a non-negative sustained upload speed and a stream bitrate greater than zero.';
         _streamEstimate = null;
       });
       return;
@@ -70,7 +69,12 @@ class _PlatformReliabilityCenterScreenState
     final free = double.tryParse(_freeStorageController.text.trim());
     final reserve = double.tryParse(_reserveStorageController.text.trim());
     final growth = double.tryParse(_dailyGrowthController.text.trim());
-    if (free == null || reserve == null || growth == null || free < 0 || reserve < 0 || growth < 0) {
+    if (free == null ||
+        reserve == null ||
+        growth == null ||
+        free < 0 ||
+        reserve < 0 ||
+        growth < 0) {
       setState(() {
         _inputError = 'Enter valid non-negative storage values in GB.';
         _storageForecast = null;
@@ -101,10 +105,12 @@ class _PlatformReliabilityCenterScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.monitor_heart_outlined, size: 34, color: theme.colorScheme.primary),
+                  Icon(Icons.monitor_heart_outlined,
+                      size: 34, color: theme.colorScheme.primary),
                   const SizedBox(height: 10),
                   Text('Observe first. Recover safely.',
-                      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+                      style: theme.textTheme.titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w900)),
                   const SizedBox(height: 8),
                   const Text(
                     'This center combines reliability targets, local planning calculators, and recovery runbooks. A signal stays “Not connected” until a trusted server-side collector supplies verified data.',
@@ -122,23 +128,31 @@ class _PlatformReliabilityCenterScreenState
             child: ListTile(
               leading: const CircleAvatar(child: Icon(Icons.hub_outlined)),
               title: const Text('Self-Driving Network'),
-              subtitle: const Text('Learn API latency, detect degradation, adapt timeouts, retry safe requests, and suppress retry storms.'),
+              subtitle: const Text(
+                  'Learn API latency, detect degradation, adapt timeouts, retry safe requests, and suppress retry storms.'),
               trailing: const Icon(Icons.chevron_right_rounded),
               isThreeLine: true,
               onTap: () => Navigator.of(context).push<void>(
-                MaterialPageRoute<void>(builder: (_) => const SelfDrivingNetworkCenterScreen()),
+                MaterialPageRoute<void>(
+                    builder: (_) => const SelfDrivingNetworkCenterScreen()),
               ),
             ),
           ),
           const SizedBox(height: 20),
-          Text('Remote stream capacity planner', style: theme.textTheme.titleLarge),
+          Text('Remote stream capacity planner',
+              style: theme.textTheme.titleLarge),
           const SizedBox(height: 6),
-          const Text('Estimate only. Use measured sustained upload and the actual stream bitrates; 30% is reserved for overhead and household traffic.'),
+          const Text(
+              'Estimate only. Use measured sustained upload and the actual stream bitrates; 30% is reserved for overhead and household traffic.'),
           const SizedBox(height: 8),
           Row(children: [
-            Expanded(child: _numberField(_uploadController, 'Sustained upload (Mbps)')),
+            Expanded(
+                child:
+                    _numberField(_uploadController, 'Sustained upload (Mbps)')),
             const SizedBox(width: 10),
-            Expanded(child: _numberField(_streamBitrateController, 'Per stream (Mbps)')),
+            Expanded(
+                child: _numberField(
+                    _streamBitrateController, 'Per stream (Mbps)')),
           ]),
           const SizedBox(height: 8),
           FilledButton.icon(
@@ -150,19 +164,25 @@ class _PlatformReliabilityCenterScreenState
             _ResultCard(
               title: 'Estimated upload budget',
               value: '${_streamEstimate!.estimatedConcurrentStreams} stream(s)',
-              detail: '${_streamEstimate!.usableUploadMbps.toStringAsFixed(1)} Mbps usable after ${(100 * _streamEstimate!.reservedFraction).round()}% headroom. Actual performance must be tested.',
+              detail:
+                  '${_streamEstimate!.usableUploadMbps.toStringAsFixed(1)} Mbps usable after ${(100 * _streamEstimate!.reservedFraction).round()}% headroom. Actual performance must be tested.',
             ),
           const SizedBox(height: 20),
           Text('Smart storage planner', style: theme.textTheme.titleLarge),
           const SizedBox(height: 6),
-          const Text('Forecasts when free space reaches your reserve based on the values you provide. This is not a live disk reading.'),
+          const Text(
+              'Forecasts when free space reaches your reserve based on the values you provide. This is not a live disk reading.'),
           const SizedBox(height: 8),
           _numberField(_freeStorageController, 'Current free space (GB)'),
           const SizedBox(height: 8),
           Row(children: [
-            Expanded(child: _numberField(_reserveStorageController, 'Keep free (GB)')),
+            Expanded(
+                child:
+                    _numberField(_reserveStorageController, 'Keep free (GB)')),
             const SizedBox(width: 10),
-            Expanded(child: _numberField(_dailyGrowthController, 'Growth per day (GB)')),
+            Expanded(
+                child: _numberField(
+                    _dailyGrowthController, 'Growth per day (GB)')),
           ]),
           const SizedBox(height: 8),
           FilledButton.icon(
@@ -178,11 +198,13 @@ class _PlatformReliabilityCenterScreenState
                   : _storageForecast!.daysUntilReserve == 0
                       ? 'Reserve reached / exceeded'
                       : '${_storageForecast!.daysUntilReserve!.toStringAsFixed(1)} days',
-              detail: 'Current free: ${_storageForecast!.freeGb.toStringAsFixed(1)} GB; reserve: ${_storageForecast!.reserveGb.toStringAsFixed(1)} GB.',
+              detail:
+                  'Current free: ${_storageForecast!.freeGb.toStringAsFixed(1)} GB; reserve: ${_storageForecast!.reserveGb.toStringAsFixed(1)} GB.',
             ),
           if (_inputError != null) ...[
             const SizedBox(height: 8),
-            Text(_inputError!, style: TextStyle(color: theme.colorScheme.error)),
+            Text(_inputError!,
+                style: TextStyle(color: theme.colorScheme.error)),
           ],
           const SizedBox(height: 20),
           Text('Reliability workstreams', style: theme.textTheme.titleLarge),
@@ -190,62 +212,60 @@ class _PlatformReliabilityCenterScreenState
           const _WorkstreamTile(
             icon: Icons.bolt_rounded,
             title: 'Smart streaming optimizer',
-            detail: 'Prefer Direct Play, then remux when codecs are compatible, and transcode only when needed and authorized. Cache only disposable transcodes.',
+            detail:
+                'Prefer Direct Play, then remux when codecs are compatible, and transcode only when needed and authorized. Cache only disposable transcodes.',
           ),
           const _WorkstreamTile(
             icon: Icons.health_and_safety_outlined,
             title: 'Self-healing infrastructure',
-            detail: 'Retry safe transient jobs and restart approved application processes. Require authorization and rollback plans for service isolation or mutations.',
+            detail:
+                'Retry safe transient jobs and restart approved application processes. Require authorization and rollback plans for service isolation or mutations.',
           ),
           const _WorkstreamTile(
             icon: Icons.verified_outlined,
             title: 'Media integrity guardian',
-            detail: 'Use checksums, metadata validation, missing-file scans, and duplicate reports. Never silently delete or replace originals.',
+            detail:
+                'Use checksums, metadata validation, missing-file scans, and duplicate reports. Never silently delete or replace originals.',
           ),
           const _WorkstreamTile(
             icon: Icons.cloud_off_rounded,
             title: 'Offline Home Mode',
-            detail: 'Keep local-LAN playback usable if the WAN fails, provided the server, router, local authentication, media, and client remain available. Remote access will be unavailable.',
+            detail:
+                'Keep local-LAN playback usable if the WAN fails, provided the server, router, local authentication, media, and client remain available. Remote access will be unavailable.',
           ),
           const _WorkstreamTile(
             icon: Icons.restore_rounded,
             title: 'Automatic recovery drills',
-            detail: 'Schedule isolated backup restores and report RTO/RPO, checksums, and missing items. Never simulate failure by pulling a live drive or modifying the only production copy.',
+            detail:
+                'Schedule isolated backup restores and report RTO/RPO, checksums, and missing items. Never simulate failure by pulling a live drive or modifying the only production copy.',
           ),
           const _WorkstreamTile(
             icon: Icons.family_restroom_rounded,
             title: 'Worldwide access & family safety',
-            detail: 'Use an authenticated HTTPS gateway, session revocation, profile isolation, and Kids policy enforcement. Keep database and storage administration ports private.',
+            detail:
+                'Use an authenticated HTTPS gateway, session revocation, profile isolation, and Kids policy enforcement. Keep database and storage administration ports private.',
           ),
           const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const MindscapeAiOrchestratorScreen())),
-            icon: const Icon(Icons.account_tree_outlined),
-            label: const Text('Open Mindscape AI Orchestrator'),
-          ),
-          const SizedBox(height: 8),
           OutlinedButton.icon(
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const MindscapeAiTeamScreen())),
-            icon: const Icon(Icons.psychology_alt_rounded),
-            label: const Text('View Mindscape AI Team'),
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const WorldwideAccessFamilySafetyScreen())),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => const WorldwideAccessFamilySafetyScreen())),
             icon: const Icon(Icons.public_rounded),
             label: const Text('Worldwide Access & Family Safety'),
           ),
           const SizedBox(height: 14),
-          const Text('Deployment truth: no background monitor, remote gateway, failover storage, host telemetry, or AI worker is created just by opening this screen. Connect and test each service before marking it healthy.'),
+          const Text(
+              'Deployment truth: no background monitor, remote gateway, failover storage, or host telemetry is created just by opening this screen. Connect and test each service before marking it healthy.'),
         ],
       ),
     );
   }
 
-  Widget _numberField(TextEditingController controller, String label) => TextField(
+  Widget _numberField(TextEditingController controller, String label) =>
+      TextField(
         controller: controller,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+        decoration: InputDecoration(
+            labelText: label, border: const OutlineInputBorder()),
       );
 }
 
@@ -268,14 +288,16 @@ class _ResultCard extends StatelessWidget {
   final String title;
   final String value;
   final String detail;
-  const _ResultCard({required this.title, required this.value, required this.detail});
+  const _ResultCard(
+      {required this.title, required this.value, required this.detail});
 
   @override
   Widget build(BuildContext context) => Card(
         color: Theme.of(context).colorScheme.secondaryContainer,
         child: Padding(
           padding: const EdgeInsets.all(14),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
             Text(value, style: Theme.of(context).textTheme.titleLarge),
@@ -290,13 +312,15 @@ class _WorkstreamTile extends StatelessWidget {
   final IconData icon;
   final String title;
   final String detail;
-  const _WorkstreamTile({required this.icon, required this.title, required this.detail});
+  const _WorkstreamTile(
+      {required this.icon, required this.title, required this.detail});
 
   @override
   Widget build(BuildContext context) => Card(
         child: ListTile(
           leading: Icon(icon),
-          title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+          title:
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
           subtitle: Text(detail),
           isThreeLine: true,
         ),

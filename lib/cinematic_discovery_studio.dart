@@ -16,8 +16,6 @@ import 'library_view_modes.dart';
 import 'media_night_features.dart';
 import 'media_feature_preferences.dart';
 import 'smart_search.dart';
-import 'social_center.dart';
-import 'watch_party_lobby.dart';
 import 'xray.dart';
 
 const Color _cinemaBg = Color(0xFF0B0B10);
@@ -320,84 +318,7 @@ class CinematicDiscoveryLogic {
     return {for (final key in orderedKeys) key: groups[key]!};
   }
 
-  static List<MediaItem> conciergeSearch(
-      String query, Iterable<MediaItem> library) {
-    final q = query.trim().toLowerCase();
-    if (q.isEmpty) return <MediaItem>[];
-    final normalized = GenreSystem.genresMentionedIn(q);
-    final explicitGenres = normalized
-        .where((value) => GenreSystem.canonicalGenres
-            .any((g) => g.toLowerCase() == value.toLowerCase()))
-        .toList(growable: false);
-    final moodEntries = GenreSystem.moodGenreHints.entries
-        .where((entry) => q.contains(entry.key))
-        .toList(growable: false);
-    final stopWords = <String>{
-      'find',
-      'show',
-      'me',
-      'a',
-      'an',
-      'the',
-      'movie',
-      'movies',
-      'film',
-      'films',
-      'series',
-      'shows',
-      'tv',
-      'that',
-      'are',
-      'is',
-      'with',
-      'for',
-      'something',
-      'please',
-      'i',
-      'want',
-      'watch',
-      'of',
-      'and',
-      'or',
-      'under',
-      'minutes',
-      'minute',
-      ...GenreSystem.canonicalGenres.map((g) => g.toLowerCase()),
-      ...GenreSystem.moodGenreHints.keys,
-    };
-    final discoveredGenreTokens = normalized
-        .expand((genre) => genre.toLowerCase().split(RegExp(r'[^a-z0-9]+')))
-        .where((token) => token.isNotEmpty)
-        .toSet();
-    final textTokens = q
-        .replaceAll(RegExp(r'[^a-z0-9 ]'), ' ')
-        .split(RegExp(r'\s+'))
-        .where((token) =>
-            token.length > 2 &&
-            !stopWords.contains(token) &&
-            !discoveredGenreTokens.contains(token))
-        .toList();
-    final results = library.where((item) {
-      if (explicitGenres.isNotEmpty &&
-          !GenreSystem.matchesGenres(item.genres, explicitGenres,
-              matchAll: true)) {
-        return false;
-      }
-      if (moodEntries.isNotEmpty &&
-          !moodEntries.any((entry) => GenreSystem.matchesGenres(
-              item.genres, entry.value,
-              matchAll: false))) {
-        return false;
-      }
-      final metadata = _text(item);
-      return textTokens.isEmpty || textTokens.any(metadata.contains);
-    }).toList();
-    if (results.isEmpty && explicitGenres.isEmpty && moodEntries.isEmpty) {
-      return SmartSearch.search(query, library.toList());
-    }
-    results.sort((a, b) => (b.rating ?? 0).compareTo(a.rating ?? 0));
-    return results;
-  }
+
 }
 
 class CinematicDiscoveryStudioScreen extends StatelessWidget {
@@ -481,12 +402,7 @@ class CinematicDiscoveryStudioScreen extends StatelessWidget {
               'X-Ray Story Explorer',
               'Choose a title to explore cast, production, connections and spoiler-aware details.',
               const XRayCatalogPickerScreen()),
-          _studioTile(
-              context,
-              Icons.search_rounded,
-              'Hey Media Watch Concierge',
-              'Search using requests such as “funny horror movies” or “romantic thrillers”.',
-              const WatchConciergeScreen()),
+
           _studioTile(
               context,
               Icons.public_rounded,
@@ -504,7 +420,7 @@ class CinematicDiscoveryStudioScreen extends StatelessWidget {
               context,
               Icons.nightlight_round,
               'My Media Night',
-              'Plan a themed night with catalog picks, music, food ideas and the existing Watch Party flow.',
+              'Plan a themed night with catalog picks and music.',
               const MyMediaNightScreen()),
           _studioTile(
               context,
@@ -548,21 +464,9 @@ class CinematicDiscoveryStudioScreen extends StatelessWidget {
               'My Data & Privacy Center',
               'Export a local profile summary or clear this module’s local settings.',
               const MyDataPrivacyCenterScreen()),
-          _studioTile(
-              context,
-              Icons.groups_rounded,
-              'Watch Party 2.0',
-              'Open the existing party lobby; real synchronization requires connected services.',
-              const WatchPartyLobbyScreen()),
-          _studioTile(
-              context,
-              Icons.forum_rounded,
-              'Fandom & Communities',
-              'Open the existing social center for friends, communities and messages.',
-              const SocialCenterScreen()),
           const SizedBox(height: 10),
           const Text(
-              'Integration note: release feeds, provider-wide availability, cross-device party sync, external platform playback and live event delivery require connected provider/backend integrations. These local-catalog tools do not invent that data.',
+              'Integration note: release feeds, provider-wide availability, external platform playback and live event delivery require connected provider/backend integrations. These local-catalog tools do not invent that data.',
               style:
                   TextStyle(color: Colors.white54, fontSize: 12, height: 1.4)),
         ]),
@@ -1017,7 +921,6 @@ class _PremiereCalendarScreenState extends State<PremiereCalendarScreen> {
                           'Live Event',
                           'Service Arrival',
                           'Service Leaving',
-                          'Watch Party',
                           'Reminder'
                         ]
                             .map((v) =>
@@ -1324,91 +1227,6 @@ class MediaWrappedScreen extends StatelessWidget {
   }
 }
 
-class WatchConciergeScreen extends StatefulWidget {
-  const WatchConciergeScreen({super.key});
-  @override
-  State<WatchConciergeScreen> createState() => _WatchConciergeScreenState();
-}
-
-class _WatchConciergeScreenState extends State<WatchConciergeScreen> {
-  final TextEditingController query = TextEditingController();
-  List<MediaItem> results = <MediaItem>[];
-  String lastQuery = '';
-  void search() {
-    final q = query.text.trim();
-    setState(() {
-      lastQuery = q;
-      results = CinematicDiscoveryLogic.conciergeSearch(
-          q, AppController.instance.library);
-    });
-  }
-
-  @override
-  void dispose() {
-    query.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-      backgroundColor: _cinemaBg,
-      appBar: AppBar(
-          title: const Text('Hey Media Watch Concierge'),
-          backgroundColor: _cinemaBg),
-      body: Column(children: [
-        Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(children: [
-              const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('Tell me what you feel like watching.',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 21,
-                          fontWeight: FontWeight.w800))),
-              const SizedBox(height: 6),
-              const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                      'Examples: “funny horror movies”, “romantic thriller”, “dark mysteries”. Matching is based on local catalog metadata.',
-                      style: TextStyle(color: Colors.white60))),
-              const SizedBox(height: 12),
-              TextField(
-                  controller: query,
-                  onSubmitted: (_) => search(),
-                  decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.auto_awesome),
-                      hintText: 'What do you want to watch?',
-                      suffixIcon: IconButton(
-                          onPressed: search, icon: const Icon(Icons.search)))),
-              const SizedBox(height: 8),
-              Align(
-                  alignment: Alignment.centerRight,
-                  child: FilledButton.icon(
-                      onPressed: search,
-                      icon: const Icon(Icons.auto_awesome),
-                      label: const Text('Find titles'))),
-            ])),
-        const Divider(height: 1, color: Colors.white12),
-        Expanded(
-            child: lastQuery.isEmpty
-                ? const _DiscoveryEmpty(
-                    message:
-                        'Try a mood, one genre, or a combination such as Horror + Comedy.')
-                : results.isEmpty
-                    ? const _DiscoveryEmpty(
-                        message:
-                            'No matching titles were found in the current catalog. Try a broader mood or genre.')
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: results.length,
-                        itemBuilder: (_, i) => _MediaResultTile(
-                            item: results[i],
-                            subtitle:
-                                GenreSystem.displayLabel(results[i].genres)))),
-      ]));
-}
-
 class CinematicUniversalSearchScreen extends StatefulWidget {
   const CinematicUniversalSearchScreen({super.key});
   @override
@@ -1442,7 +1260,7 @@ class _CinematicUniversalSearchScreenState
               child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                      'Search scope: current entertainment catalog. Shop, food delivery, friends and external streaming providers require their own connected data sources.',
+                      'Search scope: the current entertainment catalog and available metadata providers.',
                       style: TextStyle(color: Colors.white54, fontSize: 12)))),
           Expanded(
               child: query.trim().isEmpty

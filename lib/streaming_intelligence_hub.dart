@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
-import 'ai_operations_center.dart';
 import 'coming_soon_release_screen.dart';
 import 'details.dart';
 import 'franchise_universe_browse_hub.dart';
@@ -11,10 +10,10 @@ import 'library_protection_center.dart';
 import 'music.dart';
 import 'perfect_streaming_experience.dart';
 import 'profiles.dart';
-import 'public_live_tv.dart';
 import 'smart_search.dart';
 import 'xray.dart';
 import 'collection_details.dart';
+import 'platform_reliability_center.dart';
 
 /// A single entry point for the platform's discovery, library, profile and
 /// playback features. These links deliberately reuse the existing screens and
@@ -109,7 +108,7 @@ class StreamingIntelligenceHubScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 22),
-          _sectionTitle(context, 'The 9 core upgrades', 'Use the features together rather than navigating disconnected screens.'),
+          _sectionTitle(context, 'The 8 core upgrades', 'Use the features together rather than navigating disconnected screens.'),
           _HubTile(
             icon: Icons.event_available_rounded,
             title: '1. Coming Soon & Release Calendar',
@@ -119,7 +118,7 @@ class StreamingIntelligenceHubScreen extends StatelessWidget {
           _HubTile(
             icon: Icons.movie_filter_rounded,
             title: '2. Personalized Streaming Experience',
-            description: 'Profile-level discovery, playback continuity, seasons and Live TV preferences.',
+            description: 'Profile-level discovery, playback continuity, seasons and release preferences.',
             onTap: () => _open(context, const PerfectStreamingExperienceScreen()),
           ),
           _HubTile(
@@ -141,20 +140,14 @@ class StreamingIntelligenceHubScreen extends StatelessWidget {
             onTap: () => _open(context, const SmartSearchScreen()),
           ),
           _HubTile(
-            icon: Icons.live_tv_rounded,
-            title: '6. Live TV Guide',
-            description: 'Browse channels, filter by category and save profile-specific channel favorites.',
-            onTap: () => _open(context, const PublicLiveTvScreen()),
-          ),
-          _HubTile(
             icon: Icons.fact_check_outlined,
-            title: '7. Library Intelligence & Quality',
+            title: '6. Library Intelligence & Quality',
             description: 'Review metadata gaps, local extras, edition data and possible duplicate candidates.',
             onTap: () => _open(context, const LibraryIntelligenceScreen()),
           ),
           _HubTile(
             icon: Icons.people_alt_rounded,
-            title: '8. Profiles & Collections',
+            title: '7. Profiles & Collections',
             description: 'Switch profiles or open a shared, custom or automatic collection.',
             onTap: () => _openProfileAndCollections(context),
             trailingAction: IconButton(
@@ -165,9 +158,9 @@ class StreamingIntelligenceHubScreen extends StatelessWidget {
           ),
           _HubTile(
             icon: Icons.health_and_safety_outlined,
-            title: '9. Reliability & Automation',
-            description: 'Inspect actual operations events, library repair findings, backups and recovery points.',
-            onTap: () => _open(context, const AiOperationsCenterScreen()),
+            title: '8. Reliability & Recovery',
+            description: 'Review reliability planning, recovery readiness, backups and storage forecasts.',
+            onTap: () => _open(context, const PlatformReliabilityCenterScreen()),
             trailingAction: IconButton(
               tooltip: 'Open library protection and backups',
               onPressed: () => _open(context, const LibraryProtectionCenterScreen()),

@@ -17,7 +17,6 @@ extension BackendApiAdminMethods on BackendApi {
     );
   }
 
-
   // ==========================================================
   // OWNER-ONLY OPERATIONS BOT SCANS
   // ==========================================================
@@ -174,7 +173,8 @@ extension BackendApiAdminMethods on BackendApi {
   Future<Map<String, dynamic>> getSecurityStatus() async {
     _requireAuthentication();
     return _requireSuccess(
-      await _networkClient.get(Uri.parse('$baseUrl/security/status'), headers: _headers),
+      await _networkClient.get(Uri.parse('$baseUrl/security/status'),
+          headers: _headers),
       'Unable to retrieve security status.',
     );
   }
@@ -283,7 +283,6 @@ extension BackendApiAdminMethods on BackendApi {
     return data;
   }
 
-
   // ==========================================================
   // SECURITY BOT CONTROL CENTER (administrator allowlist enforced by backend)
   // ==========================================================
@@ -295,7 +294,7 @@ extension BackendApiAdminMethods on BackendApi {
         Uri.parse('$baseUrl/security-bots/status'),
         headers: _headers,
       ),
-      'Unable to load the Security Bot Control Center.',
+      'Unable to load the Security Diagnostics Center.',
     );
   }
 
@@ -321,5 +320,4 @@ extension BackendApiAdminMethods on BackendApi {
       'Unable to load the security bot audit history.',
     );
   }
-
 }

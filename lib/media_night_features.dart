@@ -8,9 +8,6 @@ import 'details.dart';
 import 'genre_system.dart';
 import 'media_feature_preferences.dart';
 import 'music.dart';
-import 'social_center.dart';
-import 'watch_and_enjoy.dart';
-import 'watch_party_lobby.dart';
 
 const Color _toolsBackground = Color(0xFF0B0B10);
 const Color _toolsPanel = Color(0xFF171722);
@@ -636,15 +633,6 @@ class _MyMediaNightScreenState extends State<MyMediaNightScreen> {
     if (picked != null) setState(() => _plannedFor = DateTime(picked.year, picked.month, picked.day, 19));
   }
 
-  String get _snackSuggestion => switch (_mood) {
-        'Funny & Spooky' => 'Popcorn, candy and a shareable snack tray',
-        'Romantic' => 'Dessert bites and a cozy snack board',
-        'Adventurous' => 'Pizza slices or a build-your-own snack spread',
-        'Relaxed' => 'Comfort snacks, tea or a favorite warm drink',
-        'Surprising' => 'A tasting flight of small snacks',
-        _ => 'Popcorn and something savory',
-      };
-
   String get _musicSuggestion => switch (_mood) {
         'Funny & Spooky' => 'Playful Halloween, surf-rock and spooky soundtrack cues',
         'Romantic' => 'Soul, soft pop and romantic film soundtracks',
@@ -673,7 +661,6 @@ class _MyMediaNightScreenState extends State<MyMediaNightScreen> {
       'mood': _mood,
       'plannedFor': _plannedFor.toIso8601String(),
       'mediaIds': ids,
-      'snackSuggestion': _snackSuggestion,
       'musicSuggestion': _musicSuggestion,
       'updatedAt': DateTime.now().toUtc().toIso8601String(),
     });
@@ -689,7 +676,7 @@ class _MyMediaNightScreenState extends State<MyMediaNightScreen> {
   Widget build(BuildContext context) {
     final suggestions = _suggestions;
     return _FeatureScaffold(title: 'My Media Night', children: <Widget>[
-      const _FeatureIntro(icon: Icons.nightlight_round, title: 'Build the whole night in one place', description: 'Choose a mood, select titles from your local catalog, and connect your existing music, food/merch and watch-party experiences. Snack and playlist ideas are suggestions, not placed orders or generated playlists.'),
+      const _FeatureIntro(icon: Icons.nightlight_round, title: 'Plan a media night', description: 'Choose a mood and select titles from your local catalog. The plan and reminder stay on this device.'),
       DropdownButtonFormField<String>(
         initialValue: _mood,
         decoration: const InputDecoration(labelText: 'Tonight’s mood'),
@@ -706,9 +693,6 @@ class _MyMediaNightScreenState extends State<MyMediaNightScreen> {
         onTap: _chooseDate,
       ),
       Card(color: _toolsPanel, child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-        const Text('Food idea', style: TextStyle(color: _toolsAccent, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 4), Text(_snackSuggestion),
-        const SizedBox(height: 12),
         const Text('Playlist direction', style: TextStyle(color: _toolsAccent, fontWeight: FontWeight.w800)),
         const SizedBox(height: 4), Text(_musicSuggestion),
       ]))),
@@ -731,11 +715,8 @@ class _MyMediaNightScreenState extends State<MyMediaNightScreen> {
       FilledButton.icon(onPressed: _saving ? null : _saveAndQueue, icon: const Icon(Icons.save_outlined), label: Text(_saving ? 'Saving plan…' : 'Save night & add titles to Next Up')),
       const SizedBox(height: 10),
       OutlinedButton.icon(onPressed: () => _open(const MusicScreen()), icon: const Icon(Icons.music_note_rounded), label: const Text('Open Music for the playlist')),
-      OutlinedButton.icon(onPressed: () => _open(const WatchAndEnjoyScreen()), icon: const Icon(Icons.local_dining_outlined), label: const Text('Open Food & Entertainment Marketplace')),
-      OutlinedButton.icon(onPressed: () => _open(const WatchPartyLobbyScreen()), icon: const Icon(Icons.groups_outlined), label: const Text('Open Watch Party')),
-      OutlinedButton.icon(onPressed: () => _open(const SocialCenterScreen()), icon: const Icon(Icons.forum_outlined), label: const Text('Open friends & communities')),
       const SizedBox(height: 8),
-      const Text('Reminder: a date is stored locally; no notification is scheduled by this module. Provider-wide availability, delivery ordering, and synchronized party playback depend on their connected flows.', style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.4)),
+      const Text('Reminder: a date is stored locally; no notification is scheduled by this module.', style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.4)),
     ]);
   }
 }

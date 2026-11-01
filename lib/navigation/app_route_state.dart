@@ -16,13 +16,8 @@ int? primaryIndexForPage(String pageId) => switch (pageId) {
       'actors' ||
       'artists' ||
       'bands' ||
-      'shop' ||
-      'marketplace' ||
-      'food-delivery' ||
-      'public-live-tv' ||
       'my-tv' =>
-        1,
-      'friends' => 2,
+        0,
       _ => null,
     };
 
@@ -90,15 +85,12 @@ class AppPageRouteObserver extends NavigatorObserver {
     if (_isUnnamedPopup(route)) {
       return appPageState.pageId;
     }
-    if (name == '/app/player' ||
-        name == '/app/page/public-live-tv/fullscreen') {
+    if (name == '/app/player') {
       return 'player';
     }
     if (name != null && name.startsWith('/app/page/')) {
       return name.substring('/app/page/'.length);
     }
-    if (name == '/app/shop') return 'shop';
-    if (name == '/app/page/food-delivery') return 'food-delivery';
     if (name == '/app/details') return 'details';
     if (name == '/app/customize' || name == '/app/more') {
       return appPageState.pageId;
@@ -107,9 +99,7 @@ class AppPageRouteObserver extends NavigatorObserver {
     if (name == '/app/server-selection') return 'server-selection';
     if (name != null && name.startsWith('/main/')) {
       final destination = name.substring('/main/'.length);
-      if (destination == 'home' ||
-          destination == 'library' ||
-          destination == 'friends') {
+      if (destination == 'home' || destination == 'library') {
         return destination;
       }
     }

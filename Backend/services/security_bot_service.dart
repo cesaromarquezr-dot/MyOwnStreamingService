@@ -25,7 +25,8 @@ class SecurityBotService {
       'id': 'sentinel',
       'name': 'Sentinel Bot',
       'category': 'Authentication signals',
-      'description': 'Summarizes recent failed sign-ins, MFA failures, recovery failures, and suspicious-login events.',
+      'description':
+          'Summarizes recent failed sign-ins, MFA failures, recovery failures, and suspicious-login events.',
       'permissionLevel': 'observe',
       'mode': 'on_demand',
     },
@@ -33,7 +34,8 @@ class SecurityBotService {
       'id': 'database_guardian',
       'name': 'Database Guardian',
       'category': 'Database connectivity',
-      'description': 'Checks whether the configured Supabase service can answer a minimal read-only query.',
+      'description':
+          'Checks whether the configured Supabase service can answer a minimal read-only query.',
       'permissionLevel': 'observe',
       'mode': 'on_demand',
     },
@@ -41,7 +43,8 @@ class SecurityBotService {
       'id': 'backup_verifier',
       'name': 'Backup & Recovery Bot',
       'category': 'Backup readiness',
-      'description': 'Checks the configured backup destination and freshness marker. It does not perform or restore a backup.',
+      'description':
+          'Checks the configured backup destination and freshness marker. It does not perform or restore a backup.',
       'permissionLevel': 'observe',
       'mode': 'on_demand',
     },
@@ -49,7 +52,8 @@ class SecurityBotService {
       'id': 'transport_guardian',
       'name': 'Transport & Rate-Limit Bot',
       'category': 'Network posture',
-      'description': 'Reviews HTTPS/TLS or trusted-proxy configuration and the configured request-rate limit.',
+      'description':
+          'Reviews HTTPS/TLS or trusted-proxy configuration and the configured request-rate limit.',
       'permissionLevel': 'observe',
       'mode': 'on_demand',
     },
@@ -57,7 +61,8 @@ class SecurityBotService {
       'id': 'vulnerability_watch',
       'name': 'Vulnerability Watch Bot',
       'category': 'Dependency scanning',
-      'description': 'Displays a trusted external scanner status marker when configured; it does not execute a scanner from a web request.',
+      'description':
+          'Displays a trusted external scanner status marker when configured; it does not execute a scanner from a web request.',
       'permissionLevel': 'recommend',
       'mode': 'external_scanner_status',
     },
@@ -65,17 +70,10 @@ class SecurityBotService {
       'id': 'permission_auditor',
       'name': 'Database Permission Auditor',
       'category': 'Row-level security',
-      'description': 'Guides an administrator through a read-only RLS/policy inventory; the SQL report must be run separately in Supabase.',
+      'description':
+          'Guides an administrator through a read-only RLS/policy inventory; the SQL report must be run separately in Supabase.',
       'permissionLevel': 'recommend',
       'mode': 'manual_sql_audit',
-    },
-    {
-      'id': 'ai_safety_guardian',
-      'name': 'AI Safety Guardian',
-      'category': 'AI action governance',
-      'description': 'Highlights the need for server-side tool authorization and approvals. Full AI tool-call telemetry is not yet connected to this dashboard.',
-      'permissionLevel': 'recommend',
-      'mode': 'manual_review',
     },
   ];
 
@@ -127,19 +125,11 @@ class SecurityBotService {
       severity: 'info',
       status: 'manual_review',
       title: 'RLS and table-policy inventory needs a separate SQL review',
-      summary: 'The bot endpoint checks reachability but does not inspect pg_policies or automatically change row-level security policies.',
-      recommendation: 'Run Backend/database/security_audit_readonly.sql in the Supabase SQL Editor using an administrator role. Review each result table-by-table; do not add broad policies just to make a warning disappear.',
+      summary:
+          'The bot endpoint checks reachability but does not inspect pg_policies or automatically change row-level security policies.',
+      recommendation:
+          'Run Backend/database/security_audit_readonly.sql in the Supabase SQL Editor using an administrator role. Review each result table-by-table; do not add broad policies just to make a warning disappear.',
     ));
-    findings.add(_finding(
-      id: 'ai_safety_review',
-      botId: 'ai_safety_guardian',
-      severity: 'info',
-      status: 'manual_review',
-      title: 'AI tool-action review remains separate',
-      summary: 'This dashboard does not inspect every AI tool invocation or grant it permissions.',
-      recommendation: 'Keep authorization in the backend for every tool. Require explicit approval for destructive or account-level actions, and connect tool-call audit events before treating this bot as automated coverage.',
-    ));
-
     final counts = <String, int>{};
     for (final finding in findings) {
       final severity = finding['severity']?.toString() ?? 'info';
@@ -175,10 +165,12 @@ class SecurityBotService {
         );
         durable = true;
       } catch (_) {
-        persistenceError = 'The scan completed, but its audit entry could not be persisted.';
+        persistenceError =
+            'The scan completed, but its audit entry could not be persisted.';
       }
     } else {
-      persistenceError = 'Supabase is not configured; this scan will be kept in memory only.';
+      persistenceError =
+          'Supabase is not configured; this scan will be kept in memory only.';
     }
 
     final event = <String, dynamic>{
@@ -187,7 +179,8 @@ class SecurityBotService {
       'metadata': {'report': report},
       'durable': durable,
     };
-    final history = _localAudit.putIfAbsent(accountId, () => <Map<String, dynamic>>[]);
+    final history =
+        _localAudit.putIfAbsent(accountId, () => <Map<String, dynamic>>[]);
     history.insert(0, event);
     if (history.length > _maxLocalAuditEvents) {
       history.removeRange(_maxLocalAuditEvents, history.length);
@@ -199,7 +192,8 @@ class SecurityBotService {
       'auditStorage': {
         'durable': durable,
         'source': durable ? 'supabase_security_events' : 'process_memory',
-        'message': persistenceError ?? 'Scan report saved to the backend security-event audit table.',
+        'message': persistenceError ??
+            'Scan report saved to the backend security-event audit table.',
       },
     };
   }
@@ -215,8 +209,10 @@ class SecurityBotService {
         severity: 'warning',
         status: 'not_configured',
         title: 'Authentication telemetry is unavailable',
-        summary: 'Supabase is not configured, so the Sentinel Bot cannot query persisted authentication events.',
-        recommendation: 'Configure Supabase persistence and apply the existing streaming_service.sql security-events schema. Existing backend rate limiting still applies independently.',
+        summary:
+            'Supabase is not configured, so the Sentinel Bot cannot query persisted authentication events.',
+        recommendation:
+            'Configure Supabase persistence and apply the existing streaming_service.sql security-events schema. Existing backend rate limiting still applies independently.',
       ));
       return;
     }
@@ -236,12 +232,21 @@ class SecurityBotService {
       final sampledEvents = signals['sampledEvents'] ?? 0;
       final sampleCapReached = sampledEvents >= 2000;
       final high = policy['severity'] == 'critical';
-      final elevated = policy['severity'] == 'warning' || high || sampleCapReached;
+      final elevated =
+          policy['severity'] == 'warning' || high || sampleCapReached;
       findings.add(_finding(
         id: 'auth_signals',
         botId: 'sentinel',
-        severity: high ? 'critical' : elevated ? 'warning' : 'info',
-        status: high ? 'critical' : elevated ? 'warning' : 'ok',
+        severity: high
+            ? 'critical'
+            : elevated
+                ? 'warning'
+                : 'info',
+        status: high
+            ? 'critical'
+            : elevated
+                ? 'warning'
+                : 'ok',
         title: high
             ? 'Elevated authentication-failure volume'
             : sampleCapReached
@@ -249,7 +254,8 @@ class SecurityBotService {
                 : elevated
                     ? 'Authentication activity deserves review'
                     : 'No configured anomaly threshold was exceeded',
-        summary: 'Past hour: $failed failed sign-in/MFA/recovery events and $suspicious suspicious-login events across up to 2,000 recent security-event records. Counts are aggregated; account identifiers, IP values, and login metadata are not returned. A full sample may mean activity is higher than these counts.',
+        summary:
+            'Past hour: $failed failed sign-in/MFA/recovery events and $suspicious suspicious-login events across up to 2,000 recent security-event records. Counts are aggregated; account identifiers, IP values, and login metadata are not returned. A full sample may mean activity is higher than these counts.',
         recommendation: elevated || high
             ? 'Review the server security-event logs and current request throttling. This bot does not automatically block accounts or IP addresses.'
             : 'Keep monitoring enabled and investigate any correlated alerts from your proxy or identity provider.',
@@ -268,8 +274,10 @@ class SecurityBotService {
         severity: 'warning',
         status: 'unavailable',
         title: 'Authentication signals could not be queried',
-        summary: 'The security-event query failed. The result is unknown, not a clean bill of health.',
-        recommendation: 'Verify the security_events table and backend service-role connectivity. No automatic response was taken.',
+        summary:
+            'The security-event query failed. The result is unknown, not a clean bill of health.',
+        recommendation:
+            'Verify the security_events table and backend service-role connectivity. No automatic response was taken.',
       ));
     }
   }
@@ -282,8 +290,10 @@ class SecurityBotService {
         severity: 'warning',
         status: 'not_configured',
         title: 'Supabase persistence is not configured',
-        summary: 'The backend is operating without the configured Supabase store.',
-        recommendation: 'Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in the backend environment. Never expose the service-role key to Flutter or logs.',
+        summary:
+            'The backend is operating without the configured Supabase store.',
+        recommendation:
+            'Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in the backend environment. Never expose the service-role key to Flutter or logs.',
       ));
       return;
     }
@@ -296,8 +306,10 @@ class SecurityBotService {
         severity: 'info',
         status: 'ok',
         title: 'Database connectivity check passed',
-        summary: 'The backend performed a minimal read-only query successfully.',
-        recommendation: 'This only verifies connectivity. It does not prove every RLS policy, schema, backup, or data relationship is correct; run the separate SQL permission audit before production changes.',
+        summary:
+            'The backend performed a minimal read-only query successfully.',
+        recommendation:
+            'This only verifies connectivity. It does not prove every RLS policy, schema, backup, or data relationship is correct; run the separate SQL permission audit before production changes.',
       ));
     } catch (_) {
       findings.add(_finding(
@@ -306,8 +318,10 @@ class SecurityBotService {
         severity: 'error',
         status: 'failed',
         title: 'Database connectivity check failed',
-        summary: 'The configured database did not answer the read-only health query.',
-        recommendation: 'Check Supabase availability, schema migration state, network connectivity, and backend-only credentials. Do not paste secret keys into the issue report.',
+        summary:
+            'The configured database did not answer the read-only health query.',
+        recommendation:
+            'Check Supabase availability, schema migration state, network connectivity, and backend-only credentials. Do not paste secret keys into the issue report.',
       ));
     }
   }
@@ -324,7 +338,8 @@ class SecurityBotService {
         status: 'unknown',
         title: 'Backup status could not be determined',
         summary: 'The read-only backup configuration check failed.',
-        recommendation: 'Check BACKUP_DESTINATION and its permissions. A reachable destination does not prove the files are restorable; test restoration in an isolated environment.',
+        recommendation:
+            'Check BACKUP_DESTINATION and its permissions. A reachable destination does not prove the files are restorable; test restoration in an isolated environment.',
       ));
     }
   }
@@ -334,7 +349,9 @@ class SecurityBotService {
     final publicUrl = Platform.environment['SERVER_PUBLIC_URL']?.trim() ?? '';
     final publicUri = publicUrl.isEmpty ? null : Uri.tryParse(publicUrl);
     final advertisedHttps = publicUrl.isEmpty || publicUri?.scheme == 'https';
-    final production = (Platform.environment['APP_ENV'] ?? '').trim().toLowerCase() == 'production';
+    final production =
+        (Platform.environment['APP_ENV'] ?? '').trim().toLowerCase() ==
+            'production';
     final publicUrlPresent = publicUrl.isNotEmpty;
     final trustedProxyReady = AppConfig.requireTrustedProxy &&
         AppConfig.proxySharedSecret.isNotEmpty &&
@@ -347,7 +364,8 @@ class SecurityBotService {
         status: 'warning',
         title: 'Production public URL is not configured',
         summary: 'APP_ENV is production but SERVER_PUBLIC_URL is empty.',
-        recommendation: 'Set SERVER_PUBLIC_URL to the real public HTTPS origin before exposing the service.',
+        recommendation:
+            'Set SERVER_PUBLIC_URL to the real public HTTPS origin before exposing the service.',
       ));
     } else if (!advertisedHttps) {
       findings.add(_finding(
@@ -357,7 +375,8 @@ class SecurityBotService {
         status: 'warning',
         title: 'Configured public URL is not HTTPS',
         summary: 'SERVER_PUBLIC_URL does not advertise an HTTPS URL.',
-        recommendation: 'Use the public HTTPS origin, and verify TLS termination at the backend or trusted reverse proxy.',
+        recommendation:
+            'Use the public HTTPS origin, and verify TLS termination at the backend or trusted reverse proxy.',
       ));
     } else if (tlsEnabled || trustedProxyReady) {
       findings.add(_finding(
@@ -365,11 +384,14 @@ class SecurityBotService {
         botId: 'transport_guardian',
         severity: 'info',
         status: 'ok',
-        title: tlsEnabled ? 'Backend TLS is configured' : 'Trusted-proxy checks are configured',
+        title: tlsEnabled
+            ? 'Backend TLS is configured'
+            : 'Trusted-proxy checks are configured',
         summary: tlsEnabled
             ? 'BACKEND_TLS_ENABLED is on. This check verifies configuration only, not public certificate validity.'
             : 'TLS appears to be delegated to a trusted proxy with a shared secret and allowlisted proxy CIDRs.',
-        recommendation: 'Verify the actual public endpoint certificate and firewall exposure during deployment validation.',
+        recommendation:
+            'Verify the actual public endpoint certificate and firewall exposure during deployment validation.',
       ));
     } else {
       findings.add(_finding(
@@ -378,8 +400,10 @@ class SecurityBotService {
         severity: 'error',
         status: 'warning',
         title: 'Transport termination needs review',
-        summary: 'Backend TLS is disabled and the complete trusted-proxy requirement is not configured.',
-        recommendation: 'Enable backend TLS or configure trusted proxy validation, including PROXY_SHARED_SECRET and TRUSTED_PROXY_CIDRS. Do not expose the internal backend port directly to the internet.',
+        summary:
+            'Backend TLS is disabled and the complete trusted-proxy requirement is not configured.',
+        recommendation:
+            'Enable backend TLS or configure trusted proxy validation, including PROXY_SHARED_SECRET and TRUSTED_PROXY_CIDRS. Do not expose the internal backend port directly to the internet.',
       ));
     }
   }
@@ -391,9 +415,13 @@ class SecurityBotService {
       botId: 'transport_guardian',
       severity: rate > 0 ? 'info' : 'error',
       status: rate > 0 ? 'ok' : 'failed',
-      title: rate > 0 ? 'Request rate limiting has a positive configured threshold' : 'Request rate limit is invalid',
-      summary: 'Configured global threshold: $rate requests per client per minute.',
-      recommendation: 'Tune thresholds using real traffic and reverse-proxy behavior. Rate limits complement—not replace—authentication and route authorization.',
+      title: rate > 0
+          ? 'Request rate limiting has a positive configured threshold'
+          : 'Request rate limit is invalid',
+      summary:
+          'Configured global threshold: $rate requests per client per minute.',
+      recommendation:
+          'Tune thresholds using real traffic and reverse-proxy behavior. Rate limits complement—not replace—authentication and route authorization.',
       evidence: {'requestsPerMinute': rate},
     ));
   }
@@ -402,18 +430,27 @@ class SecurityBotService {
     List<Map<String, dynamic>> findings,
     DateTime now,
   ) {
-    final rawTimestamp = Platform.environment['SECURITY_BOT_VULN_SCAN_LAST_SUCCESS']?.trim() ?? '';
-    final state = Platform.environment['SECURITY_BOT_VULN_SCAN_STATE']?.trim().toLowerCase() ?? '';
+    final rawTimestamp =
+        Platform.environment['SECURITY_BOT_VULN_SCAN_LAST_SUCCESS']?.trim() ??
+            '';
+    final state = Platform.environment['SECURITY_BOT_VULN_SCAN_STATE']
+            ?.trim()
+            .toLowerCase() ??
+        '';
     final timestamp = DateTime.tryParse(rawTimestamp)?.toUtc();
-    if (timestamp == null || timestamp.isAfter(now) || !{'clean', 'findings', 'failed'}.contains(state)) {
+    if (timestamp == null ||
+        timestamp.isAfter(now) ||
+        !{'clean', 'findings', 'failed'}.contains(state)) {
       findings.add(_finding(
         id: 'dependency_scan_unconfigured',
         botId: 'vulnerability_watch',
         severity: 'warning',
         status: 'not_configured',
         title: 'No trusted dependency-scan result is configured',
-        summary: 'Vulnerability Watch does not execute package scanners from an HTTP request.',
-        recommendation: 'Run dependency scanning in CI or trusted host automation, then publish SECURITY_BOT_VULN_SCAN_LAST_SUCCESS and SECURITY_BOT_VULN_SCAN_STATE (clean, findings, or failed) into the backend environment.',
+        summary:
+            'Vulnerability Watch does not execute package scanners from an HTTP request.',
+        recommendation:
+            'Run dependency scanning in CI or trusted host automation, then publish SECURITY_BOT_VULN_SCAN_LAST_SUCCESS and SECURITY_BOT_VULN_SCAN_STATE (clean, findings, or failed) into the backend environment.',
       ));
       return;
     }
@@ -424,8 +461,16 @@ class SecurityBotService {
     findings.add(_finding(
       id: 'dependency_scan_status',
       botId: 'vulnerability_watch',
-      severity: !fresh || state == 'failed' ? 'warning' : hasFindings ? 'warning' : 'info',
-      status: !fresh ? 'stale' : state == 'clean' ? 'ok' : state,
+      severity: !fresh || state == 'failed'
+          ? 'warning'
+          : hasFindings
+              ? 'warning'
+              : 'info',
+      status: !fresh
+          ? 'stale'
+          : state == 'clean'
+              ? 'ok'
+              : state,
       title: !fresh
           ? 'Dependency scan result is stale'
           : state == 'clean'
@@ -433,7 +478,8 @@ class SecurityBotService {
               : state == 'findings'
                   ? 'Dependency scan reports findings'
                   : 'Dependency scan failed',
-      summary: 'Scanner status marker timestamp: ${timestamp.toIso8601String()}. This is a trusted deployment-provided marker, not an independently verified scan.',
+      summary:
+          'Scanner status marker timestamp: ${timestamp.toIso8601String()}. This is a trusted deployment-provided marker, not an independently verified scan.',
       recommendation: state == 'clean' && fresh
           ? 'Keep the CI scanner running on every dependency change.'
           : 'Review the scanner report in the trusted CI system; patch vulnerable dependencies after testing.',
@@ -456,7 +502,8 @@ class SecurityBotService {
           'events': persisted,
           'durable': true,
           'source': 'supabase_security_events',
-          'message': 'Audit history is stored in the backend security_events table.',
+          'message':
+              'Audit history is stored in the backend security_events table.',
         };
       } catch (_) {
         // Prefer transparent fallback to a failed dashboard when persistence
@@ -464,12 +511,14 @@ class SecurityBotService {
       }
     }
     return {
-      'events': List<Map<String, dynamic>>.from(_localAudit[accountId] ?? const [])
-          .take(boundedLimit)
-          .toList(growable: false),
+      'events':
+          List<Map<String, dynamic>>.from(_localAudit[accountId] ?? const [])
+              .take(boundedLimit)
+              .toList(growable: false),
       'durable': false,
       'source': 'process_memory',
-      'message': 'Audit history is in memory only and will be lost when the backend restarts.',
+      'message':
+          'Audit history is in memory only and will be lost when the backend restarts.',
     };
   }
 
@@ -514,7 +563,8 @@ class SecurityBotPolicy {
     var result = 'unknown';
     var title = 'Backup readiness is not confirmed';
     var summary = 'The backup status is incomplete.';
-    var recommendation = 'Configure a backup destination and a trusted last-success marker, then test a restore in an isolated environment.';
+    var recommendation =
+        'Configure a backup destination and a trusted last-success marker, then test a restore in an isolated environment.';
 
     if (!configured) {
       result = 'not_configured';
@@ -525,34 +575,44 @@ class SecurityBotPolicy {
       result = 'unreachable';
       title = 'Backup destination is unreachable';
       summary = 'The configured backup path could not be reached.';
-      recommendation = 'Restore destination access and confirm that a new backup completes. Do not treat RAID as a backup.';
-    } else if (state == 'capacity_critical' || (usedPercent != null && usedPercent >= 95)) {
+      recommendation =
+          'Restore destination access and confirm that a new backup completes. Do not treat RAID as a backup.';
+    } else if (state == 'capacity_critical' ||
+        (usedPercent != null && usedPercent >= 95)) {
       severity = 'critical';
       result = 'capacity_critical';
       title = 'Backup destination is almost full';
       summary = 'Reported backup storage usage is at least 95%.';
-      recommendation = 'Expand storage or adjust retention after checking recovery obligations. Never delete the only known-good backup automatically.';
-    } else if (state == 'capacity_warning' || (usedPercent != null && usedPercent >= 85)) {
+      recommendation =
+          'Expand storage or adjust retention after checking recovery obligations. Never delete the only known-good backup automatically.';
+    } else if (state == 'capacity_warning' ||
+        (usedPercent != null && usedPercent >= 85)) {
       severity = 'warning';
       result = 'capacity_warning';
       title = 'Backup storage capacity is getting low';
       summary = 'Reported backup storage usage is at least 85%.';
-      recommendation = 'Review backup growth and approved retention before making space.';
+      recommendation =
+          'Review backup growth and approved retention before making space.';
     } else if (freshness['state'] == 'stale' || state == 'stale') {
       severity = 'error';
       result = 'stale';
       title = 'Latest backup marker is stale';
-      summary = 'The last successful backup is older than the configured maximum age.';
-      recommendation = 'Investigate the failed or missed backup job and create a verified new restore point.';
+      summary =
+          'The last successful backup is older than the configured maximum age.';
+      recommendation =
+          'Investigate the failed or missed backup job and create a verified new restore point.';
     } else if (freshness['state'] == 'fresh' && reachable && configured) {
       severity = 'info';
       result = 'ok';
       title = 'Backup destination and freshness marker look healthy';
-      summary = 'The configured destination is reachable and its success marker is within the age threshold.';
-      recommendation = 'Periodically restore a backup in an isolated environment; freshness alone does not prove recoverability.';
+      summary =
+          'The configured destination is reachable and its success marker is within the age threshold.';
+      recommendation =
+          'Periodically restore a backup in an isolated environment; freshness alone does not prove recoverability.';
     } else {
       result = 'freshness_unknown';
-      summary = 'The destination is reachable, but no reliable recent-success marker is available.';
+      summary =
+          'The destination is reachable, but no reliable recent-success marker is available.';
     }
 
     return {
@@ -580,8 +640,16 @@ class SecurityBotPolicy {
     final critical = failedEvents >= 50 || suspiciousLoginEvents >= 10;
     final warning = failedEvents >= 15 || suspiciousLoginEvents >= 4;
     return {
-      'severity': critical ? 'critical' : warning ? 'warning' : 'info',
-      'status': critical ? 'critical' : warning ? 'warning' : 'ok',
+      'severity': critical
+          ? 'critical'
+          : warning
+              ? 'warning'
+              : 'info',
+      'status': critical
+          ? 'critical'
+          : warning
+              ? 'warning'
+              : 'ok',
       'failedEvents': failedEvents,
       'suspiciousLoginEvents': suspiciousLoginEvents,
     };

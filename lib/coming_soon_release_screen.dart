@@ -664,7 +664,12 @@ String explainReleaseRelevance(
 }
 
 class ComingSoonReleaseScreen extends StatefulWidget {
-  const ComingSoonReleaseScreen({super.key});
+  final String initialFilter;
+
+  const ComingSoonReleaseScreen({
+    super.key,
+    this.initialFilter = 'All',
+  });
 
   @override
   State<ComingSoonReleaseScreen> createState() =>
@@ -714,6 +719,9 @@ class _ComingSoonReleaseScreenState extends State<ComingSoonReleaseScreen> {
   @override
   void initState() {
     super.initState();
+    _filter = _filters.contains(widget.initialFilter)
+        ? widget.initialFilter
+        : 'All';
     // Do not synchronously call setState from initState while an enclosing
     // route is still inserting this screen. Start I/O after the first frame.
     WidgetsBinding.instance.addPostFrameCallback((_) {

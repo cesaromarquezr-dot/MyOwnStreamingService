@@ -17,7 +17,7 @@
 2. The settings screen stores a maximum-resolution and data-saver preference per profile/device. The selected cap affects stream quality only once the trusted playback gateway applies it to its HLS variant list or transcode decision; the Flutter video plugin cannot uniformly select a bitrate across every platform on its own.
 3. Subtitle-size/audio-description preferences are persisted. Applying them requires a selected subtitle renderer or platform/player track-selection support for the stream supplied to each device. The current player continues to rely on the native `video_player`/platform capabilities.
 4. QoE diagnostics are currently local to the device (maximum 500 events). The SQL migration intentionally exposes no authenticated-client policies because this project uses application account/profile IDs rather than assuming they are Supabase Auth UUIDs. A trusted API/Edge Function must validate account/profile ownership and insert telemetry using the service role before cross-device dashboards can be enabled.
-5. The script creates VOD HLS renditions, not a full live TV pipeline and not DRM. Run it in an FFmpeg-enabled container with the source library mounted read-only and a separate writable output directory. Validate media you own or are authorized to process.
+5. The script creates VOD HLS renditions and does not implement DRM. Run it in an FFmpeg-enabled container with the source library mounted read-only and a separate writable output directory. Validate media you own or are authorized to process.
 
 ## Adaptive delivery pipeline
 

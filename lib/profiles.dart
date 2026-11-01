@@ -59,7 +59,6 @@ int? _avatarIndexFromValue(String? value) {
       : null;
 }
 
-
 /// One image owned by a movie, show, or album that can be used as a profile picture.
 class _ProfileMediaArtworkOption {
   const _ProfileMediaArtworkOption({
@@ -78,7 +77,8 @@ class _ProfileMediaArtworkOption {
 String? _profileArtworkSource(String? raw, {String tmdbSize = 'w500'}) {
   final value = raw?.trim() ?? '';
   if (value.isEmpty) return null;
-  if (value.startsWith('https://') || value.startsWith('http://') ||
+  if (value.startsWith('https://') ||
+      value.startsWith('http://') ||
       value.startsWith('file://')) {
     return value;
   }
@@ -151,14 +151,6 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       widget.onOpened?.call();
-      // Warm movie/show/album artwork after the profile surface has completed
-      // its first build, without blocking the initial frame.
-      for (final item in _profileBackdropItems()) {
-        unawaited(
-          precacheImage(NetworkImage(item.imageUrl), context)
-              .catchError((_) {}),
-        );
-      }
     });
 
     _animationController = AnimationController(
@@ -260,42 +252,9 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
   }
 
   /// Performs `_selectProfile` for this feature. Update this documentation when its contract changes.
-  Future<void> _selectProfile(Profile profile) async {
+  void _selectProfile(Profile profile) {
     final controller = AppController.instance;
-    final previousProfile = controller.currentProfile;
-    if (previousProfile != null &&
-        previousProfile.id != profile.id &&
-        controller.backendApi.isAuthenticated) {
-      // Mark the profile we are leaving away before switching identities. This
-      // prevents the Home activity strip from showing a stale green glow for
-      // the old profile after the selection handoff.
-      try {
-        await controller.backendApi
-            .setSocialProfilePresence(
-              profileId: previousProfile.id,
-              availability: 'away',
-              clearActivity: true,
-            )
-            .timeout(const Duration(seconds: 2));
-      } catch (_) {
-        // Presence must never prevent a profile from opening.
-      }
-    }
     controller.switchProfile(profile.id);
-    if (controller.backendApi.isAuthenticated) {
-      // The chosen profile is now the active app identity. Start a fresh
-      // presence record without carrying over an old activity from its prior
-      // session; playback can publish its own activity as it starts.
-      unawaited(
-        controller.backendApi
-            .setSocialProfilePresence(
-              profileId: profile.id,
-              availability: 'active',
-              clearActivity: true,
-            )
-            .then<void>((_) {}, onError: (_) {}),
-      );
-    }
 
     // Device registration is deliberately non-blocking. A selected profile is
     // enough to open Home; a slow/offline backend must not make selection look
@@ -356,7 +315,8 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
     // Cache the shuffle so tapping a tile never changes which artwork its
     // selected index refers to during a normal rebuild.
     items.shuffle();
-    _cachedProfileBackdropItems = List<_ProfileBackdropItem>.unmodifiable(items);
+    _cachedProfileBackdropItems =
+        List<_ProfileBackdropItem>.unmodifiable(items);
     return _cachedProfileBackdropItems!;
   }
 
@@ -609,12 +569,9 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
                   const Spacer(),
                   _buildArtworkSlider(
                     artwork,
-                    height: (size.height * 0.29)
-                        .clamp(150.0, 260.0)
-                        .toDouble(),
-                    cardWidth: (size.width * 0.105)
-                        .clamp(94.0, 150.0)
-                        .toDouble(),
+                    height: (size.height * 0.29).clamp(150.0, 260.0).toDouble(),
+                    cardWidth:
+                        (size.width * 0.105).clamp(94.0, 150.0).toDouble(),
                   ),
                 ],
               ),
@@ -726,9 +683,10 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
                             _buildArtworkSlider(
                               artwork,
                               height: 148,
-                              cardWidth: (MediaQuery.sizeOf(context).width * .25)
-                                  .clamp(90.0, 124.0)
-                                  .toDouble(),
+                              cardWidth:
+                                  (MediaQuery.sizeOf(context).width * .25)
+                                      .clamp(90.0, 124.0)
+                                      .toDouble(),
                             ),
                             const SizedBox(height: 26),
                           ] else
@@ -1705,7 +1663,8 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
                 decoration: InputDecoration(
                   labelText: 'Profile username',
                   prefixText: '@',
-                  helperText: '3–32 letters, numbers, or underscores. Must be unique.',
+                  helperText:
+                      '3–32 letters, numbers, or underscores. Must be unique.',
                   labelStyle: const TextStyle(color: Colors.white60),
                   prefixStyle: const TextStyle(color: Colors.white70),
                   filled: true,
@@ -1726,10 +1685,10 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
               ),
               const SizedBox(height: 12),
               _AvatarOptionsGrid(
-                selectedIndex: _selectedPhoto == null &&
-                        _selectedMediaArtworkUrl == null
-                    ? _selectedAvatarIndex
-                    : null,
+                selectedIndex:
+                    _selectedPhoto == null && _selectedMediaArtworkUrl == null
+                        ? _selectedAvatarIndex
+                        : null,
                 enabled: !_saving,
                 onSelected: (index) => setState(() {
                   _selectedPhoto = null;
@@ -2637,10 +2596,10 @@ class _CreateProfileSheetState extends State<CreateProfileSheet> {
               ),
               const SizedBox(height: 14),
               _AvatarOptionsGrid(
-                selectedIndex: _selectedPhoto == null &&
-                        _selectedMediaArtworkUrl == null
-                    ? _selectedAvatarIndex
-                    : null,
+                selectedIndex:
+                    _selectedPhoto == null && _selectedMediaArtworkUrl == null
+                        ? _selectedAvatarIndex
+                        : null,
                 enabled: !_saving,
                 onSelected: (index) => setState(() {
                   _selectedPhoto = null;
@@ -3156,11 +3115,13 @@ class _OwnedMediaAvatarPicker extends StatefulWidget {
   final ValueChanged<_ProfileMediaArtworkOption> onSelected;
 
   @override
-  State<_OwnedMediaAvatarPicker> createState() => _OwnedMediaAvatarPickerState();
+  State<_OwnedMediaAvatarPicker> createState() =>
+      _OwnedMediaAvatarPickerState();
 }
 
 class _OwnedMediaAvatarPickerState extends State<_OwnedMediaAvatarPicker> {
-  final List<_ProfileMediaArtworkOption> _options = <_ProfileMediaArtworkOption>[];
+  final List<_ProfileMediaArtworkOption> _options =
+      <_ProfileMediaArtworkOption>[];
   final Set<String> _seenSources = <String>{};
   bool _loading = true;
   bool _enriching = false;
@@ -3190,7 +3151,8 @@ class _OwnedMediaAvatarPickerState extends State<_OwnedMediaAvatarPicker> {
   }
 
   List<MediaItem> _ownedArtworkMedia() => AppController.instance.library
-      .where((media) => MediaArtworkAutoResolver.isMovieOrShow(media) ||
+      .where((media) =>
+          MediaArtworkAutoResolver.isMovieOrShow(media) ||
           MediaArtworkAutoResolver.isAlbum(media))
       .toList(growable: false);
 
@@ -3219,7 +3181,8 @@ class _OwnedMediaAvatarPickerState extends State<_OwnedMediaAvatarPicker> {
     for (final track in MusicLibraryStore.instance.tracks) {
       final album = track.album.trim();
       if (album.isEmpty) continue;
-      final albumKey = '${album.toLowerCase()}|${track.artist.trim().toLowerCase()}';
+      final albumKey =
+          '${album.toLowerCase()}|${track.artist.trim().toLowerCase()}';
       if (!seenAlbumKeys.add(albumKey)) continue;
       _addOption(
         title: album,
@@ -3238,7 +3201,8 @@ class _OwnedMediaAvatarPickerState extends State<_OwnedMediaAvatarPicker> {
     String tmdbSize = 'w500',
   }) {
     final normalized = _profileArtworkSource(source, tmdbSize: tmdbSize);
-    if (normalized == null || normalized.isEmpty ||
+    if (normalized == null ||
+        normalized.isEmpty ||
         !_seenSources.add(normalized)) {
       return;
     }
@@ -3286,13 +3250,17 @@ class _OwnedMediaAvatarPickerState extends State<_OwnedMediaAvatarPicker> {
       final beforeCount = _options.length;
       _addOption(
         title: media.title,
-        kind: isAlbum ? 'ALBUM COVER' : (media.isSeries ? 'SHOW POSTER' : 'MOVIE POSTER'),
+        kind: isAlbum
+            ? 'ALBUM COVER'
+            : (media.isSeries ? 'SHOW POSTER' : 'MOVIE POSTER'),
         source: paths[0],
         identity: '${media.id}:poster:selected',
       );
       _addOption(
         title: media.title,
-        kind: isAlbum ? 'ALBUM COVER' : (media.isSeries ? 'SHOW POSTER' : 'MOVIE POSTER'),
+        kind: isAlbum
+            ? 'ALBUM COVER'
+            : (media.isSeries ? 'SHOW POSTER' : 'MOVIE POSTER'),
         source: paths[1],
         identity: '${media.id}:poster:auto',
       );
@@ -3317,12 +3285,14 @@ class _OwnedMediaAvatarPickerState extends State<_OwnedMediaAvatarPicker> {
       final hasImportedPoster = (media.imageUrl?.trim().isNotEmpty ?? false) ||
           _profileArtworkSource(paths[0]) != null ||
           _profileArtworkSource(paths[1]) != null;
-      final hasBackdrop = _profileArtworkSource(paths[2], tmdbSize: 'w780') != null ||
-          _profileArtworkSource(paths[3], tmdbSize: 'w780') != null;
+      final hasBackdrop =
+          _profileArtworkSource(paths[2], tmdbSize: 'w780') != null ||
+              _profileArtworkSource(paths[3], tmdbSize: 'w780') != null;
       final shouldResolve = isAlbum
           ? !hasImportedPoster
           : isScreen && (!hasImportedPoster || !hasBackdrop);
-      if (shouldResolve && CinematicTitleMetadataService.isConfigured &&
+      if (shouldResolve &&
+          CinematicTitleMetadataService.isConfigured &&
           energy.canRunBackgroundWork(pageId: energy.activePage)) {
         final result = await MediaArtworkAutoResolver.resolveMedia(
           media,
@@ -3340,7 +3310,9 @@ class _OwnedMediaAvatarPickerState extends State<_OwnedMediaAvatarPicker> {
           final resolvedBefore = _options.length;
           _addOption(
             title: media.title,
-            kind: isAlbum ? 'ALBUM COVER' : (media.isSeries ? 'SHOW POSTER' : 'MOVIE POSTER'),
+            kind: isAlbum
+                ? 'ALBUM COVER'
+                : (media.isSeries ? 'SHOW POSTER' : 'MOVIE POSTER'),
             source: result.posterUrl,
             identity: '${media.id}:poster:resolved',
           );
@@ -3378,8 +3350,11 @@ class _OwnedMediaAvatarPickerState extends State<_OwnedMediaAvatarPicker> {
           break;
         }
         final album = track.album.trim();
-        if (album.isEmpty || track.artworkUrl?.trim().isNotEmpty == true) continue;
-        final key = '${album.toLowerCase()}|${track.artist.trim().toLowerCase()}';
+        if (album.isEmpty || track.artworkUrl?.trim().isNotEmpty == true) {
+          continue;
+        }
+        final key =
+            '${album.toLowerCase()}|${track.artist.trim().toLowerCase()}';
         if (!attempted.add(key)) continue;
         final alreadyHasCover = _options.any((item) =>
             item.title.toLowerCase() == album.toLowerCase() &&
@@ -3480,7 +3455,8 @@ class _OwnedMediaAvatarPickerState extends State<_OwnedMediaAvatarPicker> {
                   color: Colors.white.withValues(alpha: .035),
                   borderRadius: BorderRadius.circular(12),
                   child: InkWell(
-                    onTap: widget.enabled ? () => widget.onSelected(option) : null,
+                    onTap:
+                        widget.enabled ? () => widget.onSelected(option) : null,
                     borderRadius: BorderRadius.circular(12),
                     child: Container(
                       decoration: BoxDecoration(
@@ -3503,7 +3479,10 @@ class _OwnedMediaAvatarPickerState extends State<_OwnedMediaAvatarPicker> {
                               gradient: LinearGradient(
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
-                                colors: <Color>[Colors.transparent, Colors.black87],
+                                colors: <Color>[
+                                  Colors.transparent,
+                                  Colors.black87
+                                ],
                                 stops: <double>[.35, 1],
                               ),
                             ),
@@ -3584,7 +3563,8 @@ class _ProfileArtworkImage extends StatelessWidget {
                 color: Colors.white38, size: 24),
           ),
         );
-    if (imageSource.startsWith('https://') || imageSource.startsWith('http://')) {
+    if (imageSource.startsWith('https://') ||
+        imageSource.startsWith('http://')) {
       return Image.network(
         imageSource,
         fit: fit,
@@ -3696,11 +3676,15 @@ class _ProfileBackdropArtworkState extends State<_ProfileBackdropArtwork>
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.network(item.imageUrl, fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black)),
+                  Image.network(item.imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          const ColoredBox(color: Colors.black)),
                   Container(color: Colors.black.withValues(alpha: .38)),
-                  Image.network(item.imageUrl, fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black)),
+                  Image.network(item.imageUrl,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) =>
+                          const ColoredBox(color: Colors.black)),
                 ],
               ),
             ),

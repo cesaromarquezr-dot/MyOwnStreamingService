@@ -1293,7 +1293,6 @@ class _SpotifyAlbumDetailsScreenState extends State<SpotifyAlbumDetailsScreen> {
                     child: Center(child: Chip(avatar: Icon(Icons.library_music_rounded, size: 16), label: Text('In your library'))),
                   )
                 else
-                  _whereToBuySection(title, artist),
                 if (label.isNotEmpty || producers.isNotEmpty || composers.isNotEmpty || copyrights.isNotEmpty || localArtists.isNotEmpty || artist.isNotEmpty || musicBrainzReleaseCredits.isNotEmpty || musicBrainzReleaseDetails.isNotEmpty) ...[
                   const SizedBox(height: 20),
                   const Text('Album credits', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
@@ -1368,44 +1367,6 @@ class _SpotifyAlbumDetailsScreenState extends State<SpotifyAlbumDetailsScreen> {
       }
     }
     return false;
-  }
-
-  Widget _whereToBuySection(String albumTitle, String artistNames) {
-    final query = '$albumTitle $artistNames album'.trim();
-    final encoded = Uri.encodeQueryComponent(query);
-    final retailers = <({String name, IconData icon, String url})>[
-      (name: 'Amazon México', icon: Icons.shopping_bag_outlined, url: 'https://www.amazon.com.mx/s?k=$encoded'),
-      (name: 'Mercado Libre', icon: Icons.store_mall_directory_outlined, url: 'https://listado.mercadolibre.com.mx/${Uri.encodeComponent(query)}'),
-      (name: 'Apple Music', icon: Icons.music_note_rounded, url: 'https://music.apple.com/us/search?term=$encoded'),
-      (name: 'Amazon Music', icon: Icons.headphones_rounded, url: 'https://music.amazon.com/search/${Uri.encodeComponent(query)}'),
-    ];
-    return Padding(
-      padding: const EdgeInsets.only(top: 18),
-      child: Card(
-        color: const Color(0xFF191919),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Where to buy or listen', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 5),
-            const Text('This album is not marked as owned in your library. Choose a retailer or music service to check availability.', style: TextStyle(color: Colors.white60, fontSize: 12, height: 1.4)),
-            const SizedBox(height: 10),
-            Wrap(spacing: 8, runSpacing: 8, children: retailers.map((retailer) => OutlinedButton.icon(
-              onPressed: () async {
-                final uri = Uri.tryParse(retailer.url);
-                if (uri == null || uri.scheme != 'https') return;
-                final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-                if (!opened && mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open ${retailer.name}.')));
-                }
-              },
-              icon: Icon(retailer.icon, size: 16),
-              label: Text(retailer.name),
-            )).toList()),
-          ]),
-        ),
-      ),
-    );
   }
 
   bool _isCommonCreditAlreadyShown(String role) {

@@ -42,8 +42,6 @@ trailer.dart — trailer presentation and playback integration.
 
 xray.dart — contextual media information and X-Ray experiences.
 
-media_ai.dart — AI-assisted media functionality.
-
 media_experience.dart — broader media playback and viewing experiences.
 
 media_universe.dart — relationships and connected media-universe experiences.

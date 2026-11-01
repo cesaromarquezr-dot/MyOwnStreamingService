@@ -2,13 +2,13 @@
 
 ## Scope
 
-This expansion adds the shared foundation for the next wave of MyOwnStreamingService features: Hey Media agent capabilities, searchable scene metadata and bookmarks, personal entertainment timelines, collections, wishlists, privacy and accessibility preferences, device registrations, clubs/events, creator workspaces, notification preferences, library-health findings, feature flags, audit events, and durable background-job records.
+This expansion adds the shared foundation for the next wave of MyOwnStreamingService features: searchable scene metadata and bookmarks, personal entertainment timelines, collections, wishlists, privacy and accessibility preferences, device registrations, clubs/events, creator workspaces, notification preferences, library-health findings, feature flags, audit events, and durable background-job records.
 
 **Podcasts and audiobooks are intentionally out of scope.** Do not add navigation, database entities, catalog types, import flows, recommendation categories, or player modes for either format.
 
 ## New files
 
-- `lib/expanded_platform.dart`: typed capability catalog, bookmark and assistant-memory models, and a Supabase repository for scene bookmarks and explicitly user-managed Hey Media memory.
+- `lib/expanded_platform.dart`: typed capability catalog, bookmark models, and a Supabase repository for scene bookmarks.
 - `Backend/database/consolidated_platform.sql`: additive Supabase schema with ownership-oriented row-level security for personal data.
 - `test/expanded_platform_test.dart`: catalog and bookmark model tests.
 
@@ -25,7 +25,6 @@ The migration is additive and uses separate table names to avoid changing existi
 ## Security notes
 
 - Personal tables default ownership to `auth.uid()` and enforce owner-scoped RLS.
-- AI memory is explicit, editable, and deletable; do not store passwords, tokens, payment credentials, or sensitive inferred attributes.
 - Scene-search results must be filtered by media-access rights on the server before returning any result or playback URL.
 - `media_key` is a stable app-level reference, not a filesystem path or authorization token.
 - Device registration records are informational. They do not by themselves revoke Supabase sessions; connect them to a server-side session/device authorization design before treating them as a security boundary.

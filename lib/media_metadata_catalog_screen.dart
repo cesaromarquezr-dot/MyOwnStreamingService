@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'details.dart';
 import 'recommendation_ownership.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class MediaMetadataCatalogScreen extends StatefulWidget {
   const MediaMetadataCatalogScreen({
@@ -571,7 +570,6 @@ class _TmdbMetadataDetailsScreenState extends State<TmdbMetadataDetailsScreen> {
               Text(overview, style: const TextStyle(color: Colors.white70, height: 1.5)),
             ],
             if (keywords.isNotEmpty) _keywordSection(keywords),
-            _whereToBuySection(title, type, releaseDate),
             if (cast.isNotEmpty) ...[
               const SizedBox(height: 22),
               const Text('Cast', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
@@ -633,45 +631,6 @@ class _TmdbMetadataDetailsScreenState extends State<TmdbMetadataDetailsScreen> {
             )).toList(),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _whereToBuySection(String title, String type, String releaseDate) {
-    final year = releaseDate.length >= 4 ? releaseDate.substring(0, 4) : '';
-    final query = '$title $year ${type == 'tv' ? 'TV series' : 'movie'}'.trim();
-    final encoded = Uri.encodeQueryComponent(query);
-    final retailers = <({String name, IconData icon, String url})>[
-      (name: 'Amazon México', icon: Icons.shopping_bag_outlined, url: 'https://www.amazon.com.mx/s?k=$encoded'),
-      (name: 'Mercado Libre', icon: Icons.store_mall_directory_outlined, url: 'https://listado.mercadolibre.com.mx/${Uri.encodeComponent(query)}'),
-      (name: 'Walmart', icon: Icons.storefront_outlined, url: 'https://www.walmart.com/search?q=$encoded'),
-      (name: 'eBay', icon: Icons.sell_outlined, url: 'https://www.ebay.com/sch/i.html?_nkw=$encoded'),
-    ];
-    return Padding(
-      padding: const EdgeInsets.only(top: 22),
-      child: Card(
-        color: const Color(0xFF191919),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Where to buy or rent', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 5),
-            const Text('This title is not in your local library. Search retailers for streaming, digital purchase, DVD, Blu-ray, or used copies. Availability and price are confirmed by each retailer.', style: TextStyle(color: Colors.white60, fontSize: 12, height: 1.4)),
-            const SizedBox(height: 10),
-            Wrap(spacing: 8, runSpacing: 8, children: retailers.map((retailer) => OutlinedButton.icon(
-              onPressed: () async {
-                final uri = Uri.tryParse(retailer.url);
-                if (uri == null) return;
-                final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-                if (!opened && mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open ${retailer.name}.')));
-                }
-              },
-              icon: Icon(retailer.icon, size: 17),
-              label: Text(retailer.name),
-            )).toList()),
-          ]),
-        ),
       ),
     );
   }

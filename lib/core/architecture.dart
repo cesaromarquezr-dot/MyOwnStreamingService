@@ -47,7 +47,6 @@ abstract final class MasterProductCapabilities {
     ProductCapability(key: 'marketplace', domain: ProductDomain.commerce, label: 'Marketplace'),
     ProductCapability(key: 'profiles', domain: ProductDomain.identity, label: 'Profiles'),
     ProductCapability(key: 'search', domain: ProductDomain.experience, label: 'Search'),
-    ProductCapability(key: 'hey_media', domain: ProductDomain.intelligence, label: 'Hey Media'),
     ProductCapability(key: 'player', domain: ProductDomain.playback, label: 'Player'),
     ProductCapability(key: 'xray', domain: ProductDomain.playback, label: 'X-Ray'),
     ProductCapability(key: 'themes', domain: ProductDomain.themes, label: 'Themes'),

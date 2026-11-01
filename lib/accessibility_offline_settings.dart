@@ -7,7 +7,6 @@ import 'offline_sync_queue.dart';
 import 'offline_metadata_cache.dart';
 import 'privacy_preferences.dart';
 import 'streaming_experience.dart';
-import 'backend_api.dart';
 
 /// User-level accessibility, activity privacy, and retryable local progress sync.
 class AccessibilityOfflineSettingsScreen extends StatefulWidget {
@@ -86,38 +85,14 @@ class _AccessibilityOfflineSettingsScreenState
   }
 
   Future<void> _savePrivacy(void Function() change) async {
-    final priorPresence = privacy.sharePresence;
-    final priorActivity = privacy.shareActivity;
     setState(() {
       change();
       saving = true;
     });
-    final nextPresence = privacy.sharePresence;
-    final nextActivity = privacy.shareActivity;
     try {
-      final api = AppController.instance.backendApi;
-      final profileId = AppController.instance.currentProfile?.id;
-      if (profileId != null &&
-          api.isAuthenticated &&
-          ((priorPresence && !nextPresence) ||
-              (priorActivity && !nextActivity))) {
-        // Clear server-side activity while the previous permission still allows this request.
-        await api.setSocialProfilePresence(
-          profileId: profileId,
-          availability: nextPresence ? null : 'away',
-          clearActivity: !nextActivity || !nextPresence,
-        );
-      }
       await PrivacyPreferencesStore.save(profileId: _profileId, value: privacy);
       if (!privacy.allowOfflineMetadata) {
         await OfflineMetadataCache(profileId: _profileId).clear();
-      }
-      if (profileId != null &&
-          api.isAuthenticated &&
-          !priorPresence &&
-          nextPresence) {
-        await api.setSocialProfilePresence(
-            profileId: profileId, availability: 'active', clearActivity: true);
       }
       if (mounted) setState(() => saving = false);
     } catch (e) {
@@ -264,26 +239,6 @@ class _AccessibilityOfflineSettingsScreenState
                     title: UniversalText('Profile privacy'),
                     subtitle: UniversalText(
                         'These options are enforced locally and by the presence API when available. Cross-device preference sync requires the production API/migration rollout.'),
-                  ),
-                  SwitchListTile(
-                    title: const UniversalText('Share active status'),
-                    subtitle: const UniversalText(
-                        'Allow other profiles on this account to see whether this profile is active.'),
-                    value: privacy.sharePresence,
-                    onChanged: saving
-                        ? null
-                        : (value) =>
-                            _savePrivacy(() => privacy.sharePresence = value),
-                  ),
-                  SwitchListTile(
-                    title: const UniversalText('Share current activity'),
-                    subtitle: const UniversalText(
-                        'Allow titles, songs, and other current activity to appear beside this profile.'),
-                    value: privacy.shareActivity,
-                    onChanged: saving
-                        ? null
-                        : (value) =>
-                            _savePrivacy(() => privacy.shareActivity = value),
                   ),
                   SwitchListTile(
                     title: const UniversalText('Personalized recommendations'),

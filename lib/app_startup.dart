@@ -5,8 +5,6 @@ import 'app_customization.dart';
 import 'innovation_features.dart';
 import 'music.dart';
 import 'navigation/page_appearance_store.dart';
-import 'shop.dart';
-import 'social_story_experience.dart';
 import 'supabase/supabase_service.dart';
 
 typedef AppStartupStep = Future<void> Function();
@@ -24,8 +22,6 @@ class AppStartupTasks {
     required this.initializeMusicCustomization,
     required this.initializeBadges,
     required this.initializePlatformPreferences,
-    required this.initializeShopCatalog,
-    required this.initializeStoryPlacement,
   });
 
   final AppStartupStep initializeSupabase;
@@ -37,8 +33,6 @@ class AppStartupTasks {
   final AppStartupStep initializeMusicCustomization;
   final AppStartupStep initializeBadges;
   final AppStartupStep initializePlatformPreferences;
-  final AppStartupStep initializeShopCatalog;
-  final AppStartupStep initializeStoryPlacement;
 
   Future<void> run() async {
     await initializeSupabase();
@@ -50,8 +44,6 @@ class AppStartupTasks {
     await initializeMusicCustomization();
     await initializeBadges();
     await initializePlatformPreferences();
-    await initializeShopCatalog();
-    await initializeStoryPlacement();
   }
 }
 
@@ -69,8 +61,5 @@ Future<void> initializeMyStreamingService({
     initializeMusicCustomization: MusicPageCustomizationStore.initialize,
     initializeBadges: () async => AppController.instance.initializeBadges(),
     initializePlatformPreferences: PlatformPreferenceStore.initialize,
-    initializeShopCatalog: ShopCatalog.instance.initialize,
-    initializeStoryPlacement: () async =>
-        StoryPlacementStore.load(AppController.instance.currentProfile),
   ).run();
 }

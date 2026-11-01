@@ -1,6 +1,6 @@
 # Production Readiness and Reliability
 
-This release adds practical foundations for security/privacy controls, regression checks, recoverable offline playback progress, root-level accessibility, Hey Media action policy, owner-only operational probes, and backup/restore scripts. It is not a claim that the system is fully production-certified.
+This release adds practical foundations for security/privacy controls, regression checks, recoverable offline playback progress, root-level accessibility, owner-only operational probes, and backup/restore scripts. It is not a claim that the system is fully production-certified.
 
 ## Included code
 
@@ -9,8 +9,7 @@ This release adds practical foundations for security/privacy controls, regressio
 - `lib/offline_sync_queue.dart`: bounded purpose-specific queue for playback progress; updates are coalesced by profile/media. It does not accept arbitrary action types and is not used for chats, payments, credentials, or media blobs.
 - `lib/accessibility_offline_settings.dart`: text scaling, high contrast, reduce motion, subtitle and audio-description preferences, presence privacy, and pending progress sync.
 - `lib/app_accessibility.dart`: applies profile text scale, contrast, and reduced-animation preference at the app root.
-- `lib/core/services/hey_media_action_policy.dart`: shared confirmation policy for consequential Hey Media actions. Every action executor must still re-check authorization at the backend and must use this policy before side effects.
-- `Backend/database/consolidated_platform.sql`: service-role-only tables for privacy preference synchronization, sanitized AI action audits, idempotent sync receipts, health snapshots, and backup records. There are deliberately no browser-client RLS policies.
+- `Backend/database/consolidated_platform.sql`: service-role-only tables for privacy preference synchronization, sanitized action audits, idempotent sync receipts, health snapshots, and backup records. There are deliberately no browser-client RLS policies.
 - `.github/workflows/flutter-quality.yml`: analyze and test gate on push/PR.
 - `scripts/production/backup.sh` and `scripts/production/restore_supabase.sh`: encrypted PostgreSQL backup bundle and guarded database restore.
 
@@ -33,12 +32,11 @@ This release adds practical foundations for security/privacy controls, regressio
 - Automatic network-change event handling is not installed because this repository has no connectivity plugin. Users can explicitly retry when a connection returns; future work can add connectivity event triggers after the server-side sync receipt/reconciliation endpoint is in place. Do not claim support for secure offline video downloads until encryption, platform download entitlements, rights checks, key expiry, and device-bound playback are implemented.
 - Cross-device playback progress must be verified against actual account snapshot restore logic. The client includes `playbackProgress` in the synchronized snapshot, but a dedicated per-profile progress table and server-side reconciliation are recommended before relying on it for production device continuity.
 
-## Privacy and AI action safety
+## Privacy and telemetry
 
 - `sharePresence` and `shareActivity` settings suppress presence updates in the API wrapper and clear an existing activity on opt-out.
 - Playback diagnostic collection is disabled by default and checks the profile's opt-in setting before recording.
 - Turning off personalized recommendations switches local discovery ranking to a newest-first generic list, while continuing to exclude the profile's disliked/completed items.
-- The Hey Media policy distinguishes read-only discovery/playback from actions needing explicit confirmation. The current assistant is primarily a local query/plan experience; future order/payment/delete/security executors must call the policy and enforce the same role and ownership rules at the server. Never treat a client decision as authorization.
 
 ## Tests
 

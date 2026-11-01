@@ -7,7 +7,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'backend_api.dart';
 import 'app_core.dart';
 import 'entertainment_extensions.dart';
-import 'food_delivery.dart';
 import 'music.dart';
 import 'music_favorites.dart';
 import 'player.dart';
@@ -17,7 +16,6 @@ import 'core/models/tv_channel.dart';
 import 'core/services/tv_channel_engine.dart';
 import 'localization.dart';
 import 'page_customization_button.dart';
-import 'public_live_tv.dart';
 
 const _channelContentTypes = <String>['Movies', 'Shows', 'Music'];
 
@@ -1434,8 +1432,6 @@ class _MyTvScreenState extends State<MyTvScreen> {
     if (entry.track != null) {
       await MusicPlaybackController.instance.play(entry.track!);
     } else {
-      final matchedChannels = _channels.where((item) => item.id == targetChannelId);
-      final selectedChannelName = matchedChannels.isEmpty ? 'TV' : matchedChannels.first.name;
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -1443,8 +1439,6 @@ class _MyTvScreenState extends State<MyTvScreen> {
           builder: (_) => PlayerScreen(
             media: entry.media!,
             initialPositionSeconds: initialPositionSeconds,
-            activityLabel:
-                "Watching TV channel $selectedChannelName: ${entry.media!.title}",
           ),
         ),
       );
@@ -1556,21 +1550,6 @@ class _MyTvScreenState extends State<MyTvScreen> {
                   icon: const Icon(Icons.music_note_rounded),
                 ),
                 IconButton(
-                  onPressed: _loading
-                      ? null
-                      : () => Navigator.push<void>(
-                            context,
-                            MaterialPageRoute<void>(
-                              builder: (_) => FoodOrderingScreen(
-                                viewingContext:
-                                    channel?.name ?? 'My TV viewing',
-                              ),
-                            ),
-                          ),
-                  tooltip: 'Order food',
-                  icon: const Icon(Icons.delivery_dining_rounded),
-                ),
-                IconButton(
                   onPressed: _loading ? null : _addChannel,
                   tooltip: 'Create channel',
                   icon: const Icon(Icons.add),
@@ -1609,20 +1588,6 @@ class _MyTvScreenState extends State<MyTvScreen> {
                                 _loading ? null : _openMusicBreakSettings,
                             icon: const Icon(Icons.music_note_rounded),
                             label: const Text('Music breaks'),
-                          ),
-                          TextButton.icon(
-                            onPressed: _loading
-                                ? null
-                                : () => Navigator.push<void>(
-                                      context,
-                                      MaterialPageRoute<void>(
-                                          builder: (_) => FoodOrderingScreen(
-                                                viewingContext: channel?.name ??
-                                                    'My TV viewing',
-                                              )),
-                                    ),
-                            icon: const Icon(Icons.delivery_dining_rounded),
-                            label: const Text('Order food'),
                           ),
                           TextButton.icon(
                             onPressed: _loading ? null : _addChannel,
@@ -1668,24 +1633,6 @@ class _MyTvScreenState extends State<MyTvScreen> {
                       style: TextStyle(color: Colors.white38, fontSize: 12),
                     ),
                   ),
-                const SizedBox(height: 14),
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.satellite_alt_rounded),
-                    title: const Text('Looking for real broadcast channels?'),
-                    subtitle: const Text(
-                        'Open Public Live TV to browse external public streams, filter by country or genre, and save favorites.'),
-                    trailing: const Icon(Icons.arrow_forward_rounded),
-                    onTap: () => Navigator.push<void>(
-                      context,
-                      MaterialPageRoute<void>(
-                        settings: const RouteSettings(
-                            name: '/app/page/public-live-tv'),
-                        builder: (_) => const PublicLiveTvScreen(),
-                      ),
-                    ),
-                  ),
-                ),
                 const SizedBox(height: 14),
                 const UniversalText('Quick channel presets',
                     style:
