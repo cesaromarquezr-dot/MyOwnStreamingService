@@ -29,6 +29,19 @@ import 'energy_saver.dart';
 import 'streaming_experience.dart';
 import 'core/services/original_language_defaults.dart';
 import 'core/services/cinematic_title_metadata_service.dart';
+import 'media_graph_relationship.dart';
+
+class _StoryAdaptationLink {
+  const _StoryAdaptationLink({
+    required this.media,
+    required this.reasons,
+    required this.relationships,
+  });
+
+  final MediaItem media;
+  final List<String> reasons;
+  final List<MediaGraphRelationship> relationships;
+}
 
 /// Implements the `MediaDetailsScreen` class for this feature or UI component.
 class MediaDetailsScreen extends StatefulWidget {
@@ -40,8 +53,7 @@ class MediaDetailsScreen extends StatefulWidget {
   });
 
   @override
-  State<MediaDetailsScreen> createState() =>
-      _MediaDetailsScreenState();
+  State<MediaDetailsScreen> createState() => _MediaDetailsScreenState();
 }
 
 /// Implements the `_MediaDetailsScreenState` class for this feature or UI component.
@@ -56,6 +68,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
 
   int selectedSeasonIndex = 0;
   CinematicTitleMetadata? _providerTitleMetadata;
+
   /// Locally saved, profile-scoped artwork and trailer choices.
   String? _selectedPosterPath;
   String? _selectedBackdropPath;
@@ -100,13 +113,16 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   }
 
   @override
+
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
     unawaited(_loadDefaultLanguageTracks());
-    unawaited(EnergySaverController.instance.ensureLoaded(
+    unawaited(EnergySaverController.instance
+        .ensureLoaded(
       profileId: AppController.instance.currentProfile?.id,
-    ).then((_) async {
+    )
+        .then((_) async {
       await Future<void>.delayed(Duration.zero);
       // Movie/show details already request TMDB title metadata below. The
       // generic resolver is needed here for album/music detail pages instead.
@@ -141,7 +157,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         year: media.releaseYear ?? media.seriesStartYear,
       );
       if (metadata != null &&
-          EnergySaverController.instance.canRunBackgroundWork(pageId: 'details')) {
+          EnergySaverController.instance
+              .canRunBackgroundWork(pageId: 'details')) {
         unawaited(MediaArtworkAutoResolver.rememberResolvedArtwork(
           media,
           MediaArtworkResult(
@@ -201,7 +218,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _providerMetadataError = error.toString().replaceFirst('Exception: ', '');
+        _providerMetadataError =
+            error.toString().replaceFirst('Exception: ', '');
       });
     } finally {
       if (mounted) setState(() => _loadingProviderMetadata = false);
@@ -215,9 +233,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     final targetLanguage = OriginalLanguageDefaults.resolveForMedia(media);
     final audio = OriginalLanguageDefaults.bestTrack(
           media.audioTracks,
-          targetLanguage: preferences.preferOriginalLanguageTracks
-              ? targetLanguage
-              : null,
+          targetLanguage:
+              preferences.preferOriginalLanguageTracks ? targetLanguage : null,
         ) ??
         'Default';
     final subtitle = preferences.subtitlesEnabled
@@ -238,6 +255,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     // Album records can be opened from many shared discovery/search/library
@@ -279,27 +297,27 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           SafeArea(
             child: CustomScrollView(
               slivers: [
-            SliverAppBar(
-              pinned: true,
-              automaticallyImplyLeading: false,
-              backgroundColor: const Color(0xFF090909),
-              surfaceTintColor: Colors.transparent,
-              elevation: 0,
-              // The global navigation already supplies Home. The details body
-              // renders the media title, so no duplicate title/back row here.
-              actions: [
-                if (_supportsCinematicProviderMetadata)
-                  IconButton(
-                    tooltip: 'Choose poster and backdrop',
-                    icon: const Icon(Icons.photo_library_outlined),
-                    onPressed: _openArtworkGalleryForCurrentMedia,
-                  ),
-                const PageCustomizeButton(pageId: 'details'),
-              ],
-            ),
-            SliverToBoxAdapter(
-              child: _buildDetailsPage(),
-            ),
+                SliverAppBar(
+                  pinned: true,
+                  automaticallyImplyLeading: false,
+                  backgroundColor: const Color(0xFF090909),
+                  surfaceTintColor: Colors.transparent,
+                  elevation: 0,
+                  // The global navigation already supplies Home. The details body
+                  // renders the media title, so no duplicate title/back row here.
+                  actions: [
+                    if (_supportsCinematicProviderMetadata)
+                      IconButton(
+                        tooltip: 'Choose poster and backdrop',
+                        icon: const Icon(Icons.photo_library_outlined),
+                        onPressed: _openArtworkGalleryForCurrentMedia,
+                      ),
+                    const PageCustomizeButton(pageId: 'details'),
+                  ],
+                ),
+                SliverToBoxAdapter(
+                  child: _buildDetailsPage(),
+                ),
               ],
             ),
           ),
@@ -309,7 +327,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   }
 
   String? get _detailsBackdropUrl =>
-      CinematicTitleMetadataService.imageUrl(_selectedBackdropPath, size: 'w1280') ??
+      CinematicTitleMetadataService.imageUrl(_selectedBackdropPath,
+          size: 'w1280') ??
       _providerTitleMetadata?.backdropUrl;
 
   /// Performs `_buildDetailsPage` for this feature. Update this documentation when its contract changes.
@@ -318,7 +337,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       return const Padding(
         padding: EdgeInsets.all(24),
         child: Center(
-          child: UniversalText('No profile selected.',
+          child: UniversalText(
+            'No profile selected.',
             style: TextStyle(
               color: Colors.white70,
               fontSize: 16,
@@ -341,13 +361,275 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           _buildEditionSelector(),
           for (final section in customization.sectionOrder)
             _buildSection(section),
+          _buildStoryAdaptationsSection(),
           MediaContinuityPanel(mediaId: media.id, mediaTitle: media.title),
-          MediaFranchiseConnectionsPanel(mediaId: media.id, hasSeasons: isTvShow),
+          MediaFranchiseConnectionsPanel(
+              mediaId: media.id, hasSeasons: isTvShow),
           const SizedBox(height: 12),
           MediaKnowledgePanel(mediaWorkId: media.id, mediaTitle: media.title),
         ],
       ),
     );
+  }
+
+  List<MediaGraphRelationship> _graphAdaptationRelationships(
+    MediaItem candidate,
+  ) {
+    final relationships = <MediaGraphRelationship>[
+      ...media.graphRelationships,
+      ...candidate.graphRelationships,
+    ];
+    final byKey = <String, MediaGraphRelationship>{};
+    for (final relationship in relationships) {
+      if (!relationship.isAdaptationRelationship) continue;
+      final connectsPair = (relationship.sourceWorkId == media.id &&
+              relationship.targetWorkId == candidate.id) ||
+          (relationship.sourceWorkId == candidate.id &&
+              relationship.targetWorkId == media.id);
+      if (!connectsPair) continue;
+      final key = relationship.id ??
+          '${relationship.sourceWorkId}:${relationship.targetWorkId}:'
+              '${relationship.relationshipType}:${relationship.reason}';
+      byKey.putIfAbsent(key, () => relationship);
+    }
+    return byKey.values.toList(growable: false);
+  }
+
+  List<_StoryAdaptationLink> _relatedStoryAdaptations() {
+    final controller = AppController.instance;
+    final currentStoryId = media.storyId?.trim() ?? '';
+    final currentGroupId = media.adaptationGroupId?.trim() ?? '';
+    final currentGroupName =
+        media.adaptationGroupName?.trim().toLowerCase() ?? '';
+    final relatedIds = media.relatedAdaptationIds.toSet();
+    final byId = <String, _StoryAdaptationLink>{};
+
+    for (final candidate in controller.library) {
+      if (candidate.id == media.id ||
+          !candidate.isAccessibleTo(controller.currentProfile)) {
+        continue;
+      }
+
+      final sharedStory = currentStoryId.isNotEmpty &&
+          candidate.storyId?.trim() == currentStoryId;
+      final sharedGroup = currentGroupId.isNotEmpty &&
+          candidate.adaptationGroupId?.trim() == currentGroupId;
+      final candidateGroupName =
+          candidate.adaptationGroupName?.trim().toLowerCase() ?? '';
+      final sharedGroupName = currentStoryId.isEmpty &&
+          currentGroupId.isEmpty &&
+          (candidate.storyId?.trim().isEmpty ?? true) &&
+          (candidate.adaptationGroupId?.trim().isEmpty ?? true) &&
+          currentGroupName.isNotEmpty &&
+          candidateGroupName == currentGroupName;
+      final explicitlyLinked = relatedIds.contains(candidate.id) ||
+          candidate.relatedAdaptationIds.contains(media.id);
+      final relationships = _graphAdaptationRelationships(candidate);
+      final reasons = <String>[
+        if (sharedStory) 'Both titles share story ID "$currentStoryId".',
+        if (sharedGroup)
+          'Both titles share adaptation group "$currentGroupId".',
+        if (sharedGroupName)
+          'Both titles share the group name "${media.adaptationGroupName}" '
+              '(name-only match; not independently verified).',
+        if (explicitlyLinked)
+          'The catalog explicitly lists these media IDs as related adaptations.',
+        ...relationships.map((relationship) {
+          final reason = relationship.reason?.trim() ?? '';
+          return reason.isNotEmpty
+              ? reason
+              : 'Graph relationship: ${relationship.relationshipType}.';
+        }),
+      ];
+
+      if (reasons.isNotEmpty) {
+        byId.putIfAbsent(
+          candidate.id,
+          () => _StoryAdaptationLink(
+            media: candidate,
+            reasons: reasons,
+            relationships: relationships,
+          ),
+        );
+      }
+    }
+
+    return byId.values.toList()
+      ..sort((a, b) {
+        final yearOrder =
+            (a.media.releaseYear ?? 0).compareTo(b.media.releaseYear ?? 0);
+        return yearOrder != 0
+            ? yearOrder
+            : a.media.title
+                .toLowerCase()
+                .compareTo(b.media.title.toLowerCase());
+      });
+  }
+
+  Widget _buildStoryAdaptationsSection() {
+    final adaptations = _relatedStoryAdaptations();
+    final sourceTitle = media.storyTitle?.trim().isNotEmpty == true
+        ? media.storyTitle!.trim()
+        : media.adaptationGroupName?.trim();
+    final author = media.originalAuthor?.trim();
+    final hasStoryMetadata = (media.storyId?.trim().isNotEmpty ?? false) ||
+        (media.adaptationGroupId?.trim().isNotEmpty ?? false) ||
+        (sourceTitle?.isNotEmpty ?? false) ||
+        (media.relatedAdaptationIds.isNotEmpty);
+    if (!hasStoryMetadata && adaptations.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final sourceDetails = <String>[
+      if (sourceTitle?.isNotEmpty ?? false) sourceTitle!,
+      if (author?.isNotEmpty ?? false) 'by $author',
+      if (media.sourceWorkYear != null) '${media.sourceWorkYear}',
+    ].join(' · ');
+
+    return Card(
+      color: const Color(0xFF151515),
+      margin: const EdgeInsets.only(bottom: 18),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const UniversalText(
+              'Other adaptations of this story',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            ),
+            if (sourceDetails.isNotEmpty) ...[
+              const SizedBox(height: 5),
+              Text(
+                'Source work: $sourceDetails',
+                style: const TextStyle(color: Colors.white60, fontSize: 12),
+              ),
+            ],
+            if (media.adaptationType?.trim().isNotEmpty == true) ...[
+              const SizedBox(height: 4),
+              Text(
+                'This title: ${media.adaptationType!.trim()}',
+                style: const TextStyle(color: Colors.white60, fontSize: 12),
+              ),
+            ],
+            if (adaptations.isEmpty)
+              const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: UniversalText(
+                  'No other titles in your accessible library are linked to this story yet.',
+                  style: TextStyle(color: Colors.white60),
+                ),
+              )
+            else
+              ...adaptations.map((link) {
+                final adaptation = link.media;
+                final details = <String>[
+                  if (adaptation.releaseYear != null)
+                    '${adaptation.releaseYear}',
+                  if (adaptation.adaptationType?.trim().isNotEmpty == true)
+                    adaptation.adaptationType!.trim(),
+                  adaptation.type,
+                ].join(' · ');
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.auto_stories_outlined),
+                  title: Text(adaptation.title),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (details.isNotEmpty) Text(details),
+                      for (final reason in link.reasons)
+                        Text(
+                          'Why linked: $reason',
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 12),
+                        ),
+                      if (link.relationships.isEmpty)
+                        const Text(
+                          'Provenance: media metadata · verification not recorded',
+                          style: TextStyle(color: Colors.white54, fontSize: 11),
+                        ),
+                      for (final relationship in link.relationships)
+                        _buildRelationshipProvenance(relationship),
+                    ],
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => MediaDetailsScreen(media: adaptation),
+                    ),
+                  ),
+                );
+              }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRelationshipProvenance(
+    MediaGraphRelationship relationship,
+  ) {
+    final provenance = <String>[
+      'Source: ${relationship.provenanceSource?.trim().isNotEmpty == true ? relationship.provenanceSource!.trim() : 'not recorded'}',
+      'Verification: ${relationship.verificationStatus}',
+      if (relationship.confidence != null)
+        'Confidence: ${(relationship.confidence! * 100).round()}%',
+      if (relationship.verifiedAt != null)
+        'Verified: ${relationship.verifiedAt!.toIso8601String().substring(0, 10)}',
+    ].join(' · ');
+    final sourceUrl = relationship.sourceUrl?.trim() ?? '';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          provenance,
+          style: const TextStyle(color: Colors.white54, fontSize: 11),
+        ),
+        if (sourceUrl.isNotEmpty)
+          TextButton.icon(
+            onPressed: () => _openRelationshipSource(sourceUrl),
+            icon: const Icon(Icons.open_in_new, size: 14),
+            label:
+                Text(sourceUrl, maxLines: 1, overflow: TextOverflow.ellipsis),
+            style: TextButton.styleFrom(
+              padding: EdgeInsets.zero,
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _openRelationshipSource(String rawUrl) async {
+    final uri = Uri.tryParse(rawUrl);
+    if (uri == null ||
+        (uri.scheme != 'https' && uri.scheme != 'http') ||
+        uri.host.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('This relationship source URL is invalid.')),
+      );
+      return;
+    }
+    try {
+      final launched =
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Could not open the relationship source.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Could not open the relationship source: $error')),
+        );
+      }
+    }
   }
 
   /// Returns editions explicitly linked to the same canonical work.
@@ -412,11 +694,13 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
               ),
               hint: const Text('Select a version'),
               items: editions.map((edition) {
-                final label = edition.displayEditionLabel ?? 'Standard / Original Version';
+                final label = edition.displayEditionLabel ??
+                    'Standard / Original Version';
                 final year = edition.editionReleaseYear ?? edition.releaseYear;
                 return DropdownMenuItem<String>(
                   value: edition.id,
-                  child: Text(year == null ? label : '$label ($year)', overflow: TextOverflow.ellipsis),
+                  child: Text(year == null ? label : '$label ($year)',
+                      overflow: TextOverflow.ellipsis),
                 );
               }).toList(),
               onChanged: (value) => setState(() => _selectedEditionId = value),
@@ -444,18 +728,33 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
 
   String _formatProviderInteger(int value) {
     return value.toString().replaceAllMapped(
-      RegExp(r'\B(?=(\d{3})+(?!\d))'),
-      (match) => ',',
-    );
+          RegExp(r'\B(?=(\d{3})+(?!\d))'),
+          (match) => ',',
+        );
   }
 
   String _providerLanguageName(String code) {
     const names = <String, String>{
-      'ar': 'Arabic', 'de': 'German', 'en': 'English', 'es': 'Spanish',
-      'fr': 'French', 'hi': 'Hindi', 'it': 'Italian', 'ja': 'Japanese',
-      'ko': 'Korean', 'pt': 'Portuguese', 'ru': 'Russian', 'th': 'Thai',
-      'tr': 'Turkish', 'zh': 'Chinese', 'nl': 'Dutch', 'sv': 'Swedish',
-      'da': 'Danish', 'pl': 'Polish', 'no': 'Norwegian', 'fi': 'Finnish',
+      'ar': 'Arabic',
+      'de': 'German',
+      'en': 'English',
+      'es': 'Spanish',
+      'fr': 'French',
+      'hi': 'Hindi',
+      'it': 'Italian',
+      'ja': 'Japanese',
+      'ko': 'Korean',
+      'pt': 'Portuguese',
+      'ru': 'Russian',
+      'th': 'Thai',
+      'tr': 'Turkish',
+      'zh': 'Chinese',
+      'nl': 'Dutch',
+      'sv': 'Swedish',
+      'da': 'Danish',
+      'pl': 'Polish',
+      'no': 'Norwegian',
+      'fi': 'Finnish',
     };
     final name = names[code.toLowerCase()];
     return name == null ? code.toUpperCase() : '$name ($code)';
@@ -483,13 +782,15 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   Future<void> _openArtworkGalleryForCurrentMedia() async {
     if (!_supportsCinematicProviderMetadata) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Poster and backdrop galleries are available for movies and series.'),
+        content: Text(
+            'Poster and backdrop galleries are available for movies and series.'),
       ));
       return;
     }
     if (!CinematicTitleMetadataService.isConfigured) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Connect and start the metadata backend to load poster and backdrop choices.'),
+        content: Text(
+            'Connect and start the metadata backend to load poster and backdrop choices.'),
       ));
       return;
     }
@@ -528,13 +829,15 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     if (!mounted) return;
     if (metadata == null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('No exact artwork gallery was found for "${media.title}". Verify the title and try again.'),
+        content: Text(
+            'No exact artwork gallery was found for "${media.title}". Verify the title and try again.'),
       ));
       return;
     }
     if (metadata.posterPaths.isEmpty && metadata.backdropPaths.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('No poster or backdrop choices are available for "${media.title}".'),
+        content: Text(
+            'No poster or backdrop choices are available for "${media.title}".'),
       ));
       return;
     }
@@ -545,7 +848,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Videos (${videos.length})', style: const TextStyle(fontWeight: FontWeight.w800)),
+        Text('Videos (${videos.length})',
+            style: const TextStyle(fontWeight: FontWeight.w800)),
         const SizedBox(height: 4),
         const Text(
           'Choose one default YouTube trailer, or randomize playback across all available YouTube videos.',
@@ -557,8 +861,11 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
             dense: true,
             value: _randomizeAvailableTrailers,
             onChanged: _setRandomTrailerMode,
-            title: const Text('Randomize from all available videos', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
-            subtitle: Text('${_playableProviderVideos.length} YouTube video(s) in the random pool', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+            title: const Text('Randomize from all available videos',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+            subtitle: Text(
+                '${_playableProviderVideos.length} YouTube video(s) in the random pool',
+                style: const TextStyle(color: Colors.white54, fontSize: 11)),
           ),
         if ((_selectedDetailsTrailerUrl?.trim().isNotEmpty ?? false) &&
             (media.trailerUrl?.trim().isNotEmpty ?? false))
@@ -573,7 +880,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         if (videos.isEmpty)
           const Padding(
             padding: EdgeInsets.only(top: 5),
-            child: Text('No public videos currently listed by TMDB.', style: TextStyle(color: Colors.white54, fontSize: 12)),
+            child: Text('No public videos currently listed by TMDB.',
+                style: TextStyle(color: Colors.white54, fontSize: 12)),
           )
         else
           ...videos.map((video) {
@@ -583,10 +891,13 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
               contentPadding: EdgeInsets.zero,
               dense: true,
               leading: Icon(
-                isSelected ? Icons.play_circle_filled : Icons.play_circle_outline,
+                isSelected
+                    ? Icons.play_circle_filled
+                    : Icons.play_circle_outline,
                 color: isSelected ? Colors.greenAccent : Colors.white70,
               ),
-              title: Text(video.name, maxLines: 2, overflow: TextOverflow.ellipsis),
+              title: Text(video.name,
+                  maxLines: 2, overflow: TextOverflow.ellipsis),
               subtitle: Text(
                 '${video.site} · ${video.type}${video.official ? ' · Official' : ''}${isSelected ? ' · Details-page trailer' : ''}',
                 style: TextStyle(
@@ -602,14 +913,17 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                         : 'In-app trailer playback currently supports YouTube videos'),
                 icon: Icon(
                   isSelected ? Icons.check_circle : Icons.movie_filter_outlined,
-                  color: isSelected ? Colors.greenAccent : (isYouTube ? Colors.white70 : Colors.white24),
+                  color: isSelected
+                      ? Colors.greenAccent
+                      : (isYouTube ? Colors.white70 : Colors.white24),
                   size: 21,
                 ),
                 onPressed: !isYouTube || video.url == null || isSelected
                     ? null
                     : () => _setAsDetailsPageTrailer(video),
               ),
-              onTap: video.url == null ? null : () => _openProviderUrl(video.url!),
+              onTap:
+                  video.url == null ? null : () => _openProviderUrl(video.url!),
             );
           }),
       ],
@@ -652,7 +966,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not save trailer playback preference.')),
+        const SnackBar(
+            content: Text('Could not save trailer playback preference.')),
       );
     }
   }
@@ -669,7 +984,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       final savedUrl = preferences.getString(key)?.trim() ?? '';
       if (savedUrl.isEmpty) return null;
       final stillAvailable = metadata.videos.any((video) =>
-          video.site.trim().toLowerCase() == 'youtube' && video.url == savedUrl);
+          video.site.trim().toLowerCase() == 'youtube' &&
+          video.url == savedUrl);
       if (stillAvailable) return savedUrl;
       await preferences.remove(key);
     } catch (_) {
@@ -680,9 +996,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
 
   bool _isDetailsPageTrailer(CinematicTitleVideo video) {
     final savedUrl = _selectedDetailsTrailerUrl?.trim() ?? '';
-    final effectiveUrl = savedUrl.isNotEmpty
-        ? savedUrl
-        : (media.trailerUrl?.trim() ?? '');
+    final effectiveUrl =
+        savedUrl.isNotEmpty ? savedUrl : (media.trailerUrl?.trim() ?? '');
     return effectiveUrl.isNotEmpty && video.url == effectiveUrl;
   }
 
@@ -703,7 +1018,9 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     } catch (_) {
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('Could not reset the trailer selection. Please try again.')),
+        const SnackBar(
+            content: Text(
+                'Could not reset the trailer selection. Please try again.')),
       );
     }
   }
@@ -723,12 +1040,16 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         _randomizeAvailableTrailers = false;
       });
       messenger.showSnackBar(
-        SnackBar(content: Text('“${video.name}” is now the trailer for ${media.title} on this Details page.')),
+        SnackBar(
+            content: Text(
+                '“${video.name}” is now the trailer for ${media.title} on this Details page.')),
       );
     } catch (_) {
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('Could not save the selected trailer. Please try again.')),
+        const SnackBar(
+            content:
+                Text('Could not save the selected trailer. Please try again.')),
       );
     }
   }
@@ -906,11 +1227,19 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       ...seasonsWithoutNumber,
     ];
     result.sort((a, b) => (_integerValue(
-              a['seasonNumber'] ?? a['season_number'] ?? a['season'] ?? a['number'],
-            ) ?? 0)
+              a['seasonNumber'] ??
+                  a['season_number'] ??
+                  a['season'] ??
+                  a['number'],
+            ) ??
+            0)
         .compareTo(_integerValue(
-              b['seasonNumber'] ?? b['season_number'] ?? b['season'] ?? b['number'],
-            ) ?? 0));
+              b['seasonNumber'] ??
+                  b['season_number'] ??
+                  b['season'] ??
+                  b['number'],
+            ) ??
+            0));
     return result;
   }
 
@@ -949,9 +1278,10 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   Future<void> _loadEpisodesForSelectedSeason() async {
     final ordered = _orderedSeasons();
     if (ordered.isEmpty) return;
-    final index = selectedSeasonIndex >= 0 && selectedSeasonIndex < ordered.length
-        ? selectedSeasonIndex
-        : 0;
+    final index =
+        selectedSeasonIndex >= 0 && selectedSeasonIndex < ordered.length
+            ? selectedSeasonIndex
+            : 0;
     await _loadProviderSeasonEpisodes(ordered[index]);
   }
 
@@ -972,7 +1302,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     if (!mounted) return;
     setState(() => _loadingProviderEpisodeSeasons.add(seasonNumber));
     try {
-      final episodes = await CinematicTitleMetadataService.lookupTvSeasonEpisodes(
+      final episodes =
+          await CinematicTitleMetadataService.lookupTvSeasonEpisodes(
         providerId: metadata.providerId,
         seasonNumber: seasonNumber,
       );
@@ -1076,8 +1407,18 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       // Keep locally indexed identity/playback fields while enriching the
       // visible name, overview, runtime, air date, rating and still from TMDB.
       for (final key in <String>[
-        'id', 'playbackUrl', 'streamingUrl', 'streamUrl', 'url', 'path',
-        'filePath', 'mediaId', 'type', 'trailerUrl', 'audioTracks', 'subtitles',
+        'id',
+        'playbackUrl',
+        'streamingUrl',
+        'streamUrl',
+        'url',
+        'path',
+        'filePath',
+        'mediaId',
+        'type',
+        'trailerUrl',
+        'audioTracks',
+        'subtitles',
       ]) {
         final value = localEpisode[key];
         if (value != null && value.toString().trim().isNotEmpty) {
@@ -1085,7 +1426,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         }
       }
       combined['metadataOnly'] = false;
-      if ((combined['imageUrl'] == null || combined['imageUrl'].toString().isEmpty) &&
+      if ((combined['imageUrl'] == null ||
+              combined['imageUrl'].toString().isEmpty) &&
           localEpisode['imageUrl'] != null) {
         combined['imageUrl'] = localEpisode['imageUrl'];
       }
@@ -1179,14 +1521,24 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Seasons & Episodes', style: TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w900)),
+              const Text('Seasons & Episodes',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 21,
+                      fontWeight: FontWeight.w900)),
               const SizedBox(height: 10),
               Row(children: [
                 if (loading) ...[
-                  const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                  const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
                   const SizedBox(width: 10),
                 ],
-                Expanded(child: Text(message, style: const TextStyle(color: Colors.white54, fontSize: 13, height: 1.4))),
+                Expanded(
+                    child: Text(message,
+                        style: const TextStyle(
+                            color: Colors.white54, fontSize: 13, height: 1.4))),
               ]),
             ],
           ),
@@ -1204,9 +1556,10 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     final selectedSeasonNumber = _seasonNumberFrom(selectedSeason);
     final loadingEpisodes = selectedSeasonNumber != null &&
         _loadingProviderEpisodeSeasons.contains(selectedSeasonNumber);
-    final seasonOverview = (selectedSeason['overview'] ?? selectedSeason['description'])
-        ?.toString()
-        .trim();
+    final seasonOverview =
+        (selectedSeason['overview'] ?? selectedSeason['description'])
+            ?.toString()
+            .trim();
 
     return Padding(
       padding: const EdgeInsets.only(
@@ -1230,7 +1583,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            UniversalText('Seasons',
+            UniversalText(
+              'Seasons',
               textAlign: _textAlignment(),
               style: const TextStyle(
                 color: Colors.white,
@@ -1258,7 +1612,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                 seasonOverview,
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.white54, fontSize: 12, height: 1.4),
+                style: const TextStyle(
+                    color: Colors.white54, fontSize: 12, height: 1.4),
               ),
             ],
             const SizedBox(height: 12),
@@ -1354,9 +1709,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
 
           return Padding(
             padding: EdgeInsets.only(
-              bottom: index == orderedEpisodes.length - 1
-                  ? 0
-                  : 10,
+              bottom: index == orderedEpisodes.length - 1 ? 0 : 10,
             ),
             child: _EpisodeCard(
               episode: episode,
@@ -1381,9 +1734,13 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       child: const Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+          SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2)),
           SizedBox(width: 10),
-          Text('Loading episode titles, descriptions and runtimes…', style: TextStyle(color: Colors.white70, fontSize: 13)),
+          Text('Loading episode titles, descriptions and runtimes…',
+              style: TextStyle(color: Colors.white70, fontSize: 13)),
         ],
       ),
     );
@@ -1397,7 +1754,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         color: Colors.white.withValues(alpha: .035),
         borderRadius: BorderRadius.circular(15),
       ),
-      child: const UniversalText("No episode details are available for this season yet. The server's local episode list will still be shown whenever it is indexed.",
+      child: const UniversalText(
+        "No episode details are available for this season yet. The server's local episode list will still be shown whenever it is indexed.",
         textAlign: TextAlign.center,
         style: TextStyle(
           color: Colors.white54,
@@ -1411,12 +1769,9 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   String _seasonTitle(
     Map<String, dynamic> season,
   ) {
-    final name = season['name'] ??
-        season['title'] ??
-        season['seasonName'];
+    final name = season['name'] ?? season['title'] ?? season['seasonName'];
 
-    if (name != null &&
-        name.toString().trim().isNotEmpty) {
+    if (name != null && name.toString().trim().isNotEmpty) {
       return name.toString();
     }
 
@@ -1481,7 +1836,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     if (episode['metadataOnly'] == true) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('This episode has metadata but is not linked to a playable item in your library or Jellyfin server yet.'),
+          content: Text(
+              'This episode has metadata but is not linked to a playable item in your library or Jellyfin server yet.'),
         ),
       );
       return;
@@ -1491,7 +1847,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     if (episodeMedia == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: UniversalText('This episode does not contain enough information to play.',
+          content: UniversalText(
+            'This episode does not contain enough information to play.',
           ),
         ),
       );
@@ -1515,8 +1872,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   ) {
     final id = episode['id']?.toString();
 
-    final title = episode['title']?.toString() ??
-        episode['name']?.toString();
+    final title = episode['title']?.toString() ?? episode['name']?.toString();
 
     if (id == null ||
         id.trim().isEmpty ||
@@ -1525,11 +1881,10 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       return null;
     }
 
-    final imageUrl = episode['imageUrl']?.toString() ??
-        episode['posterUrl']?.toString();
+    final imageUrl =
+        episode['imageUrl']?.toString() ?? episode['posterUrl']?.toString();
 
-    final description =
-        episode['description']?.toString();
+    final description = episode['description']?.toString();
 
     final year = _integerValue(
       episode['releaseYear'] ?? episode['year'],
@@ -1547,11 +1902,9 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       );
     }
 
-    final trailerUrl =
-        episode['trailerUrl']?.toString();
+    final trailerUrl = episode['trailerUrl']?.toString();
 
-    final ratingReason =
-        episode['ratingReason']?.toString();
+    final ratingReason = episode['ratingReason']?.toString();
 
     return MediaItem(
       id: id,
@@ -1563,7 +1916,11 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       rating: rating,
       ratingReason: ratingReason,
       trailerUrl: trailerUrl,
-      playbackUrl: (episode['playbackUrl'] ?? episode['streamingUrl'] ?? episode['streamUrl'] ?? episode['url'])?.toString(),
+      playbackUrl: (episode['playbackUrl'] ??
+              episode['streamingUrl'] ??
+              episode['streamUrl'] ??
+              episode['url'])
+          ?.toString(),
     );
   }
 
@@ -1739,11 +2096,16 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   /// local image is missing or fails to load.
   Widget _posterImage() {
     final urls = <String>[];
-    final selectedUrl = CinematicTitleMetadataService.imageUrl(_selectedPosterPath, size: 'w500') ?? '';
+    final selectedUrl = CinematicTitleMetadataService.imageUrl(
+            _selectedPosterPath,
+            size: 'w500') ??
+        '';
     final catalogUrl = media.imageUrl?.trim() ?? '';
     final tmdbUrl = _providerTitleMetadata?.posterUrl ?? '';
     if (selectedUrl.isNotEmpty) urls.add(selectedUrl);
-    if (catalogUrl.isNotEmpty && !urls.contains(catalogUrl)) urls.add(catalogUrl);
+    if (catalogUrl.isNotEmpty && !urls.contains(catalogUrl)) {
+      urls.add(catalogUrl);
+    }
     if (tmdbUrl.isNotEmpty && !urls.contains(tmdbUrl)) urls.add(tmdbUrl);
     return _posterFromUrls(urls, 0);
   }
@@ -1814,20 +2176,23 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       ));
     }
     if (media.displayEditionLabel != null) {
-      pills.add(_metadataPill(Icons.movie_filter_outlined, media.displayEditionLabel!));
+      pills.add(_metadataPill(
+          Icons.movie_filter_outlined, media.displayEditionLabel!));
     }
     if (_displaySeasonCount != null) {
       final count = _displaySeasonCount!;
       pills.add(_metadataPill(Icons.live_tv_outlined,
           '$count ${count == 1 ? 'Season' : 'Seasons'}'));
     }
-    if (!media.isSeries && media.editionReleaseYear != null &&
-        media.releaseYear != null && media.editionReleaseYear != media.releaseYear) {
-      pills.add(_metadataPill(Icons.history_rounded, 'Original ${media.releaseYear}'));
+    if (!media.isSeries &&
+        media.editionReleaseYear != null &&
+        media.releaseYear != null &&
+        media.editionReleaseYear != media.releaseYear) {
+      pills.add(_metadataPill(
+          Icons.history_rounded, 'Original ${media.releaseYear}'));
     }
 
-    if (customization.showRating &&
-        media.rating != null) {
+    if (customization.showRating && media.rating != null) {
       pills.add(
         _metadataPill(
           Icons.star_rounded,
@@ -1854,8 +2219,10 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     final voteAverage = provider?.voteAverage;
     final voteCount = provider?.voteCount ?? 0;
     if (voteAverage != null && voteAverage > 0) {
-      final votes = voteCount > 0 ? ' · ${_formatProviderInteger(voteCount)} votes' : '';
-      pills.add(_metadataPill(Icons.star_rounded, 'TMDB ${voteAverage.toStringAsFixed(1)}/10$votes'));
+      final votes =
+          voteCount > 0 ? ' · ${_formatProviderInteger(voteCount)} votes' : '';
+      pills.add(_metadataPill(Icons.star_rounded,
+          'TMDB ${voteAverage.toStringAsFixed(1)}/10$votes'));
     }
 
     final releaseDate = provider?.releaseDate?.trim();
@@ -1865,31 +2232,48 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         '${provider.isTv ? 'Premiere' : 'Release'} $releaseDate',
       ));
       if (provider.isTv) {
-        final startYear = int.tryParse(releaseDate.length >= 4 ? releaseDate.substring(0, 4) : '');
+        final startYear = int.tryParse(
+            releaseDate.length >= 4 ? releaseDate.substring(0, 4) : '');
         final lastDate = provider.lastAirDate?.trim() ?? '';
-        final endYear = int.tryParse(lastDate.length >= 4 ? lastDate.substring(0, 4) : '');
+        final endYear =
+            int.tryParse(lastDate.length >= 4 ? lastDate.substring(0, 4) : '');
         final normalizedStatus = (provider.status ?? '').trim().toLowerCase();
-        final ongoing = const <String>{'returning series', 'in production', 'planned', 'pilot'}.contains(normalizedStatus);
+        final ongoing = const <String>{
+          'returning series',
+          'in production',
+          'planned',
+          'pilot'
+        }.contains(normalizedStatus);
         final runLabel = startYear == null
             ? null
-            : (ongoing ? '$startYear–Present' : (endYear != null && endYear > startYear ? '$startYear–$endYear' : '$startYear'));
+            : (ongoing
+                ? '$startYear–Present'
+                : (endYear != null && endYear > startYear
+                    ? '$startYear–$endYear'
+                    : '$startYear'));
         if (runLabel != null && runLabel != media.displayYearLabel) {
-          pills.add(_metadataPill(Icons.live_tv_outlined, 'Series run $runLabel'));
+          pills.add(
+              _metadataPill(Icons.live_tv_outlined, 'Series run $runLabel'));
         }
       }
     }
 
     final originalTitle = provider?.originalTitle?.trim();
-    if (originalTitle != null && originalTitle.isNotEmpty && originalTitle.toLowerCase() != media.title.trim().toLowerCase()) {
-      pills.add(_metadataPill(Icons.translate_rounded, 'Original: $originalTitle'));
+    if (originalTitle != null &&
+        originalTitle.isNotEmpty &&
+        originalTitle.toLowerCase() != media.title.trim().toLowerCase()) {
+      pills.add(
+          _metadataPill(Icons.translate_rounded, 'Original: $originalTitle'));
     }
     final budget = provider?.budget;
     if (budget != null && budget > 0) {
-      pills.add(_metadataPill(Icons.payments_outlined, 'Budget ${_formatProviderMoney(budget)}'));
+      pills.add(_metadataPill(
+          Icons.payments_outlined, 'Budget ${_formatProviderMoney(budget)}'));
     }
     final revenue = provider?.revenue;
     if (revenue != null && revenue > 0) {
-      pills.add(_metadataPill(Icons.account_balance_wallet_outlined, 'Revenue ${_formatProviderMoney(revenue)}'));
+      pills.add(_metadataPill(Icons.account_balance_wallet_outlined,
+          'Revenue ${_formatProviderMoney(revenue)}'));
     }
     final status = provider?.status?.trim();
     if (status != null && status.isNotEmpty) {
@@ -1897,7 +2281,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     }
     final originalLanguage = provider?.originalLanguage;
     if (originalLanguage != null && originalLanguage.trim().isNotEmpty) {
-      pills.add(_metadataPill(Icons.language_rounded, 'Language ${_providerLanguageName(originalLanguage)}'));
+      pills.add(_metadataPill(Icons.language_rounded,
+          'Language ${_providerLanguageName(originalLanguage)}'));
     }
     final tagline = provider?.tagline?.trim();
     if (tagline != null && tagline.isNotEmpty) {
@@ -1912,8 +2297,14 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       ...media.tags,
       if (provider != null) ...provider.keywords,
     ]);
-    final genrePills = linkedGenres.take(12).map((value) => _metadataPill(Icons.category_outlined, value)).toList(growable: false);
-    final tagPills = linkedTags.take(12).map((value) => _metadataPill(Icons.sell_outlined, value)).toList(growable: false);
+    final genrePills = linkedGenres
+        .take(12)
+        .map((value) => _metadataPill(Icons.category_outlined, value))
+        .toList(growable: false);
+    final tagPills = linkedTags
+        .take(12)
+        .map((value) => _metadataPill(Icons.sell_outlined, value))
+        .toList(growable: false);
 
     if (pills.isEmpty && genrePills.isEmpty && tagPills.isEmpty) {
       return const SizedBox.shrink();
@@ -1925,24 +2316,56 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         crossAxisAlignment: _crossAxisAlignment(),
         children: [
           if (pills.isNotEmpty)
-            Wrap(alignment: _wrapAlignment(), spacing: 8, runSpacing: 8, children: pills),
+            Wrap(
+                alignment: _wrapAlignment(),
+                spacing: 8,
+                runSpacing: 8,
+                children: pills),
           if (genrePills.isNotEmpty) ...[
             const SizedBox(height: 10),
-            Align(alignment: _metadataSectionAlignment(customization.titleAlignment), child: const Text('Genres', style: TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: .8))),
+            Align(
+                alignment:
+                    _metadataSectionAlignment(customization.titleAlignment),
+                child: const Text('Genres',
+                    style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: .8))),
             const SizedBox(height: 5),
-            Wrap(alignment: _wrapAlignment(), spacing: 8, runSpacing: 8, children: [
-              ...genrePills,
-              if (linkedGenres.length > 12) _metadataPill(Icons.more_horiz_rounded, '+ ${linkedGenres.length - 12} more genres'),
-            ]),
+            Wrap(
+                alignment: _wrapAlignment(),
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ...genrePills,
+                  if (linkedGenres.length > 12)
+                    _metadataPill(Icons.more_horiz_rounded,
+                        '+ ${linkedGenres.length - 12} more genres'),
+                ]),
           ],
           if (tagPills.isNotEmpty) ...[
             const SizedBox(height: 10),
-            Align(alignment: _metadataSectionAlignment(customization.titleAlignment), child: const Text('Tags', style: TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: .8))),
+            Align(
+                alignment:
+                    _metadataSectionAlignment(customization.titleAlignment),
+                child: const Text('Tags',
+                    style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: .8))),
             const SizedBox(height: 5),
-            Wrap(alignment: _wrapAlignment(), spacing: 8, runSpacing: 8, children: [
-              ...tagPills,
-              if (linkedTags.length > 12) _metadataPill(Icons.more_horiz_rounded, '+ ${linkedTags.length - 12} more tags'),
-            ]),
+            Wrap(
+                alignment: _wrapAlignment(),
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ...tagPills,
+                  if (linkedTags.length > 12)
+                    _metadataPill(Icons.more_horiz_rounded,
+                        '+ ${linkedTags.length - 12} more tags'),
+                ]),
           ],
         ],
       ),
@@ -1956,14 +2379,15 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     if (customization.showReleaseYear && media.displayYearLabel != null) {
       items.add(media.displayYearLabel!);
     }
-    if (media.displayEditionLabel != null) items.add(media.displayEditionLabel!);
+    if (media.displayEditionLabel != null) {
+      items.add(media.displayEditionLabel!);
+    }
     if (_displaySeasonCount != null) {
       final count = _displaySeasonCount!;
       items.add('$count ${count == 1 ? 'Season' : 'Seasons'}');
     }
 
-    if (customization.showRating &&
-        media.rating != null) {
+    if (customization.showRating && media.rating != null) {
       items.add(
         '★ ${media.rating!.toStringAsFixed(1)}',
       );
@@ -2055,12 +2479,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         child: Row(
           children: [
             Icon(
-              owned
-                  ? Icons.check_circle_rounded
-                  : Icons.info_outline_rounded,
-              color: owned
-                  ? Colors.greenAccent
-                  : Colors.white54,
+              owned ? Icons.check_circle_rounded : Icons.info_outline_rounded,
+              color: owned ? Colors.greenAccent : Colors.white54,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -2151,11 +2571,13 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           width: 420,
           height: 52,
           child: ElevatedButton.icon(
-            onPressed: (pressedPlay || _selectedEdition == null) ? null : playMedia,
+            onPressed:
+                (pressedPlay || _selectedEdition == null) ? null : playMedia,
             icon: const Icon(
               Icons.play_arrow_rounded,
             ),
-            label: const UniversalText('Play',
+            label: const UniversalText(
+              'Play',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
@@ -2185,7 +2607,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
               onPressed: pressedTrailer || !hasTrailer ? null : watchTrailer,
               icon: const Icon(Icons.ondemand_video_outlined),
               label: UniversalText(
-                (_randomizeAvailableTrailers && _playableProviderVideos.isNotEmpty)
+                (_randomizeAvailableTrailers &&
+                        _playableProviderVideos.isNotEmpty)
                     ? 'Play Random Trailer'
                     : ((_selectedDetailsTrailerUrl?.trim().isNotEmpty ?? false)
                         ? 'Play Selected Trailer'
@@ -2235,8 +2658,10 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (originalLanguage != null)
-                      Text('Original-language default: ${OriginalLanguageDefaults.displayName(originalLanguage)} (audio and subtitles when available)'),
-                    if (media.language != null && media.language!.trim().isNotEmpty)
+                      Text(
+                          'Original-language default: ${OriginalLanguageDefaults.displayName(originalLanguage)} (audio and subtitles when available)'),
+                    if (media.language != null &&
+                        media.language!.trim().isNotEmpty)
                       Text('Language: ${media.language}'),
                     if (media.audioTracks.isNotEmpty)
                       Text('Audio: ${media.audioTracks.join(', ')}'),
@@ -2244,7 +2669,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                       Text('Subtitles: ${media.subtitles.join(', ')}'),
                     if (media.extras.isNotEmpty) ...[
                       const SizedBox(height: 8),
-                      const UniversalText('Extras',
+                      const UniversalText(
+                        'Extras',
                         style: TextStyle(fontWeight: FontWeight.w900),
                       ),
                       for (final extra in media.extras) Text('• $extra'),
@@ -2404,13 +2830,21 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   /// Missing credits are called out honestly; the UI never invents names.
   Widget _buildCastCrew() {
     final provider = _providerTitleMetadata;
-    final actors = _mergeCreditNames(media.actors, provider?.cast ?? const <String>[]);
-    final characters = _mergeCreditNames(media.characters, provider?.characters ?? const <String>[]);
-    final directors = _mergeCreditNames(media.directors, provider?.directors ?? const <String>[]);
-    final writers = _mergeCreditNames(media.writers, provider?.writers ?? const <String>[]);
-    final music = _mergeCreditNames(media.music, provider?.music ?? const <String>[]);
-    final hasCredits = actors.isNotEmpty || characters.isNotEmpty ||
-        directors.isNotEmpty || writers.isNotEmpty || music.isNotEmpty;
+    final actors =
+        _mergeCreditNames(media.actors, provider?.cast ?? const <String>[]);
+    final characters = _mergeCreditNames(
+        media.characters, provider?.characters ?? const <String>[]);
+    final directors = _mergeCreditNames(
+        media.directors, provider?.directors ?? const <String>[]);
+    final writers =
+        _mergeCreditNames(media.writers, provider?.writers ?? const <String>[]);
+    final music =
+        _mergeCreditNames(media.music, provider?.music ?? const <String>[]);
+    final hasCredits = actors.isNotEmpty ||
+        characters.isNotEmpty ||
+        directors.isNotEmpty ||
+        writers.isNotEmpty ||
+        music.isNotEmpty;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
@@ -2426,23 +2860,30 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           children: [
             Row(
               children: [
-                const Icon(Icons.groups_2_outlined, size: 21, color: Colors.white70),
+                const Icon(Icons.groups_2_outlined,
+                    size: 21, color: Colors.white70),
                 const SizedBox(width: 9),
                 Expanded(
                   child: UniversalText(
                     media.type.toLowerCase().contains('album')
                         ? 'Artists & Album Credits'
                         : 'Cast & Crew',
-                    style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
+                    style: const TextStyle(
+                        fontSize: 19, fontWeight: FontWeight.w900),
                   ),
                 ),
                 if (CinematicTitleMetadataService.isConfigured &&
                     _supportsCinematicProviderMetadata)
                   IconButton(
                     tooltip: 'Refresh all TMDB metadata and cast/crew',
-                    onPressed: _loadingProviderMetadata ? null : _loadProviderTitleMetadata,
+                    onPressed: _loadingProviderMetadata
+                        ? null
+                        : _loadProviderTitleMetadata,
                     icon: _loadingProviderMetadata
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2))
                         : const Icon(Icons.sync, color: Colors.white70),
                   ),
               ],
@@ -2451,7 +2892,9 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
               const SizedBox(height: 10),
               const LinearProgressIndicator(minHeight: 2),
               const SizedBox(height: 6),
-              const UniversalText('Checking the exact title match and loading sourced credits…', style: TextStyle(color: Colors.white60, fontSize: 12)),
+              const UniversalText(
+                  'Checking the exact title match and loading sourced credits…',
+                  style: TextStyle(color: Colors.white60, fontSize: 12)),
             ],
             if (!hasCredits) ...[
               const SizedBox(height: 10),
@@ -2460,7 +2903,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                     ? 'Artist and performer credits are not available for this album yet. Add the artist to the album metadata or import a metadata source.'
                     : (!CinematicTitleMetadataService.isConfigured
                         ? 'Cast and crew credits are not available in the local catalog. Sign in and configure TMDB_API_KEY or TMDB_API_TOKEN in Backend/.env to load sourced cast, director, and writer metadata.'
-                        : (_providerMetadataError ?? 'No sourced cast and crew credits are available for this title yet.')),
+                        : (_providerMetadataError ??
+                            'No sourced cast and crew credits are available for this title yet.')),
                 style: const TextStyle(color: Colors.white60, height: 1.4),
               ),
             ] else ...[
@@ -2470,18 +2914,21 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                   padding: EdgeInsets.only(bottom: 9),
                   child: UniversalText(
                     'Starter catalog credits for exploring profiles; this is not an exhaustive or provider-verified credits list. Sign in and configure TMDB_API_KEY or TMDB_API_TOKEN in Backend/.env to enrich supported movie/TV titles.',
-                    style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.35),
+                    style: TextStyle(
+                        color: Colors.white54, fontSize: 12, height: 1.35),
                   ),
                 ),
               if (provider != null)
                 const Padding(
                   padding: EdgeInsets.only(bottom: 8),
-                  child: UniversalText('Verified title match from TMDB; credits below are merged with catalog metadata.', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                  child: UniversalText(
+                      'Verified title match from TMDB; credits below are merged with catalog metadata.',
+                      style: TextStyle(color: Colors.white54, fontSize: 12)),
                 ),
-              if (actors.isNotEmpty)
-                _castCrewNameRow('Cast', actors),
+              if (actors.isNotEmpty) _castCrewNameRow('Cast', actors),
               if (characters.isNotEmpty)
-                _castCrewNameRow('Characters', characters, entityKind: CatalogEntityKind.character),
+                _castCrewNameRow('Characters', characters,
+                    entityKind: CatalogEntityKind.character),
               if (directors.isNotEmpty)
                 _castCrewNameRow('Directors', directors),
               if (writers.isNotEmpty)
@@ -2496,7 +2943,9 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
               if (_providerMetadataError != null && provider == null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Text(_providerMetadataError!, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                  child: Text(_providerMetadataError!,
+                      style:
+                          const TextStyle(color: Colors.white54, fontSize: 12)),
                 ),
             ],
           ],
@@ -2517,20 +2966,29 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       rows.add(_infoRow(
         media.isSeries
             ? 'Series Run'
-            : (media.editionReleaseYear != null ? 'Edition Release Year' : 'Release Year'),
+            : (media.editionReleaseYear != null
+                ? 'Edition Release Year'
+                : 'Release Year'),
         media.displayYearLabel!,
       ));
     }
-    if (media.isSeries || const <String>{'movie', 'film'}.contains(media.type.trim().toLowerCase())) {
+    if (media.isSeries ||
+        const <String>{'movie', 'film'}
+            .contains(media.type.trim().toLowerCase())) {
       final localCountry = media.countryOfOrigin?.trim() ?? '';
-      final providerCountry = _providerTitleMetadata?.countryOfOrigin?.trim() ?? '';
+      final providerCountry =
+          _providerTitleMetadata?.countryOfOrigin?.trim() ?? '';
       final country = localCountry.isNotEmpty
           ? mediaCountryOriginLabel(media)
-          : (providerCountry.isNotEmpty ? providerCountry : 'Country of origin unavailable');
+          : (providerCountry.isNotEmpty
+              ? providerCountry
+              : 'Country of origin unavailable');
       rows.add(_infoRow('Country of Origin', country));
     }
-    if (!media.isSeries && media.editionReleaseYear != null &&
-        media.releaseYear != null && media.editionReleaseYear != media.releaseYear) {
+    if (!media.isSeries &&
+        media.editionReleaseYear != null &&
+        media.releaseYear != null &&
+        media.editionReleaseYear != media.releaseYear) {
       rows.add(_infoRow('Original Release Year', media.releaseYear.toString()));
     }
     if (media.displayEditionLabel != null) {
@@ -2541,7 +2999,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     }
     if (_displaySeasonCount != null) {
       final count = _displaySeasonCount!;
-      rows.add(_infoRow('Seasons', '$count ${count == 1 ? 'Season' : 'Seasons'}'));
+      rows.add(
+          _infoRow('Seasons', '$count ${count == 1 ? 'Season' : 'Seasons'}'));
     }
 
     final provider = _providerTitleMetadata;
@@ -2553,11 +3012,13 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       if (provider.homepage?.trim().isNotEmpty == true) {
         rows.add(Padding(
           padding: const EdgeInsets.only(top: 4, bottom: 4),
-          child: Align(alignment: Alignment.centerLeft, child: TextButton.icon(
-            onPressed: () => _openProviderUrl(provider.homepage!),
-            icon: const Icon(Icons.open_in_new_rounded, size: 16),
-            label: const Text('Official website'),
-          )),
+          child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => _openProviderUrl(provider.homepage!),
+                icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                label: const Text('Official website'),
+              )),
         ));
       }
     }
@@ -2592,7 +3053,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       ));
     }
 
-    final linkedTags = _cleanCreditNames(<String>[...media.tags, if (provider != null) ...provider.keywords]);
+    final linkedTags = _cleanCreditNames(
+        <String>[...media.tags, if (provider != null) ...provider.keywords]);
     if (linkedTags.isNotEmpty) {
       rows.add(_castCrewNameRow(
         'Tags',
@@ -2615,21 +3077,38 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Extras & Special Features (${relatedExtras.length})', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+                Text('Extras & Special Features (${relatedExtras.length})',
+                    style: const TextStyle(
+                        fontSize: 17, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 4),
-                const Text('Linked deleted scenes, featurettes, trailers, alternate cuts and commentary items appear here. Playback requires a connected media-server URL.', style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.4)),
+                const Text(
+                    'Linked deleted scenes, featurettes, trailers, alternate cuts and commentary items appear here. Playback requires a connected media-server URL.',
+                    style: TextStyle(
+                        color: Colors.white54, fontSize: 12, height: 1.4)),
                 const SizedBox(height: 8),
                 for (final extra in relatedExtras)
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.movie_filter_outlined, color: Colors.white70),
-                    title: Text(extra.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+                    leading: const Icon(Icons.movie_filter_outlined,
+                        color: Colors.white70),
+                    title: Text(extra.title,
+                        maxLines: 2, overflow: TextOverflow.ellipsis),
                     subtitle: Text(<String>[
-                      ...extra.tags.where((tag) => tag.toLowerCase() != 'disc extra'),
-                      if (extra.releaseYear != null) extra.releaseYear.toString(),
+                      ...extra.tags
+                          .where((tag) => tag.toLowerCase() != 'disc extra'),
+                      if (extra.releaseYear != null)
+                        extra.releaseYear.toString(),
                     ].take(3).join(' · ')),
-                    trailing: Icon(extra.playbackUrl?.trim().isNotEmpty == true ? Icons.play_circle_outline_rounded : Icons.info_outline_rounded, color: extra.playbackUrl?.trim().isNotEmpty == true ? Colors.greenAccent : Colors.white54),
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => MediaDetailsScreen(media: extra))),
+                    trailing: Icon(
+                        extra.playbackUrl?.trim().isNotEmpty == true
+                            ? Icons.play_circle_outline_rounded
+                            : Icons.info_outline_rounded,
+                        color: extra.playbackUrl?.trim().isNotEmpty == true
+                            ? Colors.greenAccent
+                            : Colors.white54),
+                    onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                            builder: (_) => MediaDetailsScreen(media: extra))),
                   ),
               ],
             ),
@@ -2650,7 +3129,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         rows.add(Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: TextButton.icon(
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => MediaDetailsScreen(media: parent))),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => MediaDetailsScreen(media: parent))),
             icon: const Icon(Icons.subdirectory_arrow_left_rounded),
             label: Text('Bonus content for ${parent.title}'),
           ),
@@ -2675,8 +3155,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       rows.add(_infoRow('Content Advisories', contentAdvisories));
     }
 
-    if (customization.showRating &&
-        media.rating != null) {
+    if (customization.showRating && media.rating != null) {
       rows.add(
         _infoRow(
           'Rating',
@@ -2684,8 +3163,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         ),
       );
 
-      if (media.ratingReason != null &&
-          media.ratingReason!.trim().isNotEmpty) {
+      if (media.ratingReason != null && media.ratingReason!.trim().isNotEmpty) {
         rows.add(
           _infoRow(
             'Why this rating',
@@ -2723,7 +3201,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       );
     }
 
-    if (media.discCollectionTitle != null && media.discCollectionTitle!.trim().isNotEmpty) {
+    if (media.discCollectionTitle != null &&
+        media.discCollectionTitle!.trim().isNotEmpty) {
       rows.add(
         _infoRow(
           'Disc Collection',
@@ -2759,7 +3238,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            UniversalText('Information',
+            UniversalText(
+              'Information',
               textAlign: _informationTextAlign(),
               style: const TextStyle(
                 color: Colors.white,
@@ -2861,14 +3341,10 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                 }
               },
               icon: Icon(
-                owned
-                    ? Icons.remove_circle_outline
-                    : Icons.add_circle_outline,
+                owned ? Icons.remove_circle_outline : Icons.add_circle_outline,
               ),
               label: Text(
-                owned
-                    ? 'Remove from Library'
-                    : 'Add to Library',
+                owned ? 'Remove from Library' : 'Add to Library',
               ),
             ),
           ),
@@ -2879,7 +3355,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
               child: OutlinedButton.icon(
                 onPressed: _showAddToCollection,
                 icon: const Icon(Icons.collections_bookmark_outlined),
-                label: const UniversalText('Add to Collection',
+                label: const UniversalText(
+                  'Add to Collection',
                   style: TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
@@ -2899,7 +3376,9 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
 
     if (collections.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: UniversalText('No collections are available for this profile.')),
+        SnackBar(
+            content: UniversalText(
+                'No collections are available for this profile.')),
       );
       return;
     }
@@ -2918,7 +3397,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 8),
-            const UniversalText('Choose a collaborative or private custom collection.',
+            const UniversalText(
+              'Choose a collaborative or private custom collection.',
               style: TextStyle(color: Colors.white60),
             ),
             const SizedBox(height: 12),
@@ -2958,7 +3438,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                   navigator.pop();
                   setState(() {});
                   messenger.showSnackBar(
-                    SnackBar(content: UniversalText('Added to ${collection.name}.')),
+                    SnackBar(
+                        content: UniversalText('Added to ${collection.name}.')),
                   );
                 },
               ),
@@ -2981,8 +3462,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     Navigator.of(context)
         .push(
       PageRouteBuilder(
-          settings: const RouteSettings(name: '/app/player'),
-          pageBuilder: (_, __, ___) {
+        settings: const RouteSettings(name: '/app/player'),
+        pageBuilder: (_, __, ___) {
           return PlayerScreen(
             media: _selectedEdition ?? media,
           );
@@ -3032,8 +3513,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       pressedTrailer = true;
     });
 
-    Navigator.of(context)
-        .push(
+    Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) {
           return TrailerPlayerScreen(
@@ -3042,8 +3522,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           );
         },
       ),
-    )
-        .then((_) {
+    ).then((_) {
       if (mounted) {
         setState(() {
           pressedTrailer = false;
@@ -3114,7 +3593,6 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     }
   }
 
-
   // ===========================================================================
   // MEDIA METADATA
   // ===========================================================================
@@ -3162,11 +3640,12 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
 
   String? get runtime {
     final value = firstMetadataValue([
-      'runtime',
-      'runtimeMinutes',
-      'duration',
-      'durationMinutes',
-    ]) ?? _providerTitleMetadata?.runtimeMinutes?.toString();
+          'runtime',
+          'runtimeMinutes',
+          'duration',
+          'durationMinutes',
+        ]) ??
+        _providerTitleMetadata?.runtimeMinutes?.toString();
 
     if (value == null) {
       return null;
@@ -3195,7 +3674,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   bool get hasTrailer {
     final selectedUrl = _selectedDetailsTrailerUrl?.trim() ?? '';
     final catalogUrl = media.trailerUrl?.trim() ?? '';
-    return selectedUrl.isNotEmpty || catalogUrl.isNotEmpty ||
+    return selectedUrl.isNotEmpty ||
+        catalogUrl.isNotEmpty ||
         _playableProviderVideos.isNotEmpty;
   }
 }
@@ -3216,6 +3696,7 @@ class _SeasonButton extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return AnimatedContainer(
@@ -3228,9 +3709,7 @@ class _SeasonButton extends StatelessWidget {
               : Colors.white.withValues(
                   alpha: .045,
                 ),
-          foregroundColor: selected
-              ? Colors.black
-              : Colors.white,
+          foregroundColor: selected ? Colors.black : Colors.white,
           side: BorderSide(
             color: selected
                 ? Colors.white
@@ -3272,8 +3751,7 @@ class _EpisodeCard extends StatefulWidget {
   });
 
   @override
-  State<_EpisodeCard> createState() =>
-      _EpisodeCardState();
+  State<_EpisodeCard> createState() => _EpisodeCardState();
 }
 
 /// Implements the `_EpisodeCardState` class for this feature or UI component.
@@ -3287,8 +3765,7 @@ class _EpisodeCardState extends State<_EpisodeCard> {
   }
 
   String? get description {
-    final value =
-        widget.episode['description']?.toString();
+    final value = widget.episode['description']?.toString();
 
     if (value == null || value.trim().isEmpty) {
       return null;
@@ -3298,9 +3775,8 @@ class _EpisodeCardState extends State<_EpisodeCard> {
   }
 
   String? get imageUrl {
-    final value =
-        widget.episode['imageUrl']?.toString() ??
-            widget.episode['posterUrl']?.toString();
+    final value = widget.episode['imageUrl']?.toString() ??
+        widget.episode['posterUrl']?.toString();
 
     if (value == null || value.trim().isEmpty) {
       return null;
@@ -3330,10 +3806,9 @@ class _EpisodeCardState extends State<_EpisodeCard> {
   }
 
   String? get runtime {
-    final value =
-        widget.episode['runtime'] ??
-            widget.episode['runtimeMinutes'] ??
-            widget.episode['duration'];
+    final value = widget.episode['runtime'] ??
+        widget.episode['runtimeMinutes'] ??
+        widget.episode['duration'];
 
     if (value == null) {
       return null;
@@ -3386,6 +3861,7 @@ class _EpisodeCardState extends State<_EpisodeCard> {
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return MouseRegion(
@@ -3459,8 +3935,7 @@ class _EpisodeCardState extends State<_EpisodeCard> {
               const SizedBox(width: 13),
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (_showEpisodeLabel())
                       Text(
@@ -3499,7 +3974,10 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                     if (runtime != null || airDate != null) ...[
                       const SizedBox(height: 6),
                       Text(
-                        [if (airDate != null) 'Aired $airDate', if (runtime != null) runtime!].join('  •  '),
+                        [
+                          if (airDate != null) 'Aired $airDate',
+                          if (runtime != null) runtime!
+                        ].join('  •  '),
                         style: const TextStyle(
                           color: Colors.white38,
                           fontSize: 11,
@@ -3551,28 +4029,25 @@ class TrailerPlayerScreen extends StatefulWidget {
   });
 
   @override
-  State<TrailerPlayerScreen> createState() =>
-      _TrailerPlayerScreenState();
+  State<TrailerPlayerScreen> createState() => _TrailerPlayerScreenState();
 }
 
 /// Implements the `_TrailerPlayerScreenState` class for this feature or UI component.
-class _TrailerPlayerScreenState
-    extends State<TrailerPlayerScreen> {
+class _TrailerPlayerScreenState extends State<TrailerPlayerScreen> {
   YoutubePlayerController? _controller;
 
   @override
+
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
 
-    final videoId =
-        YoutubePlayerController.convertUrlToId(
+    final videoId = YoutubePlayerController.convertUrlToId(
       widget.trailerUrl,
     );
 
     if (videoId != null && videoId.isNotEmpty) {
-      _controller =
-          YoutubePlayerController.fromVideoId(
+      _controller = YoutubePlayerController.fromVideoId(
         videoId: videoId,
         autoPlay: true,
         params: const YoutubePlayerParams(
@@ -3585,6 +4060,7 @@ class _TrailerPlayerScreenState
   }
 
   @override
+
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     _controller?.close();
@@ -3592,6 +4068,7 @@ class _TrailerPlayerScreenState
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
@@ -3609,7 +4086,8 @@ class _TrailerPlayerScreenState
         child: _controller == null
             ? const Padding(
                 padding: EdgeInsets.all(24),
-                child: UniversalText('Unable to play this trailer.',
+                child: UniversalText(
+                  'Unable to play this trailer.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white70,
@@ -3625,7 +4103,6 @@ class _TrailerPlayerScreenState
     );
   }
 }
-
 
 /// Resolves the alignment for metadata section headings. Kept top-level so
 /// metadata widgets can use it without relying on a particular State scope.

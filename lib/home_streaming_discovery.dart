@@ -1961,9 +1961,15 @@ String? _episodePlaybackSource(Map<String, dynamic> episode) {
 /// Surfaces real episode records and season-aware holiday collections. It does
 /// not infer a theme merely from the episode's air date; title, tags, synopsis
 /// or a curated show/episode alias must support the match.
-class HomeThemedEpisodesSection extends StatelessWidget {
+class HomeThemedEpisodesSection extends StatefulWidget {
   const HomeThemedEpisodesSection({super.key});
 
+  @override
+  State<HomeThemedEpisodesSection> createState() =>
+      _HomeThemedEpisodesSectionState();
+}
+
+class _HomeThemedEpisodesSectionState extends State<HomeThemedEpisodesSection> {
   List<_ThemedEpisodeEntry> _entries(
     List<MediaItem> library, {
     DateTime? now,
@@ -2071,6 +2077,36 @@ class HomeThemedEpisodesSection extends StatelessWidget {
             : a.title.toLowerCase().compareTo(b.title.toLowerCase());
       });
     return sorted;
+  }
+
+  Widget _countryPreferences() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Prioritize celebrations from',
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          CountryThemePicker(
+            onSelectionChanged: () {
+              if (mounted) setState(() {});
+            },
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Selected countries move their celebration themes higher in these shelves.',
+            style: TextStyle(color: Colors.white54, fontSize: 11),
+          ),
+        ],
+      ),
+    );
   }
 
   MediaItem? _findPlayableEpisode(
@@ -2200,6 +2236,7 @@ class HomeThemedEpisodesSection extends StatelessWidget {
                   'Themed episodes, movies and shows from holidays around the world stay available year-round.',
               themeKey: currentThemeKey,
             ),
+            _countryPreferences(),
             const Padding(
               padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
               child: Text(
@@ -2223,6 +2260,7 @@ class HomeThemedEpisodesSection extends StatelessWidget {
                 'Seasonal picks first • international holidays and other celebrations remain available year-round',
             themeKey: currentThemeKey,
           ),
+          _countryPreferences(),
           for (final themeKey in episodeThemeKeys)
             Builder(builder: (context) {
               final rankedThemeEntries = groupedEpisodes[themeKey]!

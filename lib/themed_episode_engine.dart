@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 /// Holiday and themed-episode matching for the local media catalogue.
 ///
 /// Recognition is metadata-driven and conservative: explicit episode titles,
@@ -54,86 +56,293 @@ class ThemedEpisodeEngine {
     'veterans-day': 'Veterans Day',
   };
 
+  static final Set<String> selectedCountries = <String>{};
+
+  static const Map<String, String> countryLabels = <String, String>{
+    'us': 'United States',
+    'mx': 'Mexico',
+    'cn': 'China',
+    'in': 'India',
+    'ie': 'Ireland',
+    'gb': 'United Kingdom',
+    'fr': 'France',
+    'de': 'Germany',
+    'es': 'Spain',
+    'jp': 'Japan',
+    'kr': 'South Korea',
+    'br': 'Brazil',
+  };
+
+  static const Map<String, List<String>> countryThemeMap =
+      <String, List<String>>{
+    'us': <String>[
+      'halloween',
+      'thanksgiving',
+      'christmas',
+      'independence-day',
+      'valentines',
+      'new-year'
+    ],
+    'mx': <String>['dia-de-muertos', 'christmas', 'cinco-de-mayo', 'new-year'],
+    'cn': <String>['lunar-new-year', 'christmas', 'new-year'],
+    'in': <String>['diwali', 'christmas', 'new-year'],
+    'ie': <String>['st-patricks', 'christmas', 'new-year'],
+    'gb': <String>['christmas', 'new-year', 'st-patricks'],
+    'fr': <String>['christmas', 'new-year'],
+    'de': <String>['christmas', 'new-year'],
+    'es': <String>['christmas', 'new-year'],
+    'jp': <String>['new-year', 'christmas'],
+    'kr': <String>['new-year', 'christmas'],
+    'br': <String>['christmas', 'new-year'],
+  };
+
+  static String normalizeCountryCode(String? value) {
+    final raw = (value ?? '').trim();
+    if (raw.isEmpty) return '';
+    final lowered = raw.toLowerCase();
+    if (countryLabels.containsKey(lowered)) return lowered;
+    for (final entry in countryLabels.entries) {
+      if (entry.value.toLowerCase() == lowered) return entry.key;
+      if (entry.key == lowered.toLowerCase()) return entry.key;
+    }
+    return '';
+  }
+
+  static List<String> countryThemeKeysFor(Iterable<String> countries,
+      [DateTime? date]) {
+    final ordered = <String>[];
+    final seen = <String>{};
+    for (final country in countries) {
+      final code = normalizeCountryCode(country);
+      if (code.isEmpty) continue;
+      for (final themeKey in countryThemeMap[code] ?? const <String>[]) {
+        if (seen.add(themeKey)) {
+          ordered.add(themeKey);
+        }
+      }
+    }
+    return ordered;
+  }
+
+  static void setSelectedCountries(Iterable<String> countries) {
+    selectedCountries
+      ..clear()
+      ..addAll(
+        countries.map(normalizeCountryCode).where((code) => code.isNotEmpty),
+      );
+  }
+
+  static void toggleCountry(String country) {
+    final code = normalizeCountryCode(country);
+    if (code.isEmpty) return;
+    if (selectedCountries.contains(code)) {
+      selectedCountries.remove(code);
+    } else {
+      selectedCountries.add(code);
+    }
+  }
+
   static const Map<String, List<String>> _keywords = <String, List<String>>{
     'halloween': <String>[
-      'halloween', 'trick or treat', 'treehouse of horror', 'haunted house',
-      'costume party', 'costume contest', 'pumpkin carving', 'jack o lantern',
-      'ghost story', 'spooky', 'horror night', 'monster mash', 'all hallows',
-      'hubie halloween', 'the nightmare before christmas',
+      'halloween',
+      'trick or treat',
+      'treehouse of horror',
+      'haunted house',
+      'costume party',
+      'costume contest',
+      'pumpkin carving',
+      'jack o lantern',
+      'ghost story',
+      'spooky',
+      'horror night',
+      'monster mash',
+      'all hallows',
+      'hubie halloween',
+      'the nightmare before christmas',
     ],
     'christmas': <String>[
-      'christmas', 'santa claus', 'santa', 'reindeer', 'christmas eve',
-      'christmas party', 'holiday gift exchange', 'secret santa', 'mistletoe',
-      'stocking stuffer', 'twas the mission before christmas', 'noel',
-      'father christmas', 'carol of the bells', 'uncontrollable christmas',
-      'the nightmare before christmas', 'the grinch', 'home alone',
-      'jingle all the way', 'miracle on 34th street', 'good luck charlie it s christmas',
-      'a very muppet christmas', 'how the grinch stole christmas',
+      'christmas',
+      'santa claus',
+      'santa',
+      'reindeer',
+      'christmas eve',
+      'christmas party',
+      'holiday gift exchange',
+      'secret santa',
+      'mistletoe',
+      'stocking stuffer',
+      'twas the mission before christmas',
+      'noel',
+      'father christmas',
+      'carol of the bells',
+      'uncontrollable christmas',
+      'the nightmare before christmas',
+      'the grinch',
+      'home alone',
+      'jingle all the way',
+      'miracle on 34th street',
+      'good luck charlie it s christmas',
+      'a very muppet christmas',
+      'how the grinch stole christmas',
     ],
     'thanksgiving': <String>[
-      'thanksgiving', 'thanksgiving dinner', 'turkey day', 'thanksgiving turkey',
-      'friendsgiving', 'the peck', 'turkey in a can', 'an indecent thanksgiving proposal',
-      'thanks hoarding', 'holiday armadillo',
+      'thanksgiving',
+      'thanksgiving dinner',
+      'turkey day',
+      'thanksgiving turkey',
+      'friendsgiving',
+      'the peck',
+      'turkey in a can',
+      'an indecent thanksgiving proposal',
+      'thanks hoarding',
+      'holiday armadillo',
     ],
     'valentines': <String>[
-      "valentine's day", 'valentines day', 'valentine day', 'love potion',
-      'blind date', 'romantic dinner', 'cupid', 'love is in the air',
+      "valentine's day",
+      'valentines day',
+      'valentine day',
+      'love potion',
+      'blind date',
+      'romantic dinner',
+      'cupid',
+      'love is in the air',
     ],
     'easter': <String>[
-      'easter', 'easter egg hunt', 'easter bunny', 'good friday', 'resurrection',
+      'easter',
+      'easter egg hunt',
+      'easter bunny',
+      'good friday',
+      'resurrection',
       'valloweaster',
     ],
     'hanukkah': <String>[
-      'hanukkah', 'chanukah', 'menorah', 'dreidel', 'gelt', 'festival of lights',
+      'hanukkah',
+      'chanukah',
+      'menorah',
+      'dreidel',
+      'gelt',
+      'festival of lights',
       'holiday armadillo',
     ],
     'kwanzaa': <String>['kwanzaa', 'kinara', 'seven principles of kwanzaa'],
     'ramadan': <String>[
-      'ramadan', 'iftar', 'suhoor', 'fasting month', 'breaking the fast',
+      'ramadan',
+      'iftar',
+      'suhoor',
+      'fasting month',
+      'breaking the fast',
     ],
     'eid': <String>[
-      'eid al adha', 'eid al-adha', 'eid al fitr', 'eid al-fitr', 'eid mubarak',
+      'eid al adha',
+      'eid al-adha',
+      'eid al fitr',
+      'eid al-fitr',
+      'eid mubarak',
       'feast of sacrifice',
     ],
     'diwali': <String>[
-      'diwali', 'deepavali', 'festival of lights', 'diyas', 'rangoli',
+      'diwali',
+      'deepavali',
+      'festival of lights',
+      'diyas',
+      'rangoli',
     ],
     'lunar-new-year': <String>[
-      'lunar new year', 'chinese new year', 'spring festival', 'year of the dragon',
-      'year of the snake', 'red envelope', 'lantern festival',
+      'lunar new year',
+      'chinese new year',
+      'spring festival',
+      'year of the dragon',
+      'year of the snake',
+      'red envelope',
+      'lantern festival',
     ],
     'yom-kippur': <String>['yom kippur', 'day of atonement', 'kol nidre'],
     'st-patricks': <String>[
-      "st. patrick's day", 'st patricks day', 'shamrock', 'leprechaun',
+      "st. patrick's day",
+      'st patricks day',
+      'shamrock',
+      'leprechaun',
       'wearing green',
     ],
     'mothers-day': <String>[
-      "mother's day", 'mothers day', 'mother-daughter day', 'mom gets a day off',
+      "mother's day",
+      'mothers day',
+      'mother-daughter day',
+      'mom gets a day off',
     ],
-    'fathers-day': <String>["father's day", 'fathers day', 'dad gets a day off'],
+    'fathers-day': <String>[
+      "father's day",
+      'fathers day',
+      'dad gets a day off'
+    ],
     'labor-day': <String>['labor day', 'labour day', 'last weekend of summer'],
     'juneteenth': <String>['juneteenth', 'june nineteenth', 'emancipation day'],
     'dia-de-muertos': <String>[
-      'día de muertos', 'dia de muertos', 'day of the dead', 'ofrenda',
-      'calavera', 'sugar skull',
+      'día de muertos',
+      'dia de muertos',
+      'day of the dead',
+      'ofrenda',
+      'calavera',
+      'sugar skull',
     ],
-    'festivus': <String>['festivus', 'airing of grievances', 'feats of strength'],
-    'chrismukkah': <String>['chrismukkah', 'christmukkah', 'christmas hanukkah'],
-    'holiday-mashup': <String>['valloweaster', 'holiday mashup', 'holiday mash-up'],
+    'festivus': <String>[
+      'festivus',
+      'airing of grievances',
+      'feats of strength'
+    ],
+    'chrismukkah': <String>[
+      'chrismukkah',
+      'christmukkah',
+      'christmas hanukkah'
+    ],
+    'holiday-mashup': <String>[
+      'valloweaster',
+      'holiday mashup',
+      'holiday mash-up'
+    ],
     'new-year': <String>[
-      'new year', "new year's eve", 'new years eve', 'midnight countdown',
-      'ball drop', 'new year resolution',
+      'new year',
+      "new year's eve",
+      'new years eve',
+      'midnight countdown',
+      'ball drop',
+      'new year resolution',
     ],
-    'graduation': <String>['graduation', 'commencement', 'senior prom', 'valedictorian'],
+    'graduation': <String>[
+      'graduation',
+      'commencement',
+      'senior prom',
+      'valedictorian'
+    ],
     'back-to-school': <String>[
-      'back to school', 'first day of school', 'school starts', 'new school year',
+      'back to school',
+      'first day of school',
+      'school starts',
+      'new school year',
     ],
-    'independence-day': <String>['independence day', 'fourth of july', '4th of july', 'fireworks display'],
-    'earth-day': <String>['earth day', 'environmental cleanup', 'save the planet'],
+    'independence-day': <String>[
+      'independence day',
+      'fourth of july',
+      '4th of july',
+      'fireworks display'
+    ],
+    'earth-day': <String>[
+      'earth day',
+      'environmental cleanup',
+      'save the planet'
+    ],
     'pride-month': <String>['pride month', 'pride parade', 'pride festival'],
     'cinco-de-mayo': <String>['cinco de mayo', 'battle of puebla'],
-    'memorial-day': <String>['memorial day', 'fallen soldiers', 'memorial service'],
-    'veterans-day': <String>['veterans day', 'armistice day', 'remembrance day'],
+    'memorial-day': <String>[
+      'memorial day',
+      'fallen soldiers',
+      'memorial service'
+    ],
+    'veterans-day': <String>[
+      'veterans day',
+      'armistice day',
+      'remembrance day'
+    ],
   };
 
   /// Curated film/show title aliases. These deliberately allow the same title
@@ -251,7 +460,12 @@ class ThemedEpisodeEngine {
       'wizards of waverly place': <String>['halloween'],
       'lab rats': <String>['halloween'],
       'the simpsons': <String>['treehouse of horror', 'halloween of horror'],
-      'brooklyn nine nine': <String>['halloween', 'halloween heist', 'halloveen', 'valloweaster'],
+      'brooklyn nine nine': <String>[
+        'halloween',
+        'halloween heist',
+        'halloveen',
+        'valloweaster'
+      ],
       'buffy the vampire slayer': <String>['halloween', 'fear itself'],
       'the office': <String>['halloween', 'costume contest'],
       'stranger things': <String>['trick or treat freak'],
@@ -283,7 +497,9 @@ class ThemedEpisodeEngine {
     'thanksgiving': <String, List<String>>{
       'friends': <String>['thanksgiving', 'football', 'the one with the list'],
       'bobs burgers': <String>[
-        'an indecent thanksgiving proposal', 'dawn of the peck', 'turkey in a can',
+        'an indecent thanksgiving proposal',
+        'dawn of the peck',
+        'turkey in a can',
         'thanks hoarding',
       ],
     },
@@ -299,7 +515,10 @@ class ThemedEpisodeEngine {
       'the office': <String>['diwali'],
     },
     'lunar-new-year': <String, List<String>>{
-      'american dragon jake long': <String>['year of the dragon', 'lunar new year'],
+      'american dragon jake long': <String>[
+        'year of the dragon',
+        'lunar new year'
+      ],
       'abby hatcher': <String>['lunar new year', 'chinese new year'],
     },
     'ramadan': <String, List<String>>{
@@ -334,7 +553,8 @@ class ThemedEpisodeEngine {
     return themes.isEmpty ? 'christmas' : themes.first;
   }
 
-  static String get currentSeasonLabel => _labels[currentThemeKey] ?? currentThemeKey;
+  static String get currentSeasonLabel =>
+      _labels[currentThemeKey] ?? currentThemeKey;
 
   static String labelFor(String key) => _labels[key] ?? key;
 
@@ -426,7 +646,12 @@ class ThemedEpisodeEngine {
       case 4:
         return const <String>['easter', 'ramadan', 'eid', 'earth-day'];
       case 5:
-        return const <String>['mothers-day', 'cinco-de-mayo', 'graduation', 'memorial-day'];
+        return const <String>[
+          'mothers-day',
+          'cinco-de-mayo',
+          'graduation',
+          'memorial-day'
+        ];
       case 6:
         return const <String>['juneteenth', 'fathers-day', 'pride-month'];
       case 7:
@@ -438,9 +663,20 @@ class ThemedEpisodeEngine {
       case 10:
         return const <String>['halloween', 'dia-de-muertos', 'diwali'];
       case 11:
-        return const <String>['thanksgiving', 'diwali', 'dia-de-muertos', 'veterans-day'];
+        return const <String>[
+          'thanksgiving',
+          'diwali',
+          'dia-de-muertos',
+          'veterans-day'
+        ];
       case 12:
-        return const <String>['christmas', 'hanukkah', 'kwanzaa', 'chrismukkah', 'new-year'];
+        return const <String>[
+          'christmas',
+          'hanukkah',
+          'kwanzaa',
+          'chrismukkah',
+          'new-year'
+        ];
       default:
         return const <String>[];
     }
@@ -448,7 +684,12 @@ class ThemedEpisodeEngine {
 
   static List<String> themesForDate([DateTime? date]) {
     final now = date ?? DateTime.now();
-    final active = _activeThemes(now);
+    final active = _activeThemes(now).toList(growable: true);
+    for (final themeKey in countryThemeKeysFor(selectedCountries, now)) {
+      if (!active.contains(themeKey)) {
+        active.add(themeKey);
+      }
+    }
     final rest = _labels.keys.where((key) => !active.contains(key)).toList();
     return <String>[...active, ...rest];
   }
@@ -459,12 +700,19 @@ class ThemedEpisodeEngine {
     return index < 0 ? 500 : index;
   }
 
-  static String episodeLabel(Map<String, dynamic> season, Map<String, dynamic> episode) {
+  static String episodeLabel(
+      Map<String, dynamic> season, Map<String, dynamic> episode) {
     final seasonNumber = _number(season, const <String>[
-      'seasonNumber', 'season_number', 'number', 'season',
+      'seasonNumber',
+      'season_number',
+      'number',
+      'season',
     ]);
     final episodeNumber = _number(episode, const <String>[
-      'episodeNumber', 'episode_number', 'number', 'episode',
+      'episodeNumber',
+      'episode_number',
+      'number',
+      'episode',
     ]);
     if (seasonNumber == null && episodeNumber == null) return 'Special episode';
     if (seasonNumber == null) return 'Episode $episodeNumber';
@@ -490,7 +738,8 @@ class ThemedEpisodeEngine {
     final title = (episode['title'] ?? episode['name'] ?? '').toString();
     final summary = <String>[
       title,
-      (episode['description'] ?? episode['overview'] ?? episode['plot'] ?? '').toString(),
+      (episode['description'] ?? episode['overview'] ?? episode['plot'] ?? '')
+          .toString(),
       _asSearchText(episode['genres']),
       _asSearchText(episode['tags']),
       _asSearchText(episode['keywords']),
@@ -638,7 +887,51 @@ class ThemedEpisodeEngine {
 
   static String _asSearchText(dynamic value) {
     if (value is List) return value.map((item) => item.toString()).join(' ');
-    if (value is Map) return value.values.map((item) => item.toString()).join(' ');
+    if (value is Map) {
+      return value.values.map((item) => item.toString()).join(' ');
+    }
     return value?.toString() ?? '';
+  }
+}
+
+class CountryThemePicker extends StatefulWidget {
+  const CountryThemePicker({
+    super.key,
+    this.onSelectionChanged,
+  });
+
+  final VoidCallback? onSelectionChanged;
+
+  @override
+  State<CountryThemePicker> createState() => _CountryThemePickerState();
+}
+
+class _CountryThemePickerState extends State<CountryThemePicker> {
+  @override
+  Widget build(BuildContext context) {
+    final selected = ThemedEpisodeEngine.selectedCountries;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: ThemedEpisodeEngine.countryLabels.entries.map((entry) {
+        final selectedCountry = selected.contains(entry.key);
+        return FilterChip(
+          label: Text(entry.value),
+          selected: selectedCountry,
+          onSelected: (_) {
+            setState(() {
+              ThemedEpisodeEngine.toggleCountry(entry.key);
+            });
+            widget.onSelectionChanged?.call();
+          },
+          backgroundColor: Colors.white.withValues(alpha: 0.06),
+          selectedColor: Colors.primaries.first.withValues(alpha: 0.3),
+          labelStyle: TextStyle(
+            color: selectedCountry ? Colors.white : Colors.white70,
+            fontWeight: FontWeight.w700,
+          ),
+        );
+      }).toList(),
+    );
   }
 }

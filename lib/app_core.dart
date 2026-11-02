@@ -19,6 +19,7 @@ import 'cinematic_seed_examples.dart';
 import 'demo_catalog_metadata.dart';
 import 'core/models/profile_governance.dart';
 import 'core/models/platform_server.dart';
+import 'media_graph_relationship.dart';
 
 /// Keeps legacy or externally supplied metadata outside this product's media scope.
 /// MyOwnStreamingService supports movies, series, episodes, and music tracks/albums;
@@ -203,8 +204,15 @@ class MediaItem {
   final String? countryOfOrigin;
   final String? canonicalTitle;
   final String? language;
+  final String? storyId;
+  final String? storyTitle;
+  final String? originalAuthor;
+  final int? sourceWorkYear;
+  final String? adaptationType;
   final String? adaptationGroupId;
   final String? adaptationGroupName;
+  final List<String> relatedAdaptationIds;
+  final List<MediaGraphRelationship> graphRelationships;
   final List<String> relationshipTypes;
 
   // Profile-level access. An empty list means the account's legacy library
@@ -300,8 +308,15 @@ class MediaItem {
     this.countryOfOrigin,
     this.canonicalTitle,
     this.language,
+    this.storyId,
+    this.storyTitle,
+    this.originalAuthor,
+    this.sourceWorkYear,
+    this.adaptationType,
     this.adaptationGroupId,
     this.adaptationGroupName,
+    List<String>? relatedAdaptationIds,
+    List<MediaGraphRelationship>? graphRelationships,
     List<String>? relationshipTypes,
     List<String>? accessibleProfileIds,
     List<String>? eligibleMerchandiseProductIds,
@@ -421,6 +436,8 @@ class MediaItem {
         extras = extras ?? <String>[],
         xrayEvents = xrayEvents ?? <Map<String, dynamic>>[],
         tvIntros = tvIntros ?? <Map<String, dynamic>>[],
+        relatedAdaptationIds = relatedAdaptationIds ?? <String>[],
+        graphRelationships = graphRelationships ?? <MediaGraphRelationship>[],
         relationshipTypes = relationshipTypes ?? <String>[],
         accessibleProfileIds = accessibleProfileIds ?? <String>[],
         eligibleMerchandiseProductIds =
@@ -745,12 +762,43 @@ class MediaItem {
       countryOfOrigin: countryOrigin,
       canonicalTitle: data['canonicalTitle']?.toString(),
       language: data['language']?.toString(),
-      adaptationGroupId: data['adaptationGroupId']?.toString(),
-      adaptationGroupName: data['adaptationGroupName']?.toString(),
-      relationshipTypes: _stringList(data['relationshipTypes']),
-      accessibleProfileIds: _stringList(data['accessibleProfileIds']),
-      eligibleMerchandiseProductIds:
-          _stringList(data['eligibleMerchandiseProductIds']),
+      storyId: (data['storyId'] ?? data['story_id'])?.toString(),
+      storyTitle: (data['storyTitle'] ?? data['story_title'])?.toString(),
+      originalAuthor:
+          (data['originalAuthor'] ?? data['original_author'])?.toString(),
+      sourceWorkYear:
+          _intValue(data['sourceWorkYear'] ?? data['source_work_year']),
+      adaptationType:
+          (data['adaptationType'] ?? data['adaptation_type'])?.toString(),
+      adaptationGroupId:
+          (data['adaptationGroupId'] ?? data['adaptation_group_id'])
+              ?.toString(),
+      adaptationGroupName:
+          (data['adaptationGroupName'] ?? data['adaptation_group_name'])
+              ?.toString(),
+      relatedAdaptationIds: _stringList(
+        data['relatedAdaptationIds'] ?? data['related_adaptation_ids'],
+      ),
+      graphRelationships:
+          (data['graphRelationships'] ?? data['graph_relationships']) is List
+              ? ((data['graphRelationships'] ?? data['graph_relationships'])
+                      as List)
+                  .whereType<Map>()
+                  .map((relationship) => MediaGraphRelationship.fromJson(
+                        Map<String, dynamic>.from(relationship),
+                      ))
+                  .toList()
+              : <MediaGraphRelationship>[],
+      relationshipTypes: _stringList(
+        data['relationshipTypes'] ?? data['relationship_types'],
+      ),
+      accessibleProfileIds: _stringList(
+        data['accessibleProfileIds'] ?? data['accessible_profile_ids'],
+      ),
+      eligibleMerchandiseProductIds: _stringList(
+        data['eligibleMerchandiseProductIds'] ??
+            data['eligible_merchandise_product_ids'],
+      ),
       franchiseId: data['franchiseId']?.toString(),
       franchiseName: data['franchiseName']?.toString(),
       franchiseType: data['franchiseType']?.toString(),
@@ -1442,8 +1490,17 @@ class MediaItem {
       'countryOfOrigin': countryOfOrigin,
       'canonicalTitle': canonicalTitle,
       'language': language,
+      'storyId': storyId,
+      'storyTitle': storyTitle,
+      'originalAuthor': originalAuthor,
+      'sourceWorkYear': sourceWorkYear,
+      'adaptationType': adaptationType,
       'adaptationGroupId': adaptationGroupId,
       'adaptationGroupName': adaptationGroupName,
+      'relatedAdaptationIds': relatedAdaptationIds,
+      'graphRelationships': graphRelationships
+          .map((relationship) => relationship.toJson())
+          .toList(),
       'relationshipTypes': relationshipTypes,
       'accessibleProfileIds': accessibleProfileIds,
       'eligibleMerchandiseProductIds': eligibleMerchandiseProductIds,
