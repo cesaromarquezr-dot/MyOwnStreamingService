@@ -34,6 +34,7 @@ import 'core/services/cinematic_title_metadata_service.dart';
 import 'media_graph_relationship.dart';
 import 'media_edition_identity.dart';
 
+import 'backend_api_compatibility.dart';
 class _StoryAdaptationLink {
   const _StoryAdaptationLink({
     required this.media,

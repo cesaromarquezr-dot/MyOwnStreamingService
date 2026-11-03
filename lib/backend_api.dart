@@ -7,7 +7,6 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-import 'privacy_preferences.dart';
 import 'core/config/app_env.dart';
 import 'core/services/self_driving_network_engine.dart';
 
@@ -15,12 +14,9 @@ part 'backend_api_parts/account.dart';
 part 'backend_api_parts/library.dart';
 part 'backend_api_parts/groups.dart';
 part 'backend_api_parts/server.dart';
-part 'backend_api_parts/commerce.dart';
 part 'backend_api_parts/admin.dart';
 part 'backend_api_parts/discovery.dart';
-part 'backend_api_parts/social.dart';
 part 'backend_api_parts/collaboration.dart';
-part 'backend_api_parts/commerce_platform.dart';
 part 'backend_api_parts/devices.dart';
 part 'backend_api_parts/support.dart';
 

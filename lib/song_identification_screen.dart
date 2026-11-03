@@ -1,12 +1,10 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:record/record.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_core.dart';
+import 'song_audio_capture.dart';
 
 class SongIdentificationScreen extends StatefulWidget {
   const SongIdentificationScreen({super.key});
@@ -17,14 +15,13 @@ class SongIdentificationScreen extends StatefulWidget {
 }
 
 class _SongIdentificationScreenState extends State<SongIdentificationScreen> {
-  final AudioRecorder _recorder = AudioRecorder();
+  final SongAudioCapture _capture = SongAudioCapture();
   Timer? _timer;
   int _secondsLeft = 10;
   bool _recording = false;
   bool _loading = false;
   String? _error;
   String? _message;
-  String? _recordPath;
   Map<String, dynamic>? _identified;
 
   @override
@@ -35,18 +32,7 @@ class _SongIdentificationScreenState extends State<SongIdentificationScreen> {
   }
 
   Future<void> _cleanupRecording() async {
-    final path = _recordPath;
-    try {
-      if (_recording) await _recorder.stop();
-    } catch (_) {}
-    try {
-      await _recorder.dispose();
-    } catch (_) {}
-    if (path != null) {
-      try {
-        await File(path).delete();
-      } catch (_) {}
-    }
+    try { await _capture.dispose(); } catch (_) {}
   }
 
   Future<void> _startRecognition() async {
@@ -58,28 +44,9 @@ class _SongIdentificationScreenState extends State<SongIdentificationScreen> {
       return;
     }
     try {
-      final permitted = await _recorder.hasPermission();
-      if (!mounted) return;
-      if (!permitted) {
-        setState(() {
-          _error = 'Microphone permission is required to identify a song.';
-        });
-        return;
-      }
-      final temp = await getTemporaryDirectory();
-      final path =
-          '${temp.path}${Platform.pathSeparator}moss-song-id-${DateTime.now().millisecondsSinceEpoch}.m4a';
-      _recordPath = path;
-      await _recorder.start(
-        const RecordConfig(
-          encoder: AudioEncoder.aacLc,
-          bitRate: 96000,
-          sampleRate: 44100,
-        ),
-        path: path,
-      );
+      await _capture.start();
       if (!mounted) {
-        await _recorder.stop();
+        await _capture.dispose();
         return;
       }
       setState(() {
@@ -117,14 +84,9 @@ class _SongIdentificationScreenState extends State<SongIdentificationScreen> {
           'Checking the audio sample against the song-recognition provider…';
     });
     try {
-      final stoppedPath = await _recorder.stop();
-      final path = stoppedPath ?? _recordPath;
-      if (path == null || !await File(path).exists()) {
-        throw StateError('No microphone sample was saved.');
-      }
-      final bytes = await File(path).readAsBytes();
+      final sample = await _capture.stop();
       final payload = await AppController.instance.backendApi
-          .identifySongFromAudio(bytes, mimeType: 'audio/mp4');
+          .identifySongFromAudio(sample.bytes, mimeType: sample.mimeType);
       if (!mounted) return;
       setState(() {
         _identified = payload['matched'] == true
@@ -143,13 +105,7 @@ class _SongIdentificationScreenState extends State<SongIdentificationScreen> {
         });
       }
     } finally {
-      final path = _recordPath;
-      _recordPath = null;
-      if (path != null) {
-        try {
-          await File(path).delete();
-        } catch (_) {}
-      }
+      try { await _capture.dispose(); } catch (_) {}
       if (mounted) {
         setState(() => _loading = false);
       }

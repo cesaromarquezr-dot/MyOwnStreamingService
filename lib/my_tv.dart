@@ -17,6 +17,7 @@ import 'core/services/tv_channel_engine.dart';
 import 'localization.dart';
 import 'page_customization_button.dart';
 
+import 'backend_api_compatibility.dart';
 const _channelContentTypes = <String>['Movies', 'Shows', 'Music'];
 
 /// Stable across process restarts. Dart's general-purpose hashCode is not a

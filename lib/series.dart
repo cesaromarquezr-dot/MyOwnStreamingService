@@ -115,13 +115,9 @@ class _SeriesScreenState extends State<SeriesScreen>
   List<MediaItem> _getShows() {
     final library = AppController.instance.library;
 
-    final shows = library.where((media) {
-      final type = media.type.toLowerCase();
-
-      return type == 'tvshow' ||
-          type == 'tv_show' ||
-          type == 'tv show';
-    }).toList();
+    // Use the shared type classifier so TV, TV Show, TV_Show, TV Series,
+    // and other supported series aliases all follow the same rating path.
+    final shows = library.where((media) => media.isSeries).toList();
 
     final result = _searchQuery.trim().isEmpty
         ? List<MediaItem>.from(shows)

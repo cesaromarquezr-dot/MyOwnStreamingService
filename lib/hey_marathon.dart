@@ -5,15 +5,12 @@
 // session API; this module does not claim that an entire multi-title schedule
 // is synchronized by a single Group Watch session.
 
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'backend_api.dart';
 import 'app_core.dart';
-import 'food_delivery.dart';
 import 'group_watch.dart';
 import 'localization.dart';
 import 'page_customization_button.dart';
@@ -630,37 +627,11 @@ class _HeyMarathonScreenState extends State<HeyMarathonScreen> {
   @override
   void initState() {
     super.initState();
-    unawaited(_setProfileActivity('Planning a Hey Marathon'));
     _loadPlans();
-  }
-
-  Future<void> _setProfileActivity(String? activity) async {
-    final profile = _app.currentProfile;
-    final api = _app.backendApi;
-    if (profile == null || !api.isAuthenticated) return;
-    try {
-      if (activity == null) {
-        await api.setSocialProfilePresence(
-          profileId: profile.id,
-          availability: 'active',
-          clearActivity: true,
-        );
-      } else {
-        await api.setSocialProfilePresence(
-          profileId: profile.id,
-          availability: 'active',
-          activityType: 'planning_marathon',
-          activityText: activity,
-        );
-      }
-    } catch (_) {
-      // Presence is optional and must not interrupt marathon planning.
-    }
   }
 
   @override
   void dispose() {
-    unawaited(_setProfileActivity(null));
     _titleController.dispose();
     _foodNotesController.dispose();
     super.dispose();
@@ -886,16 +857,6 @@ class _HeyMarathonScreenState extends State<HeyMarathonScreen> {
     }
   }
 
-  Future<void> _openFood(MarathonPlan plan) async {
-    await Navigator.of(context).push<void>(MaterialPageRoute<void>(
-      settings: const RouteSettings(name: '/app/page/hey-marathon/food'),
-      builder: (_) => FoodOrderingScreen(
-        viewingContext:
-            'Hey Marathon · ${plan.title} · ${plan.theme.title} · themed food ideas: ${plan.theme.foodIdeas.take(3).join(', ')}${plan.foodNotes.isEmpty ? '' : ' · ${plan.foodNotes}'}',
-      ),
-    ));
-  }
-
   Future<void> _startGroupWatch(MarathonPlan plan) async {
     if (!_app.backendApi.isAuthenticated) {
       _toast(
@@ -1021,7 +982,7 @@ class _HeyMarathonScreenState extends State<HeyMarathonScreen> {
                                 fontSize: 25, fontWeight: FontWeight.w900)),
                         const SizedBox(height: 6),
                         const UniversalText(
-                            'Build a watch order from your library, schedule breaks, invite friends, and find themed food.',
+                            'Build a watch order from your library, schedule breaks, and share invitations.',
                             style: TextStyle(color: Colors.white70)),
                         const SizedBox(height: 12),
                         Wrap(spacing: 8, runSpacing: 8, children: [
@@ -1029,8 +990,6 @@ class _HeyMarathonScreenState extends State<HeyMarathonScreen> {
                               Icons.schedule_rounded, 'Runtime-aware schedule'),
                           _featureChip(
                               Icons.people_alt_rounded, 'Share invitations'),
-                          _featureChip(
-                              Icons.restaurant_rounded, 'Food handoff'),
                         ]),
                       ]),
                 ),
@@ -1463,10 +1422,6 @@ class _HeyMarathonScreenState extends State<HeyMarathonScreen> {
                 onPressed: () => _sharePlan(plan),
                 icon: const Icon(Icons.ios_share_rounded),
                 label: const UniversalText('Invite / share')),
-            OutlinedButton.icon(
-                onPressed: () => _openFood(plan),
-                icon: const Icon(Icons.restaurant_rounded),
-                label: const UniversalText('Find themed food')),
             FilledButton.tonalIcon(
                 onPressed: () => _startGroupWatch(plan),
                 icon: const Icon(Icons.play_circle_outline_rounded),

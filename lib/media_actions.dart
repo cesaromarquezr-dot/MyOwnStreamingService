@@ -5,8 +5,7 @@
 import 'dart:async';
 
 import 'app_core.dart';
-import 'backend_api.dart';
-
+import 'backend_api_compatibility.dart';
 enum UniversalMediaAction {
   like,
   dislike,

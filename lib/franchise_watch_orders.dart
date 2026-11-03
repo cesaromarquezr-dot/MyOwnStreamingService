@@ -8,6 +8,7 @@ import 'app_core.dart';
 import 'details.dart';
 import 'localization.dart';
 
+import 'backend_api_compatibility.dart';
 /// A single canonical work used by a curated or catalog-generated watch guide.
 /// The stable id is shared between guides so completion carries across branches.
 @immutable

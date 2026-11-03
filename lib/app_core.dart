@@ -21,6 +21,7 @@ import 'core/models/profile_governance.dart';
 import 'core/models/platform_server.dart';
 import 'media_graph_relationship.dart';
 
+import 'backend_api_compatibility.dart';
 class MediaMetadataProtection {
   const MediaMetadataProtection._();
 

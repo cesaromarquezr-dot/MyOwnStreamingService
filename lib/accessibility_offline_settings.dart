@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
-import 'backend_api.dart';
 import 'app_accessibility.dart';
 import 'localization.dart';
 import 'offline_sync_queue.dart';
@@ -86,7 +85,6 @@ class _AccessibilityOfflineSettingsScreenState
   }
 
   Future<void> _savePrivacy(void Function() change) async {
-    final previous = PrivacyPreferences.fromJson(privacy.toJson());
     final updated = PrivacyPreferences.fromJson(privacy.toJson());
     privacy = updated;
     setState(() {
@@ -95,25 +93,9 @@ class _AccessibilityOfflineSettingsScreenState
       error = null;
     });
 
-    String? presenceError;
-    String? cacheError;
-    if ((previous.sharePresence && !updated.sharePresence) ||
-        (previous.shareActivity && !updated.shareActivity)) {
-      try {
-        await AppController.instance.backendApi.setSocialProfilePresence(
-          profileId: _profileId,
-          availability: previous.sharePresence && !updated.sharePresence
-              ? 'away'
-              : null,
-          clearActivity: true,
-        );
-      } catch (e) {
-        presenceError = e.toString().replaceFirst('Exception: ', '');
-      }
-    }
-
     try {
       await PrivacyPreferencesStore.save(profileId: _profileId, value: updated);
+      String? cacheError;
       if (!updated.allowOfflineMetadata) {
         try {
           await OfflineMetadataCache(profileId: _profileId).clear();
@@ -124,19 +106,9 @@ class _AccessibilityOfflineSettingsScreenState
       if (mounted) {
         setState(() {
           saving = false;
-          if (presenceError != null && cacheError != null) {
-            error = 'Privacy was saved. Existing shared activity may not have '
-                'been cleared: $presenceError Offline metadata could not be '
-                'cleared: $cacheError';
-          } else if (presenceError != null) {
-            error = 'Privacy was saved, but existing shared activity may not '
-                'have been cleared: $presenceError';
-          } else if (cacheError != null) {
-            error = 'Privacy was saved, but offline metadata could not be '
-                'cleared: $cacheError';
-          } else {
-            error = null;
-          }
+          error = cacheError == null
+              ? null
+              : 'Privacy was saved, but offline metadata could not be cleared: $cacheError';
         });
       }
     } catch (e) {
@@ -278,12 +250,12 @@ class _AccessibilityOfflineSettingsScreenState
                     leading: Icon(Icons.privacy_tip_outlined),
                     title: UniversalText('Profile privacy'),
                     subtitle: UniversalText(
-                        'These options are enforced locally and by the presence API when available. Cross-device preference sync requires the production API/migration rollout.'),
+                        'These preferences are stored per profile on this device. Cross-device preference synchronization depends on the production API rollout.'),
                   ),
                   SwitchListTile(
                     title: const UniversalText('Share presence'),
                     subtitle: const UniversalText(
-                        'Allow this profile to appear as online or away in shared areas.'),
+                        'Save this profile’s presence preference for features that support it.'),
                     value: privacy.sharePresence,
                     onChanged: saving
                         ? null
@@ -293,7 +265,7 @@ class _AccessibilityOfflineSettingsScreenState
                   SwitchListTile(
                     title: const UniversalText('Share viewing activity'),
                     subtitle: const UniversalText(
-                        'Allow recent playback activity to appear in shared areas. Turning this off clears activity on the next presence update.'),
+                        'Save this profile’s activity-sharing preference for features that support it.'),
                     value: privacy.shareActivity,
                     onChanged: saving
                         ? null

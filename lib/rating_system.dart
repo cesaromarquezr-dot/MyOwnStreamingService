@@ -178,40 +178,57 @@ class _TmdbMediaRatingBadgeState extends State<TmdbMediaRatingBadge> {
     if (!CinematicTitleMetadataService.isConfigured) {
       return const SizedBox.shrink();
     }
-    return FutureBuilder<Map<String, dynamic>?>(
-      future: _ratingFuture,
-      builder: (context, snapshot) {
-        final data = snapshot.data;
-        final raw = data?['score'];
-        if (raw is! num || raw <= 0) return const SizedBox.shrink();
-        final score = raw.toDouble();
-        final percent = (score * 10).round().clamp(0, 100);
-        return Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: widget.compact ? 6 : 9,
-            vertical: widget.compact ? 3 : 5,
-          ),
-          decoration: BoxDecoration(
-            color: Colors.amber.withValues(alpha: .12),
-            borderRadius: BorderRadius.circular(7),
-            border: Border.all(color: Colors.amber.withValues(alpha: .28)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.star_rounded,
-                  size: widget.compact ? 12 : 15, color: Colors.amber),
-              const SizedBox(width: 3),
-              Text(
-                'TMDB ${score.toStringAsFixed(1)}/10 · $percent%',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: .9),
-                  fontSize: widget.compact ? 9.5 : 11,
-                  fontWeight: FontWeight.w800,
+    // The same profile palette used by personal score badges also controls
+    // provider-rating labels. Listen for palette changes so Home, Movies,
+    // Shows, and Details update immediately after the user saves new colors.
+    return ValueListenableBuilder<int>(
+      valueListenable: UserMediaRatingStore.changes,
+      builder: (context, paletteRevision, child) {
+        final palette = UserMediaRatingStore.paletteFor(
+          AppController.instance.currentProfile?.id,
+        );
+        return FutureBuilder<Map<String, dynamic>?>(
+          future: _ratingFuture,
+          builder: (context, snapshot) {
+            final data = snapshot.data;
+            final raw = data?['score'];
+            if (raw is! num || raw <= 0) return const SizedBox.shrink();
+            final score = raw.toDouble();
+            final percent = (score * 10).round().clamp(0, 100);
+            final ratingColor = palette.colorFor(percent.toDouble());
+            return Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: widget.compact ? 6 : 9,
+                vertical: widget.compact ? 3 : 5,
+              ),
+              decoration: BoxDecoration(
+                color: ratingColor.withValues(alpha: .14),
+                borderRadius: BorderRadius.circular(7),
+                border: Border.all(
+                  color: ratingColor.withValues(alpha: .62),
                 ),
               ),
-            ],
-          ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.star_rounded,
+                    size: widget.compact ? 12 : 15,
+                    color: ratingColor,
+                  ),
+                  const SizedBox(width: 3),
+                  Text(
+                    'TMDB ${score.toStringAsFixed(1)}/10 · $percent%',
+                    style: TextStyle(
+                      color: ratingColor,
+                      fontSize: widget.compact ? 9.5 : 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         );
       },
     );
