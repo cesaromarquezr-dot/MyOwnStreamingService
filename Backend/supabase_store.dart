@@ -5450,6 +5450,12 @@ class SupabaseStore {
                     ? Map<String, dynamic>.from(profileRow['governance'])
                     : null,
               ),
+              wishlistRecommendationIds:
+                  profileRow['wishlist_recommendation_ids'] is List
+                      ? (profileRow['wishlist_recommendation_ids'] as List)
+                          .map((value) => value.toString())
+                          .toList()
+                      : const <String>[],
             ),
           );
         }
@@ -6315,6 +6321,8 @@ class SupabaseStore {
           field: 'profile.name', maxLength: _maxNameLength),
       'avatar_url': _safeNullableText(profile.avatarUrl, maxLength: 2048),
       'governance': profile.governance.toJson(),
+      'wishlist_recommendation_ids':
+          profile.wishlistRecommendationIds,
       'is_active': true,
     }, onConflict: 'external_profile_id');
   }
@@ -8572,9 +8580,9 @@ class SupabaseStore {
       );
     }
 
-    if (account.profiles.length > 7) {
+    if (account.profiles.length > Account.maxProfiles) {
       throw ArgumentError(
-        'An account cannot contain more than 7 profiles.',
+        'An account cannot contain more than ${Account.maxProfiles} profiles.',
       );
     }
   }

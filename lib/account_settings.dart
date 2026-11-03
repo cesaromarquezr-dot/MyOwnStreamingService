@@ -15,6 +15,7 @@ import 'customer_support.dart';
 import 'tv_controller.dart';
 import 'tv_host.dart';
 import 'streaming_upgrade_center.dart';
+import 'user_rating_store.dart';
 
 /// Implements the `AccountSettingsScreen` class for this feature or UI component.
 class AccountSettingsScreen extends StatefulWidget {
@@ -303,6 +304,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                 const SizedBox(height: 8),
                 ListTile(leading: const Icon(Icons.devices_rounded), title: const UniversalText('Device Center'), subtitle: const UniversalText('Devices, downloads and connected screens'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DeviceCenterScreen()))),
                 ListTile(leading: const Icon(Icons.auto_awesome_rounded), title: const UniversalText('Streaming Upgrade Center'), subtitle: const UniversalText('Search, collections, profiles and streaming tools'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StreamingUpgradeCenterScreen()))),
+                ListTile(leading: const Icon(Icons.palette_outlined), title: const UniversalText('Personal Rating Colors'), subtitle: const UniversalText('Customize the color bands used for your own movie, show, and music scores'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RatingColorSettingsScreen()))),
                 ListTile(leading: const Icon(Icons.high_quality_rounded), title: const UniversalText('Streaming Experience'), subtitle: const UniversalText('Playback quality, accessibility and player diagnostics'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StreamingExperienceSettingsScreen()))),
                 ListTile(leading: const Icon(Icons.energy_savings_leaf_rounded), title: const UniversalText('Power & Performance'), subtitle: const UniversalText('Eco mode, OLED-black surfaces and background activity controls'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PowerPerformanceScreen()))),
                 ListTile(leading: const Icon(Icons.tune_rounded), title: const UniversalText('Perfect Streaming'), subtitle: const UniversalText('Autoplay, discovery and watch-party preferences'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PerfectStreamingExperienceScreen()))),

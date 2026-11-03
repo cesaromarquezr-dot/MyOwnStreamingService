@@ -1018,7 +1018,11 @@ class MediaItem {
   }
 
   bool get isSeries {
-    final normalized = type.toLowerCase().trim();
+    final normalized = type
+        .toLowerCase()
+        .trim()
+        .replaceAll(RegExp(r'[_-]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ');
     return normalized == 'tv' ||
         normalized == 'show' ||
         normalized == 'tv show' ||
@@ -1702,6 +1706,7 @@ class Profile {
   String username;
   String? avatarUrl;
   ProfileGovernance governance;
+  final List<String> wishlistRecommendationIds;
 
   Profile({
     required this.id,
@@ -1709,7 +1714,9 @@ class Profile {
     String? username,
     this.avatarUrl,
     this.governance = const ProfileGovernance(),
-  }) : username = _resolveProfileUsername(username, name);
+    List<String>? wishlistRecommendationIds,
+  })  : username = _resolveProfileUsername(username, name),
+        wishlistRecommendationIds = wishlistRecommendationIds ?? <String>[];
 
   factory Profile.fromJson(Map<String, dynamic> json) {
     return Profile(
@@ -1717,6 +1724,11 @@ class Profile {
       name: json['name']?.toString() ?? 'Profile',
       username: json['username']?.toString(),
       avatarUrl: json['avatarUrl']?.toString(),
+      wishlistRecommendationIds: json['wishlistRecommendationIds'] is List
+          ? (json['wishlistRecommendationIds'] as List)
+              .map((value) => value.toString())
+              .toList()
+          : <String>[],
       governance: ProfileGovernance.fromJson(
         json['governance'] is Map
             ? Map<String, dynamic>.from(json['governance'])
@@ -1732,6 +1744,7 @@ class Profile {
       'name': name,
       'username': username,
       'avatarUrl': avatarUrl,
+      'wishlistRecommendationIds': List<String>.from(wishlistRecommendationIds),
       'governance': governance.toJson(),
     };
   }
@@ -1750,6 +1763,8 @@ String _resolveProfileUsername(String? username, String name) {
 
 /// Implements the `UserAccount` class for this feature or UI component.
 class UserAccount {
+  static const int maxProfiles = 10;
+
   /// Backend account identifier used to correlate this client with Supabase.
   final String id;
   final String username;
@@ -3827,9 +3842,9 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    if (currentAccount!.profiles.length >= 7) {
+    if (currentAccount!.profiles.length >= UserAccount.maxProfiles) {
       throw StateError(
-        'You can have a maximum of 7 profiles.',
+        'You can have a maximum of ${UserAccount.maxProfiles} profiles.',
       );
     }
 
@@ -5590,6 +5605,7 @@ class AppController extends ChangeNotifier {
       }
 
       groupRecommendations = loaded;
+      _syncProfileRecommendationWishlists(loaded);
     } catch (error) {
       groupRecommendationsError = error.toString();
     } finally {
@@ -5625,9 +5641,10 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    if (cleanedType != 'movie' && cleanedType != 'tvShow') {
+    if (!const {'movie', 'tvShow', 'episode', 'song', 'album'}
+        .contains(cleanedType)) {
       throw ArgumentError(
-        'Recommendation type must be "movie" or "tvShow".',
+        'Recommendation type must be movie, tvShow, episode, song, or album.',
       );
     }
 
@@ -5685,13 +5702,23 @@ class AppController extends ChangeNotifier {
         0,
         recommendationMap,
       );
+      _syncProfileRecommendationWishlist(recommendationMap);
 
       final String titleForMessage =
           recommendationMap['title']?.toString() ?? cleanedTitle;
 
-      final String icon = cleanedType == 'tvShow' ? '📺' : '🎬';
-
-      final String typeLabel = cleanedType == 'tvShow' ? 'TV show' : 'movie';
+      final String typeLabel = switch (cleanedType) {
+        'tvShow' => 'TV show',
+        'episode' => 'episode',
+        'song' => 'song',
+        'album' => 'album',
+        _ => 'movie',
+      };
+      final String icon = switch (cleanedType) {
+        'tvShow' || 'episode' => '📺',
+        'song' || 'album' => '🎵',
+        _ => '🎬',
+      };
 
       sendGroupMessage(
         message: tr(
@@ -5750,6 +5777,7 @@ class AppController extends ChangeNotifier {
       0,
       recommendationMap,
     );
+    _syncProfileRecommendationWishlist(recommendationMap);
 
     notifyListeners();
 
@@ -5812,6 +5840,7 @@ class AppController extends ChangeNotifier {
         0,
         recommendationMap,
       );
+      _syncProfileRecommendationWishlist(recommendationMap);
 
       final String title =
           recommendationMap['title']?.toString() ?? 'this recommendation';
@@ -5902,6 +5931,7 @@ class AppController extends ChangeNotifier {
         0,
         recommendationMap,
       );
+      _syncProfileRecommendationWishlist(recommendationMap);
 
       final status = recommendationMap['status']?.toString().toLowerCase();
 
@@ -5943,8 +5973,43 @@ class AppController extends ChangeNotifier {
     groupRecommendations.removeWhere(
       (item) => item['id']?.toString() == cleanedId,
     );
+    for (final profile in currentAccount?.profiles ?? <Profile>[]) {
+      profile.wishlistRecommendationIds.remove(cleanedId);
+    }
 
     notifyListeners();
+  }
+
+  void _syncProfileRecommendationWishlists(
+    List<Map<String, dynamic>> recommendations,
+  ) {
+    for (final recommendation in recommendations) {
+      _syncProfileRecommendationWishlist(recommendation);
+    }
+  }
+
+  void _syncProfileRecommendationWishlist(
+    Map<String, dynamic> recommendation,
+  ) {
+    final recommendationId = recommendation['id']?.toString().trim() ?? '';
+    if (recommendationId.isEmpty) return;
+
+    final status = recommendation['status']?.toString().toLowerCase();
+    final participants = (recommendation['activeParticipants'] as List?)
+            ?.map((value) => value.toString())
+            .toSet() ??
+        <String>{};
+
+    for (final profile in currentAccount?.profiles ?? <Profile>[]) {
+      if (status == 'rejected' && participants.contains(profile.id)) {
+        if (!profile.wishlistRecommendationIds.contains(recommendationId)) {
+          profile.wishlistRecommendationIds.add(recommendationId);
+        }
+      } else if (const {'approved', 'rejected', 'acquired', 'expired'}
+          .contains(status)) {
+        profile.wishlistRecommendationIds.remove(recommendationId);
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------

@@ -18,15 +18,34 @@ class ExternalRatingService {
     required String title,
     int? year,
     String? imdbId,
+    String? tmdbId,
     String mediaType = 'movie',
     bool refresh = false,
   }) async {
-    final key = '${mediaType.toLowerCase()}:${imdbId ?? title}:$year';
+    final key = '${mediaType.toLowerCase()}:${tmdbId ?? ''}:${imdbId ?? title}:$year';
     if (!refresh && _cache.containsKey(key)) return List.unmodifiable(_cache[key]!);
 
     final ratings = <ExternalRating>[];
-    ratings.addAll(await _tmdb(title: title, year: year, mediaType: mediaType));
-    ratings.addAll(await _omdb(title: title, year: year, imdbId: imdbId, mediaType: mediaType));
+    final normalizedType = mediaType.trim().toLowerCase();
+    final isCinematic = normalizedType == 'movie' ||
+        normalizedType == 'film' ||
+        normalizedType == 'tv' ||
+        normalizedType.contains('show') ||
+        normalizedType.contains('series');
+    if (isCinematic) {
+      ratings.addAll(await _tmdb(
+        title: title,
+        year: year,
+        mediaType: mediaType,
+        tmdbId: tmdbId,
+      ));
+      ratings.addAll(await _omdb(
+        title: title,
+        year: year,
+        imdbId: imdbId,
+        mediaType: mediaType,
+      ));
+    }
 
     // Deduplicate by provider/kind while preserving the most recently fetched value.
     final deduped = <String, ExternalRating>{};
@@ -42,27 +61,50 @@ class ExternalRatingService {
     required String title,
     required int? year,
     required String mediaType,
+    String? tmdbId,
   }) async {
     final token = AppConfig.tmdbApiToken;
     if (token.isEmpty) return const [];
 
-    final type = mediaType.toLowerCase() == 'tv' || mediaType.toLowerCase().contains('show')
-        ? 'tv'
-        : 'movie';
-    final uri = Uri.https('api.themoviedb.org', '/3/search/$type', {
-      'query': title,
-      if (year != null) type == 'movie' ? 'year' : 'first_air_date_year': '$year',
-    });
+    final type = _isTvType(mediaType) ? 'tv' : 'movie';
+    final cleanTmdbId = tmdbId?.trim() ?? '';
+    final hasTmdbId = RegExp(r'^\d+$').hasMatch(cleanTmdbId);
+    final uri = hasTmdbId
+        ? Uri.https('api.themoviedb.org', '/3/$type/$cleanTmdbId')
+        : Uri.https('api.themoviedb.org', '/3/search/$type', {
+            'query': title,
+            if (year != null)
+              type == 'movie' ? 'year' : 'first_air_date_year': '$year',
+          });
 
     try {
       final response = await _get(uri, bearer: token);
       if (response == null) return const [];
-      final json = response;
-      if (json is! Map || json['results'] is! List || (json['results'] as List).isEmpty) return const [];
-      final first = (json['results'] as List).first;
-      if (first is! Map) return const [];
-      final value = (first['vote_average'] as num?)?.toDouble();
-      final votes = (first['vote_count'] as num?)?.toInt();
+      final Map<String, dynamic> json;
+      if (hasTmdbId) {
+        json = response;
+      } else {
+        final rawResults = response['results'];
+        if (rawResults is! List || rawResults.isEmpty) return const [];
+        final normalizedTitle = _normalizeTitle(title);
+        Map<String, dynamic>? match;
+        for (final row in rawResults.whereType<Map>()) {
+          final candidateTitle = _normalizeTitle(
+            (row[type == 'tv' ? 'name' : 'title'] ??
+                    row[type == 'tv' ? 'original_name' : 'original_title'] ??
+                    '')
+                .toString(),
+          );
+          if (candidateTitle == normalizedTitle) {
+            match = Map<String, dynamic>.from(row);
+            break;
+          }
+        }
+        if (match == null) return const [];
+        json = match;
+      }
+      final value = (json['vote_average'] as num?)?.toDouble();
+      final votes = (json['vote_count'] as num?)?.toInt();
       if (value == null) return const [];
       return [ExternalRating(
         provider: RatingProvider.tmdb,
@@ -78,6 +120,25 @@ class ExternalRatingService {
     }
   }
 
+
+  bool _isTvType(String mediaType) {
+    final normalized = mediaType
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[_-]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ');
+    return normalized == 'tv' ||
+        normalized == 'show' ||
+        normalized == 'tv show' ||
+        normalized == 'tvshow' ||
+        normalized == 'television' ||
+        normalized.contains('series');
+  }
+
+  String _normalizeTitle(String value) => value
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]'), '');
+
   Future<List<ExternalRating>> _omdb({
     required String title,
     required int? year,
@@ -92,7 +153,7 @@ class ExternalRatingService {
       if (imdbId != null && imdbId.isNotEmpty) 'i': imdbId,
       if (imdbId == null || imdbId.isEmpty) 't': title,
       if (year != null) 'y': '$year',
-      'type': mediaType.toLowerCase().contains('tv') || mediaType.toLowerCase().contains('show') ? 'series' : 'movie',
+      'type': _isTvType(mediaType) ? 'series' : 'movie',
     });
 
     try {

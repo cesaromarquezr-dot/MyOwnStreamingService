@@ -61,9 +61,10 @@ class GroupRecommendationService {
 
     final normalizedType = type.trim();
 
-    if (normalizedType != 'movie' && normalizedType != 'tvShow') {
+    if (!const {'movie', 'tvShow', 'episode', 'song', 'album'}
+        .contains(normalizedType)) {
       throw ArgumentError(
-        'Recommendation type must be "movie" or "tvShow".',
+        'Recommendation type must be movie, tvShow, episode, song, or album.',
       );
     }
 
@@ -356,6 +357,7 @@ class GroupRecommendationService {
 
     if (recommendation.hasMajorityYes) {
       recommendation.approve();
+      _removeRecommendationFromProfileWishlists(recommendation);
       _addApprovedRecommendationToWishlist(recommendation);
     } else {
       // This intentionally covers:
@@ -363,6 +365,7 @@ class GroupRecommendationService {
       // - YES == NO
       // - zero votes
       recommendation.reject();
+      _addRejectedRecommendationToProfileWishlists(recommendation);
     }
 
     database.saveGroupRecommendation(recommendation);
@@ -409,6 +412,36 @@ class GroupRecommendationService {
     // explicitly saving it keeps this mutation visible to database
     // implementations that replace the object or add persistence hooks.
     database.saveAccount(account);
+  }
+
+  void _addRejectedRecommendationToProfileWishlists(
+    GroupRecommendation recommendation,
+  ) {
+    final account = database.getAccountById(recommendation.accountId);
+    if (account == null) return;
+
+    for (final profile in account.profiles) {
+      if (recommendation.activeParticipants.contains(profile.id)) {
+        profile.addWishlistRecommendation(recommendation.id);
+      }
+    }
+
+    database.saveAccount(account);
+    _persistProfileWishlists(account);
+  }
+
+  void _removeRecommendationFromProfileWishlists(
+    GroupRecommendation recommendation,
+  ) {
+    final account = database.getAccountById(recommendation.accountId);
+    if (account == null) return;
+
+    for (final profile in account.profiles) {
+      profile.removeWishlistRecommendation(recommendation.id);
+    }
+
+    database.saveAccount(account);
+    _persistProfileWishlists(account);
   }
 
   // ---------------------------------------------------------------------------
@@ -568,6 +601,10 @@ class GroupRecommendationService {
       account.wishlistRecommendationIds.remove(
         recommendation.id,
       );
+      for (final profile in account.profiles) {
+        profile.removeWishlistRecommendation(recommendation.id);
+      }
+      _persistProfileWishlists(account);
 
       database.saveAccount(account);
     }
@@ -575,6 +612,56 @@ class GroupRecommendationService {
     database.deleteGroupRecommendation(
       recommendation.id,
     );
+  }
+
+  void reconcileImportedMedia({
+    required String accountId,
+    required String mediaId,
+    required String title,
+    required String type,
+  }) {
+    final normalizedAccountId = accountId.trim();
+    final normalizedMediaId = mediaId.trim();
+    final normalizedTitle = _normalizeTitle(title);
+    final normalizedType = _normalizeMediaType(type);
+    if (normalizedAccountId.isEmpty || normalizedTitle.isEmpty) return;
+
+    final account = database.getAccountById(normalizedAccountId);
+    if (account == null) return;
+
+    var changed = false;
+    for (final recommendation
+        in database.getGroupRecommendationsForAccount(normalizedAccountId)) {
+      final matchesMediaId = normalizedMediaId.isNotEmpty &&
+          recommendation.mediaId == normalizedMediaId;
+      final matchesTitle =
+          _normalizeTitle(recommendation.title) == normalizedTitle &&
+              _recommendationTypesMatch(
+                _normalizeMediaType(recommendation.type),
+                normalizedType,
+              );
+      if (!matchesMediaId && !matchesTitle) continue;
+
+      recommendation.status = GroupRecommendationStatus.acquired;
+      account.wishlistRecommendationIds.remove(recommendation.id);
+      final recommendedMediaId = _normalizeOptionalId(recommendation.mediaId);
+      if (recommendedMediaId != null) {
+        account.wishlistMediaIds.remove(recommendedMediaId);
+      }
+      if (normalizedMediaId.isNotEmpty) {
+        account.wishlistMediaIds.remove(normalizedMediaId);
+      }
+      for (final profile in account.profiles) {
+        profile.removeWishlistRecommendation(recommendation.id);
+      }
+      database.saveGroupRecommendation(recommendation);
+      changed = true;
+    }
+
+    if (changed) {
+      database.saveAccount(account);
+      _persistProfileWishlists(account);
+    }
   }
 
   /// Clears all group recommendations.
@@ -655,6 +742,30 @@ class GroupRecommendationService {
     }
 
     return normalized;
+  }
+
+  String _normalizeTitle(String value) =>
+      value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+  String _normalizeMediaType(String value) {
+    final normalized = value.trim().toLowerCase();
+    return switch (normalized) {
+      'tvshow' || 'tv show' || 'show' || 'series' => 'tvShow',
+      'track' || 'music' || 'audio' => 'song',
+      _ => normalized,
+    };
+  }
+
+  bool _recommendationTypesMatch(
+    String recommendationType,
+    String mediaType,
+  ) =>
+      recommendationType == mediaType;
+
+  void _persistProfileWishlists(Account account) {
+    for (final profile in account.profiles) {
+      database.persistProfile(profile, account);
+    }
   }
 
   String _generateId() {

@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 import 'app_core.dart';
+import 'rating_system.dart';
 import 'backend_api.dart';
 import 'music_catalog_screen.dart';
 import 'cinematic_title.dart';
@@ -31,6 +32,7 @@ import 'streaming_experience.dart';
 import 'core/services/original_language_defaults.dart';
 import 'core/services/cinematic_title_metadata_service.dart';
 import 'media_graph_relationship.dart';
+import 'media_edition_identity.dart';
 
 class _StoryAdaptationLink {
   const _StoryAdaptationLink({
@@ -42,6 +44,16 @@ class _StoryAdaptationLink {
   final MediaItem media;
   final List<String> reasons;
   final List<MediaGraphRelationship> relationships;
+}
+
+class _EditionSelection {
+  const _EditionSelection({
+    required this.editionId,
+    required this.saveAsDefault,
+  });
+
+  final String editionId;
+  final bool saveAsDefault;
 }
 
 /// Implements the `MediaDetailsScreen` class for this feature or UI component.
@@ -62,6 +74,9 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   bool pressedPlay = false;
   bool pressedTrailer = false;
   String? _selectedEditionId;
+  String? _preferredEditionId;
+  List<String>? _editionSelectionIds;
+  bool _requiresEditionReview = false;
 
   String selectedAudio = 'Default';
   bool subtitlesEnabled = false;
@@ -368,9 +383,15 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildEditionSelector(),
           for (final section in customization.sectionOrder)
             _buildSection(section),
+          MediaRatingsPanel(
+            mediaId: media.id,
+            title: media.title,
+            year: media.releaseYear ?? media.seriesStartYear,
+            mediaType: media.type,
+            tmdbId: _providerTitleMetadata?.providerId.toString(),
+          ),
           MediaMetadataProvenancePanel(media: media),
           _buildStoryAdaptationsSection(),
           MediaContinuityPanel(mediaId: media.id, mediaTitle: media.title),
@@ -643,12 +664,11 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     }
   }
 
-  /// Returns editions explicitly linked to the same canonical work.
-  /// Similar titles are never merged by title text alone.
+  /// Returns versions explicitly linked to the same canonical work.
   List<MediaItem> _linkedEditions() {
     if (media.isSeries) return <MediaItem>[];
-    final workId = media.canonicalWorkId?.trim();
-    if (workId == null || workId.isEmpty) return <MediaItem>[media];
+    final workId = mediaEditionGroupId(media);
+    if (workId == null) return <MediaItem>[media];
 
     final byId = <String, MediaItem>{media.id: media};
     final profile = AppController.instance.currentProfile;
@@ -658,7 +678,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           !candidate.isAccessibleTo(profile)) {
         continue;
       }
-      if (candidate.canonicalWorkId?.trim() == workId) {
+      if (mediaEditionGroupId(candidate) == workId) {
         byId.putIfAbsent(candidate.id, () => candidate);
       }
     }
@@ -669,7 +689,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   }
 
   String get _editionPreferenceKey =>
-      'media_edition_preference:${media.canonicalWorkId?.trim().isNotEmpty == true ? media.canonicalWorkId!.trim() : media.id}';
+      'media_edition_preference:${mediaEditionGroupId(media) ?? media.id}';
 
   Future<void> _loadPreferredEdition() async {
     final profile = AppController.instance.currentProfile;
@@ -687,10 +707,24 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         }
         final data = Map<String, dynamic>.from(record['data'] as Map);
         final preferredId = data['editionId']?.toString();
+        final editions = _linkedEditions();
+        final currentIds = _editionIds(editions);
+        final rawStoredIds = data['editionIds'];
+        final storedIds = rawStoredIds is List
+            ? rawStoredIds.map((value) => value.toString()).toList()
+            : null;
+        final selectionMatchesCurrentSet =
+            _sameEditionIds(storedIds, currentIds);
         if (preferredId != null &&
-            _linkedEditions().any((edition) => edition.id == preferredId) &&
+            editions.any((edition) => edition.id == preferredId) &&
             mounted) {
-          setState(() => _selectedEditionId = preferredId);
+          setState(() {
+            _preferredEditionId = preferredId;
+            _editionSelectionIds = storedIds;
+            _requiresEditionReview =
+                editions.length > 1 && !selectionMatchesCurrentSet;
+            _selectedEditionId = _requiresEditionReview ? null : preferredId;
+          });
         }
         return;
       }
@@ -704,9 +738,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     }
   }
 
-  Future<void> _selectEdition(String? editionId) async {
-    setState(() => _selectedEditionId = editionId);
-    if (editionId == null) return;
+  Future<void> _savePreferredEdition(String? editionId) async {
     final profile = AppController.instance.currentProfile;
     final api = AppController.instance.backendApi;
     if (profile == null || !api.isAuthenticated) {
@@ -725,11 +757,20 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         recordKey: _editionPreferenceKey,
         data: {
           'mediaId': media.id,
-          'canonicalWorkId': media.canonicalWorkId,
+          'canonicalWorkId': mediaEditionGroupId(media),
           'editionId': editionId,
+          'editionIds': _editionIds(_linkedEditions()),
+          'versionCount': _linkedEditions().length,
           'updatedAt': DateTime.now().toUtc().toIso8601String(),
         },
       );
+      if (mounted) {
+        setState(() {
+          _preferredEditionId = editionId;
+          _editionSelectionIds = _editionIds(_linkedEditions());
+          _requiresEditionReview = false;
+        });
+      }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -740,70 +781,136 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     }
   }
 
+  Future<void> _showEditionPicker() async {
+    final editions = _linkedEditions();
+    if (editions.length < 2) return;
+    var selectedId = _selectedEditionId;
+    var saveAsDefault = selectedId != null && selectedId == _preferredEditionId;
+    final choice = await showDialog<_EditionSelection>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Versions & Cuts'),
+          content: SizedBox(
+            width: 440,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Choose the version to play. You can save a default for this profile.',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                RadioGroup<String>(
+                  groupValue: selectedId,
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setDialogState(() {
+                      selectedId = value;
+                      if (selectedId != _preferredEditionId) {
+                        saveAsDefault = false;
+                      }
+                    });
+                  },
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: editions.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final edition = entry.value;
+                      final label = edition.displayEditionLabel ??
+                          edition.discTitle ??
+                          'Version ${index + 1}';
+                      final year =
+                          edition.editionReleaseYear ?? edition.releaseYear;
+                      return RadioListTile<String>(
+                        value: edition.id,
+                        title: Text(
+                          year == null ? label : '$label ($year)',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: saveAsDefault,
+                  title: const Text('Set selected version as my default'),
+                  controlAffinity: ListTileControlAffinity.leading,
+                  onChanged: selectedId == null
+                      ? null
+                      : (value) => setDialogState(
+                            () => saveAsDefault = value ?? false,
+                          ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: selectedId == null
+                  ? null
+                  : () => Navigator.pop(
+                        dialogContext,
+                        _EditionSelection(
+                          editionId: selectedId!,
+                          saveAsDefault: saveAsDefault,
+                        ),
+                      ),
+              child: const Text('Use version'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    setState(() {
+      _selectedEditionId = choice.editionId;
+      _editionSelectionIds = _editionIds(editions);
+      _requiresEditionReview = false;
+    });
+    if (choice.saveAsDefault ||
+        (!choice.saveAsDefault && choice.editionId == _preferredEditionId)) {
+      await _savePreferredEdition(
+        choice.saveAsDefault ? choice.editionId : null,
+      );
+    }
+  }
+
+  List<String> _editionIds(List<MediaItem> editions) =>
+      editions.map((edition) => edition.id).toList()..sort();
+
+  bool _sameEditionIds(List<String>? savedIds, List<String> currentIds) {
+    if (savedIds == null || savedIds.length != currentIds.length) return false;
+    final saved = savedIds.toSet();
+    return saved.length == currentIds.length &&
+        currentIds.every(saved.contains);
+  }
+
+  bool get _needsEditionReview {
+    final editions = _linkedEditions();
+    if (editions.length < 2) return false;
+    return _requiresEditionReview ||
+        !_sameEditionIds(_editionSelectionIds, _editionIds(editions));
+  }
+
   MediaItem? get _selectedEdition {
     final editions = _linkedEditions();
     if (editions.length == 1) return editions.first;
+    if (_needsEditionReview) return null;
     final id = _selectedEditionId;
     if (id == null) return null;
     for (final edition in editions) {
       if (edition.id == id) return edition;
     }
     return null;
-  }
-
-  /// Multiple editions require an explicit selection; a single edition
-  /// automatically becomes the playback target so Play remains enabled.
-  Widget _buildEditionSelector() {
-    final editions = _linkedEditions();
-    if (editions.length < 2) return const SizedBox.shrink();
-
-    return Card(
-      color: const Color(0xFF151515),
-      margin: const EdgeInsets.only(bottom: 18),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const UniversalText('Versions & Cuts',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 5),
-            const UniversalText(
-              'Choose a version to watch. Your selection is saved to your profile.',
-              style: TextStyle(color: Colors.white60, fontSize: 12),
-            ),
-            const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              initialValue: _selectedEditionId,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: 'Choose a version',
-                border: OutlineInputBorder(),
-              ),
-              hint: const Text('Select a version'),
-              items: editions.map((edition) {
-                final label = edition.displayEditionLabel ??
-                    'Standard / Original Version';
-                final year = edition.editionReleaseYear ?? edition.releaseYear;
-                return DropdownMenuItem<String>(
-                  value: edition.id,
-                  child: Text(year == null ? label : '$label ($year)',
-                      overflow: TextOverflow.ellipsis),
-                );
-              }).toList(),
-              onChanged: _selectEdition,
-            ),
-            if (_selectedEdition == null) ...[
-              const SizedBox(height: 8),
-              const UniversalText(
-                'Play is disabled until you choose a version.',
-                style: TextStyle(color: Colors.amberAccent, fontSize: 12),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
   }
 
   /// Shows the extended data returned by TMDB. This is intentionally outside
@@ -2309,8 +2416,9 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     if (voteAverage != null && voteAverage > 0) {
       final votes =
           voteCount > 0 ? ' · ${_formatProviderInteger(voteCount)} votes' : '';
+      final percent = (voteAverage * 10).round().clamp(0, 100);
       pills.add(_metadataPill(Icons.star_rounded,
-          'TMDB ${voteAverage.toStringAsFixed(1)}/10$votes'));
+          'TMDB ${voteAverage.toStringAsFixed(1)}/10 · $percent%$votes'));
     }
 
     final releaseDate = provider?.releaseDate?.trim();
@@ -2651,26 +2759,60 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
 
   /// Performs `_buildPlay` for this feature. Update this documentation when its contract changes.
   Widget _buildPlay() {
+    final hasMultipleEditions = _linkedEditions().length > 1;
+    final playButton = SizedBox(
+      height: 52,
+      child: ElevatedButton.icon(
+        onPressed:
+            (pressedPlay || _selectedEdition == null) ? null : playMedia,
+        icon: const Icon(Icons.play_arrow_rounded),
+        label: const UniversalText(
+          'Play',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+        ),
+      ),
+    );
+    final buttons = hasMultipleEditions
+        ? Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 52,
+                  child: OutlinedButton.icon(
+                    onPressed: _showEditionPicker,
+                    icon: const Icon(Icons.video_library_outlined),
+                    label: UniversalText('Versions (${_linkedEditions().length})'),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: playButton),
+            ],
+          )
+        : SizedBox(width: 420, child: playButton);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Align(
         alignment: _buttonAlignment(),
-        child: SizedBox(
-          width: 420,
-          height: 52,
-          child: ElevatedButton.icon(
-            onPressed:
-                (pressedPlay || _selectedEdition == null) ? null : playMedia,
-            icon: const Icon(
-              Icons.play_arrow_rounded,
-            ),
-            label: const UniversalText(
-              'Play',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: hasMultipleEditions ? 850 : 420,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              buttons,
+              if (hasMultipleEditions && _selectedEdition == null) ...[
+                const SizedBox(height: 7),
+                const Text(
+                  'Select a version before playing. The available versions changed or no default has been confirmed.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white60, fontSize: 11),
+                ),
+              ],
+            ],
           ),
         ),
       ),
@@ -3543,6 +3685,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
 
   /// Performs `playMedia` for this feature. Update this documentation when its contract changes.
   void playMedia() {
+    final selectedEdition = _selectedEdition;
+    if (selectedEdition == null) return;
     setState(() {
       pressedPlay = true;
     });
@@ -3553,7 +3697,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         settings: const RouteSettings(name: '/app/player'),
         pageBuilder: (_, __, ___) {
           return PlayerScreen(
-            media: _selectedEdition ?? media,
+            media: selectedEdition,
           );
         },
         transitionsBuilder: (

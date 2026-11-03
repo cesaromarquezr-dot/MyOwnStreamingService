@@ -564,7 +564,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                 icon: const Icon(Icons.refresh_rounded),
               ),
               IconButton(
-                tooltip: 'Create account group chat',
+                tooltip: 'Open household group chat',
                 onPressed: _newAccountGroupMessage,
                 icon: const Icon(Icons.group_work_outlined),
               ),
@@ -1551,7 +1551,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                         ),
                       ),
                       IconButton(
-                        tooltip: 'Create account group chat',
+                        tooltip: 'Open household group chat',
                         onPressed: _newAccountGroupMessage,
                         icon: const Icon(Icons.group_work_outlined),
                       ),
@@ -2771,98 +2771,27 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     final current = controller.currentProfile;
     if (current == null) return;
     if (!controller.backendApi.isAuthenticated) {
-      _showMessage('Sign in to create an account group chat.');
+      _showMessage('Sign in to open the household group chat.');
       return;
     }
-    final profiles = (controller.currentAccount?.profiles ?? <Profile>[])
-        .where((profile) => profile.id != current.id)
-        .toList();
-    if (profiles.isEmpty) {
+    final conversations = _list('conversations');
+    final household = conversations.firstWhere(
+      (conversation) =>
+          conversation['system_key'] == 'household' ||
+          conversation['systemKey'] == 'household',
+      orElse: () => <String, dynamic>{},
+    );
+    final conversationId = household['id']?.toString().trim() ?? '';
+    if (conversationId.isEmpty) {
       _showMessage(
-          'Create another profile on this account before creating a group chat.');
+        'The household chat is created automatically when the account has at least two active profiles.',
+      );
       return;
     }
 
-    final titleController = TextEditingController(text: 'Account group');
-    final selectedIds = <String>{};
-    final result = await showDialog<(String, List<String>)>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const UniversalText('Create account group chat'),
-          content: SizedBox(
-            width: 440,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: titleController,
-                    maxLength: 100,
-                    decoration: const InputDecoration(labelText: 'Group name'),
-                  ),
-                  const SizedBox(height: 8),
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: UniversalText('Choose profiles from this account'),
-                  ),
-                  ...profiles.map((profile) => CheckboxListTile(
-                        value: selectedIds.contains(profile.id),
-                        onChanged: (checked) => setDialogState(() {
-                          if (checked == true) {
-                            selectedIds.add(profile.id);
-                          } else {
-                            selectedIds.remove(profile.id);
-                          }
-                        }),
-                        title: Text(profile.name),
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                      )),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const UniversalText('Cancel')),
-            FilledButton(
-              onPressed: selectedIds.isEmpty
-                  ? null
-                  : () => Navigator.pop(
-                        dialogContext,
-                        (titleController.text, selectedIds.toList()),
-                      ),
-              child: const UniversalText('Create group'),
-            ),
-          ],
-        ),
-      ),
-    );
-    titleController.dispose();
-    if (result == null || result.$2.isEmpty) return;
-    try {
-      final response =
-          await controller.backendApi.createSocialAccountGroupConversation(
-        profileId: current.id,
-        title: result.$1,
-        profileIds: result.$2,
-      );
-      final conversation = response['conversation'] is Map
-          ? Map<String, dynamic>.from(response['conversation'] as Map)
-          : <String, dynamic>{};
-      final id = conversation['id']?.toString();
-      if (id == null || id.isEmpty || !mounted) return;
-      await _load();
-      final messagesIndex = _tabSections.indexOf('messages');
-      if (messagesIndex >= 0) _tabs.animateTo(messagesIndex);
-      await _openConversation(id);
-    } catch (error) {
-      if (mounted) {
-        _showMessage(error.toString().replaceFirst('Exception: ', ''));
-      }
-    }
+    final messagesIndex = _tabSections.indexOf('messages');
+    if (messagesIndex >= 0) _tabs.animateTo(messagesIndex);
+    await _openConversation(conversationId);
   }
 
   Future<void> _newMessage() async {

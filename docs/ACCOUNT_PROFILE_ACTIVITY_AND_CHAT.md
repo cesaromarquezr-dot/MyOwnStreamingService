@@ -7,7 +7,15 @@
 - Selecting a profile from the main app resets navigation to that profile's Home screen.
 - Home's account activity strip intentionally excludes the current profile. It lists other profiles in the same account, shows a green glow for a recently active profile, exposes an exact elapsed-time tooltip, and renders the latest activity text.
 - The profile strip's Message action starts a profile-to-profile conversation and opens it in Friends > Messages.
-- Friends has a top-right Create account group chat action. The dialog permits selecting other profiles on the same account, and the created group appears in the existing Messages list.
+- Friends has a top-right household group chat action that opens the account's single automatically provisioned household conversation. Other friend and cross-account group chats remain separate.
+- More > Account Recommendations lets any profile recommend a movie, show, episode, song, or album for an account-wide vote. A majority YES places it on the shared wishlist; a non-YES outcome places it on each participating profile's wishlist. Matching imported media clears the recommendation from wishlists.
+- Accounts support up to 10 profiles. Profiles can vote once each on an account recommendation.
+
+## Account recommendation behavior
+
+Recommendations are open for the configured voting period (24 hours from the current UI). A strict YES majority approves the recommendation; a tie or no votes is treated as not approved. Approved recommendations appear in the account wishlist. Other outcomes appear in each eligible profile's wishlist. When an imported server-library item matches by media ID or normalized title and type, it is marked acquired and removed from those wishlists.
+
+Apply `lib/supabase/migrations/20261102_profile_recommendation_wishlist.sql` to persist per-profile recommendation wishlists.
 
 ## Presence and activity
 

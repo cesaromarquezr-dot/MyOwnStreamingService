@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app_core.dart';
+import '../../media_edition_identity.dart';
 import 'original_language_defaults.dart';
 
 enum DiscRipStatus { running, succeeded, failed, cancelled }
@@ -560,6 +561,7 @@ class DiscIngestionService extends ChangeNotifier {
     int? releaseYear,
     String? artworkUrl,
     String? discTitle,
+    String? editionName,
     String contentCategory = 'Main Feature',
     String? parentMediaId,
   }) async {
@@ -590,23 +592,48 @@ class DiscIngestionService extends ChangeNotifier {
     final inferredOriginalLanguage = OriginalLanguageDefaults.resolveFromFields(
       title: cleanTitle,
     );
+    final isMainFeature = contentCategory == 'Main Feature' ||
+        contentCategory == 'Episode' ||
+        contentCategory == 'Alternate Feature';
+    final isMovieVersion = mediaKind == 'movie' &&
+        (contentCategory == 'Main Feature' ||
+            contentCategory == 'Alternate Feature');
+    final cleanEditionName = (editionName ?? '').trim();
+    final fileName = filePath.trim().split(RegExp(r'[/\\]')).last;
+    final inferredEditionName = fileName.replaceFirst(
+      RegExp(r'\.mkv$', caseSensitive: false),
+      '',
+    );
     final media = MediaItem(
       id: 'disc-import-${_stablePathHash(normalizedPath)}',
       title: cleanTitle,
       originalTitle: cleanTitle,
       originalLanguage: inferredOriginalLanguage,
       type: mediaKind,
+      canonicalWorkId: isMovieVersion
+          ? discImportCanonicalWorkId(
+              title: cleanTitle,
+              releaseYear: releaseYear,
+            )
+          : null,
+      editionName: isMovieVersion
+          ? (cleanEditionName.isNotEmpty
+              ? cleanEditionName
+              : ((discTitle ?? '').trim().isNotEmpty
+                  ? discTitle!.trim()
+                  : inferredEditionName))
+          : null,
       imageUrl: cleanArtwork.isEmpty ? null : cleanArtwork,
-      description: contentCategory == 'Main Feature' || contentCategory == 'Episode'
+      description: isMainFeature
           ? 'Imported through the Disc Ingestion Center. Review the metadata and connect this item to a configured media-server playback gateway.'
           : 'Disc bonus material: $contentCategory. Imported through the Disc Ingestion Center. Review the metadata and connect this item to a configured media-server playback gateway.',
-      tags: contentCategory == 'Main Feature' || contentCategory == 'Episode'
+      tags: isMainFeature
           ? <String>[]
           : <String>['Disc Extra', contentCategory],
-      extras: contentCategory == 'Main Feature' || contentCategory == 'Episode'
+      extras: isMainFeature
           ? <String>[]
           : <String>[contentCategory],
-      editionFeatures: contentCategory == 'Main Feature' || contentCategory == 'Episode'
+      editionFeatures: isMainFeature
           ? <String>[]
           : <String>[contentCategory],
       releaseYear: releaseYear,

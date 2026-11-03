@@ -347,6 +347,8 @@ class CinematicTitleMetadataService {
 
     return <String, dynamic>{
       'overview': _cleanNullable(details['overview']?.toString()),
+      'tmdbVoteAverage': _doubleOrNull(details['vote_average']),
+      'tmdbVoteCount': _positiveIntOrNull(details['vote_count']) ?? 0,
       'seasonCount': countedSeasons,
       'seasons': normalizedSeasons,
       'seriesStartYear': startYear,

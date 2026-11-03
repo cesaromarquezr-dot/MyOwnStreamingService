@@ -21,6 +21,8 @@ import 'media_health_screen.dart';
 import 'signup.dart';
 import 'smart_search.dart';
 import 'details.dart';
+import 'rating_system.dart';
+import 'user_rating_store.dart';
 import 'player.dart';
 import 'seasonal_collections.dart';
 import 'profiles.dart';
@@ -4910,6 +4912,11 @@ void _showGlobalMore() {
         push(const DialogueSearchScreen(),
             routeName: '/app/page/dialogue-search');
       },
+      onGroupRecommendations: () {
+        Navigator.of(sheetContext).pop();
+        push(const RecommendationCompetitionScreen(),
+            routeName: '/app/page/account-recommendations');
+      },
       onEntertainmentStudio: () {
         Navigator.of(sheetContext).pop();
         push(const EntertainmentStudioScreen(),
@@ -5238,6 +5245,7 @@ class _MoreActionsSheet extends StatelessWidget {
   final VoidCallback onPlaybackQueue;
   final VoidCallback onHistoryCalendar;
   final VoidCallback onDialogueSearch;
+  final VoidCallback onGroupRecommendations;
   final VoidCallback onEntertainmentStudio;
   final VoidCallback onInnovationHub;
   final VoidCallback onInterruptionMode;
@@ -5261,6 +5269,7 @@ class _MoreActionsSheet extends StatelessWidget {
     required this.onPlaybackQueue,
     required this.onHistoryCalendar,
     required this.onDialogueSearch,
+    required this.onGroupRecommendations,
     required this.onEntertainmentStudio,
     required this.onInnovationHub,
     required this.onInterruptionMode,
@@ -5326,11 +5335,8 @@ class _MoreActionsSheet extends StatelessWidget {
               'Accessibility & Offline',
               'Text scaling, activity privacy and pending sync',
               onAccessibilityOffline),
-          _moreCard(
-              Icons.queue_play_next_rounded,
-              'Up Next',
-              'Build and reorder a private cross-media queue',
-              onPlaybackQueue),
+          _moreCard(Icons.queue_play_next_rounded, 'Up Next',
+              'Build and reorder a private cross-media queue', onPlaybackQueue),
           _moreCard(
               Icons.calendar_month_rounded,
               'Watch History',
@@ -5341,6 +5347,11 @@ class _MoreActionsSheet extends StatelessWidget {
               'Search Dialogue',
               'Find scenes from indexed movie and episode subtitles',
               onDialogueSearch),
+          _moreCard(
+              Icons.how_to_vote_rounded,
+              'Account Recommendations',
+              'Share recommendations and vote as a household',
+              onGroupRecommendations),
         ],
       ),
     );
@@ -5471,6 +5482,10 @@ class _HomeScreenState extends State<HomeScreen>
     unawaited(MusicLibraryStore.instance.initializeForProfile(
       AppController.instance.currentProfile?.id,
     ));
+    UserMediaRatingStore.changes.addListener(_onHomeRatingsChanged);
+    unawaited(UserMediaRatingStore.initializeForProfile(
+      AppController.instance.currentProfile?.id,
+    ));
     if (AppController.instance.backendApi.isAuthenticated) {
       unawaited(_syncHomeServerMedia());
     }
@@ -5481,6 +5496,10 @@ class _HomeScreenState extends State<HomeScreen>
       vsync: this,
       duration: const Duration(milliseconds: 180),
     )..forward();
+  }
+
+  void _onHomeRatingsChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _syncHomeServerMedia() async {
@@ -5511,6 +5530,7 @@ class _HomeScreenState extends State<HomeScreen>
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     HomeCustomizationStore.revision.removeListener(_onHomeCustomizationChanged);
+    UserMediaRatingStore.changes.removeListener(_onHomeRatingsChanged);
     PageHeroSettingsStore.revision
         .removeListener(_onHomePageHeroSettingsChanged);
     _heroController.dispose();
@@ -7124,6 +7144,22 @@ class _MediaCardState extends State<MediaCard> {
                   color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
+              if (media.isSeries ||
+                  <String>{'movie', 'film'}.contains(media.type.trim().toLowerCase()))
+                TmdbMediaRatingBadge(
+                  title: media.title,
+                  isTv: media.isSeries,
+                  year: media.seriesStartYear ?? media.releaseYear,
+                ),
+              if (UserMediaRatingStore.scorePercentFor(
+                    AppController.instance.currentProfile?.id, media.id) != null)
+                UserScoreBadge(
+                  score: UserMediaRatingStore.scoreFor(
+                    AppController.instance.currentProfile?.id, media.id),
+                  palette: UserMediaRatingStore.paletteFor(
+                    AppController.instance.currentProfile?.id,
+                  ),
+                ),
               if (media.displayYearLabel != null)
                 Text(
                   [
@@ -8654,7 +8690,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const UniversalText('Who is watching?',
               style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
-          UniversalText('${account.profiles.length}/7 profiles',
+          UniversalText(
+              '${account.profiles.length}/${UserAccount.maxProfiles} profiles',
               style: const TextStyle(color: Colors.white54)),
           const SizedBox(height: 24),
           ...account.profiles.map(
@@ -8674,7 +8711,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
           ),
-          if (account.profiles.length < 7)
+          if (account.profiles.length < UserAccount.maxProfiles)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: OutlinedButton.icon(

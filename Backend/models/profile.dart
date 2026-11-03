@@ -40,6 +40,7 @@ class Profile {
 
   // Media this profile has explicitly disliked.
   final List<String> dislikedMediaIds;
+  final List<String> wishlistRecommendationIds;
 
   // Watch progress for this profile.
   //
@@ -71,6 +72,7 @@ class Profile {
     List<String>? watchedMediaIds,
     List<String>? likedMediaIds,
     List<String>? dislikedMediaIds,
+    List<String>? wishlistRecommendationIds,
     Map<String, double>? watchProgress,
     List<String>? watchHistory,
     Map<String, DateTime>? watchHistoryTimestamps,
@@ -78,6 +80,8 @@ class Profile {
         watchedMediaIds = _normalizeStringList(watchedMediaIds),
         likedMediaIds = _normalizeStringList(likedMediaIds),
         dislikedMediaIds = _normalizeStringList(dislikedMediaIds),
+        wishlistRecommendationIds =
+            _normalizeStringList(wishlistRecommendationIds),
         watchProgress = _normalizeProgressMap(watchProgress),
         watchHistory = _normalizeStringList(watchHistory),
         watchHistoryTimestamps =
@@ -326,6 +330,21 @@ class Profile {
     dislikedMediaIds.remove(normalizedId);
   }
 
+  void addWishlistRecommendation(String recommendationId) {
+    final normalizedId = _normalizeId(recommendationId);
+    if (normalizedId != null &&
+        !wishlistRecommendationIds.contains(normalizedId)) {
+      wishlistRecommendationIds.add(normalizedId);
+    }
+  }
+
+  void removeWishlistRecommendation(String recommendationId) {
+    final normalizedId = _normalizeId(recommendationId);
+    if (normalizedId != null) {
+      wishlistRecommendationIds.remove(normalizedId);
+    }
+  }
+
   // ------------------------------------------------------------
   // WATCH PROGRESS
   // ------------------------------------------------------------
@@ -519,6 +538,7 @@ class Profile {
     List<String>? watchedMediaIds,
     List<String>? likedMediaIds,
     List<String>? dislikedMediaIds,
+    List<String>? wishlistRecommendationIds,
     Map<String, double>? watchProgress,
     List<String>? watchHistory,
     Map<String, DateTime>? watchHistoryTimestamps,
@@ -539,6 +559,8 @@ class Profile {
           likedMediaIds ?? List<String>.from(this.likedMediaIds),
       dislikedMediaIds:
           dislikedMediaIds ?? List<String>.from(this.dislikedMediaIds),
+      wishlistRecommendationIds: wishlistRecommendationIds ??
+          List<String>.from(this.wishlistRecommendationIds),
       watchProgress:
           watchProgress ?? Map<String, double>.from(this.watchProgress),
       watchHistory:
@@ -566,6 +588,8 @@ class Profile {
       'watchedMediaIds': List<String>.from(watchedMediaIds),
       'likedMediaIds': List<String>.from(likedMediaIds),
       'dislikedMediaIds': List<String>.from(dislikedMediaIds),
+      'wishlistRecommendationIds':
+          List<String>.from(wishlistRecommendationIds),
       'watchProgress': Map<String, double>.from(watchProgress),
       'watchHistory': List<String>.from(watchHistory),
       'governance': governance.toJson(),
@@ -597,6 +621,9 @@ class Profile {
       ),
       dislikedMediaIds: _stringList(
         json['dislikedMediaIds'],
+      ),
+      wishlistRecommendationIds: _stringList(
+        json['wishlistRecommendationIds'],
       ),
       watchProgress: _doubleMap(
         json['watchProgress'],

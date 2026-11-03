@@ -1582,12 +1582,12 @@ class GroupRoutes {
       return;
     }
 
-    if (type != 'movie' && type != 'tvShow') {
+    if (!const {'movie', 'tvShow', 'episode', 'song', 'album'}.contains(type)) {
       await _sendJson(
         request,
         HttpStatus.badRequest,
         <String, dynamic>{
-          'error': 'type must be either "movie" or "tvShow".',
+          'error': 'type must be movie, tvShow, episode, song, or album.',
         },
       );
       return;

@@ -334,6 +334,44 @@ extension BackendApiServerMethods on BackendApi {
         'Unable to load media ratings.');
   }
 
+  /// Retrieves all private ratings for one profile in a single request.
+  Future<Map<String, dynamic>> getProfileUserRatings({
+    required String profileId,
+  }) async {
+    _requireAuthentication();
+    final cleanProfileId = profileId.trim();
+    if (cleanProfileId.isEmpty) {
+      throw BackendApiException('A profile is required to load personal ratings.');
+    }
+    final uri = Uri.parse('$baseUrl/ratings/user').replace(
+      queryParameters: <String, String>{'profileId': cleanProfileId},
+    );
+    return _requireSuccess(
+      await _networkClient.get(uri, headers: _headers),
+      'Unable to retrieve profile ratings.',
+    );
+  }
+
+  /// Saves an exact user score from 0 to 100 for the active profile.
+  Future<Map<String, dynamic>> saveUserScore({
+    required String mediaId,
+    required String profileId,
+    required double score,
+  }) async {
+    _requireAuthentication();
+    if (!score.isFinite || score < 0 || score > 100) {
+      throw BackendApiException('Personal score must be between 0 and 100.');
+    }
+    return _requireSuccess(
+      await _networkClient.post(
+        Uri.parse('$baseUrl/ratings/user'),
+        headers: _headers,
+        body: jsonEncode({'mediaId': mediaId, 'profileId': profileId, 'score': score}),
+      ),
+      'Unable to save your personal score.',
+    );
+  }
+
   /// Saves a profile rating in half-star increments from 0.5 to 5.0.
   Future<Map<String, dynamic>> saveUserRating({
     required String mediaId,

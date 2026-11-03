@@ -55,6 +55,12 @@ class RatingRoutes {
 
     try {
       if (request.method == 'GET' &&
+          request.uri.path == '$_ratingsPath/user') {
+        await _getProfileUserRatings(request, auth);
+        return;
+      }
+
+      if (request.method == 'GET' &&
           request.uri.path == _ratingsPath) {
         await _getRatings(request, auth);
         return;
@@ -123,6 +129,46 @@ class RatingRoutes {
         },
       );
     }
+  }
+
+
+  Future<void> _getProfileUserRatings(
+    HttpRequest request,
+    dynamic auth,
+  ) async {
+    final profileId = request.uri.queryParameters['profileId']?.trim() ?? '';
+    if (profileId.isEmpty || profileId.length > _maxProfileIdLength) {
+      await _json(
+        request.response,
+        400,
+        <String, dynamic>{
+          'success': false,
+          'error': 'A valid profileId is required.',
+        },
+      );
+      return;
+    }
+    if (!_profileBelongsToAccount(auth, profileId)) {
+      await _json(
+        request.response,
+        403,
+        <String, dynamic>{
+          'success': false,
+          'error': 'Profile does not belong to this account.',
+        },
+      );
+      return;
+    }
+    await _json(
+      request.response,
+      200,
+      <String, dynamic>{
+        'success': true,
+        'ratings': service.ratingsForProfile(profileId)
+            .map((rating) => rating.toJson())
+            .toList(growable: false),
+      },
+    );
   }
 
   Future<void> _getRatings(
@@ -305,25 +351,34 @@ class RatingRoutes {
       return;
     }
 
-    final stars = _parseStars(body['stars']);
+    final score = body.containsKey('score')
+        ? _parseScore(body['score'])
+        : null;
+    final stars = body.containsKey('score') ? null : _parseStars(body['stars']);
 
-    if (stars == null) {
+    if (score == null && stars == null) {
       await _json(
         request.response,
         400,
         <String, dynamic>{
           'success': false,
-          'error': 'stars must be between 0.5 and 5.0 in 0.5-star increments.',
+          'error': 'score must be between 0 and 100, or legacy stars between 0.5 and 5.0.',
         },
       );
       return;
     }
 
-    final rating = await service.saveUserRating(
-      mediaId: mediaId,
-      profileId: profileId,
-      stars: stars,
-    );
+    final rating = score != null
+        ? await service.saveUserScore(
+            mediaId: mediaId,
+            profileId: profileId,
+            score: score,
+          )
+        : await service.saveUserRating(
+            mediaId: mediaId,
+            profileId: profileId,
+            stars: stars!,
+          );
 
     await _json(
       request.response,
@@ -358,6 +413,16 @@ class RatingRoutes {
     }
 
     return year;
+  }
+
+  double? _parseScore(Object? value) {
+    final score = value is num
+        ? value.toDouble()
+        : double.tryParse(value?.toString().trim() ?? '');
+    if (score == null || !score.isFinite || score < 0 || score > 100) {
+      return null;
+    }
+    return score;
   }
 
   double? _parseStars(Object? value) {

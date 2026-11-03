@@ -520,7 +520,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
                               onAchievements: () => _showAchievements(profile),
                             ),
                           ),
-                        if (profiles.length < 7)
+                        if (profiles.length < UserAccount.maxProfiles)
                           Padding(
                             padding: const EdgeInsets.only(top: 8),
                             child: _CreateProfileButton(onTap: _createProfile),
@@ -528,7 +528,8 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
                       ],
                     ),
                   ),
-                  Text('${profiles.length} of 7 profiles',
+                  Text(
+                      '${profiles.length} of ${UserAccount.maxProfiles} profiles',
                       style: const TextStyle(
                         color: Colors.white38,
                         fontSize: 12,
@@ -716,7 +717,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
                                     },
                                   ),
                                 ),
-                                if (profiles.length < 7)
+                                if (profiles.length < UserAccount.maxProfiles)
                                   _CreateProfileCard(
                                     onTap: _createProfile,
                                   ),
@@ -735,7 +736,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
                           UniversalText(
                             '${profiles.length} '
                             '${profiles.length == 1 ? 'profile' : 'profiles'}'
-                            ' • Maximum 7',
+                            ' • Maximum ${UserAccount.maxProfiles}',
                             style: TextStyle(
                               fontSize: 13,
                               color: Colors.white.withValues(

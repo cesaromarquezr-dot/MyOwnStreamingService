@@ -69,9 +69,10 @@ extension BackendApiGroupMethods on BackendApi {
       );
     }
 
-    if (cleanType != 'movie' && cleanType != 'tvShow') {
+    if (!const {'movie', 'tvShow', 'episode', 'song', 'album'}
+        .contains(cleanType)) {
       throw BackendApiException(
-        'Recommendation type must be "movie" or "tvShow".',
+        'Recommendation type must be movie, tvShow, episode, song, or album.',
       );
     }
 
@@ -931,6 +932,4 @@ extension BackendApiGroupMethods on BackendApi {
       'Unable to delete Group Watch session.',
     );
   }
-
-
 }

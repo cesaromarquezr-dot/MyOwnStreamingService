@@ -53,7 +53,7 @@ Subscription? subscription;
 
 final List<Profile> profiles;
 
-static const int maxProfiles = 7;
+static const int maxProfiles = 10;
 
 // Account-wide server library.
 //

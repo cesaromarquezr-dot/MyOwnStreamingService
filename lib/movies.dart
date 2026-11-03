@@ -19,6 +19,8 @@ import 'catalog_poster_image.dart';
 import 'library_view_modes.dart';
 import 'page_hero_banner.dart';
 import 'country_origin_style.dart';
+import 'user_rating_store.dart';
+import 'rating_system.dart';
 import 'home_streaming_discovery.dart'
     show
         HomeHeroCarousel,
@@ -36,6 +38,7 @@ class _MoviesScreenState extends State<MoviesScreen>
   late final AnimationController _pageController;
   String _searchQuery = '';
   String _sortMode = 'Default';
+  bool _prefetchingTmdbRatings = false;
   LibraryViewMode _viewMode = LibraryViewPreferenceStore.get(
     'movies',
     fallback: LibraryViewMode.grid,
@@ -46,6 +49,11 @@ class _MoviesScreenState extends State<MoviesScreen>
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
+    UserMediaRatingStore.changes.addListener(_onUserRatingsChanged);
+    TmdbMediaRatingStore.revision.addListener(_onTmdbRatingsChanged);
+    unawaited(UserMediaRatingStore.initializeForProfile(
+      AppController.instance.currentProfile?.id,
+    ).then((_) { if (mounted) setState(() {}); }));
     HomeHoverPreviewStore.clearCurrent();
 
     // Seed browseable catalog examples when Movies/TV is opened directly.
@@ -65,6 +73,30 @@ class _MoviesScreenState extends State<MoviesScreen>
     });
   }
 
+  void _onUserRatingsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _onTmdbRatingsChanged() {
+    if (mounted && _sortMode.contains('Rated') && !_prefetchingTmdbRatings) {
+      setState(() {});
+    }
+  }
+
+  void _changeSortMode(String? value) {
+    if (value == null) return;
+    setState(() => _sortMode = value);
+    if (!value.contains('Rated')) return;
+    final items = AppController.instance.library
+        .where((media) => media.type.toLowerCase() == 'movie')
+        .toList(growable: false);
+    _prefetchingTmdbRatings = true;
+    unawaited(TmdbMediaRatingStore.prefetch(items, isTv: false).whenComplete(() {
+      _prefetchingTmdbRatings = false;
+      if (mounted && _sortMode.contains('Rated')) setState(() {});
+    }));
+  }
+
   Future<void> _reloadHeroSettings() async {
     final settings = await PageHeroSettingsStore.load('movies');
     if (mounted) setState(() => _heroSettings = settings);
@@ -76,6 +108,8 @@ class _MoviesScreenState extends State<MoviesScreen>
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     PageHeroSettingsStore.revision.removeListener(_onHeroSettingsRevision);
+    UserMediaRatingStore.changes.removeListener(_onUserRatingsChanged);
+    TmdbMediaRatingStore.revision.removeListener(_onTmdbRatingsChanged);
     _pageController.dispose();
     super.dispose();
   }
@@ -169,7 +203,18 @@ class _MoviesScreenState extends State<MoviesScreen>
           if (movie.releaseYear != null) Text('${movie.releaseYear}', style: const TextStyle(color: Colors.white60, fontSize: 11)),
           if (movie.genres.isNotEmpty) Text(movie.genres.take(2).join(' · '), style: const TextStyle(color: Colors.white60, fontSize: 11)),
           CountryOriginInline(media: movie, fontSize: 10.5),
+          TmdbMediaRatingBadge(
+            title: movie.title, isTv: false, year: movie.releaseYear,
+          ),
           AddedByProfileLabel.forMedia(movie),
+          if (UserMediaRatingStore.scorePercentFor(
+                AppController.instance.currentProfile?.id, movie.id) != null)
+            UserScoreBadge(
+              score: UserMediaRatingStore.scoreFor(
+                AppController.instance.currentProfile?.id, movie.id),
+              palette: UserMediaRatingStore.paletteFor(
+                AppController.instance.currentProfile?.id),
+            ),
         ],
       ),
       year: movie.releaseYear,
@@ -368,6 +413,29 @@ class _MoviesScreenState extends State<MoviesScreen>
           return byCountry != 0 ? byCountry : a.title.toLowerCase().compareTo(b.title.toLowerCase());
         });
         break;
+      case 'Top Rated':
+      case 'Lowest Rated':
+        final lowestFirst = _sortMode == 'Lowest Rated';
+        items.sort((a, b) {
+          final scoreA = TmdbMediaRatingStore.scoreFor(
+            title: a.title, isTv: false, year: a.releaseYear,
+          );
+          final scoreB = TmdbMediaRatingStore.scoreFor(
+            title: b.title, isTv: false, year: b.releaseYear,
+          );
+          if (scoreA == null && scoreB == null) {
+            return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+          }
+          if (scoreA == null) return 1;
+          if (scoreB == null) return -1;
+          final scoreOrder = lowestFirst
+              ? scoreA.compareTo(scoreB)
+              : scoreB.compareTo(scoreA);
+          return scoreOrder != 0
+              ? scoreOrder
+              : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+        });
+        break;
       default:
         final prioritized = internationalCatalogFirst(items);
         items
@@ -379,8 +447,11 @@ class _MoviesScreenState extends State<MoviesScreen>
 
   /// Displays the movie organization dropdown.
   Widget _sortDropdown() {
-    return DropdownButtonHideUnderline(
-      child: DropdownButton<String>(
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
         value: _sortMode,
         dropdownColor: const Color(0xFF151515),
         icon: const Icon(Icons.unfold_more_rounded, color: Colors.white70, size: 18),
@@ -393,9 +464,22 @@ class _MoviesScreenState extends State<MoviesScreen>
           DropdownMenuItem(value: 'Countries Z-A', child: UniversalText('Countries Z-A')),
           DropdownMenuItem(value: 'Oldest to Newest', child: UniversalText('Oldest to Newest')),
           DropdownMenuItem(value: 'Newest to Oldest', child: UniversalText('Newest to Oldest')),
+          DropdownMenuItem(value: 'Top Rated', child: UniversalText('Top Rated (TMDB)')),
+          DropdownMenuItem(value: 'Lowest Rated', child: UniversalText('Lowest Rated (TMDB)')),
         ],
-        onChanged: (value) => setState(() => _sortMode = value ?? 'Default'),
-      ),
+            onChanged: _changeSortMode,
+          ),
+        ),
+        IconButton(
+          tooltip: 'Customize personal rating colors',
+          icon: const Icon(Icons.palette_outlined, size: 18),
+          onPressed: () => Navigator.of(context).push<void>(
+            MaterialPageRoute<void>(
+              builder: (_) => const RatingColorSettingsScreen(),
+            ),
+          ),
+        ),
+      ],
     );
   }
   // ============================================================
@@ -1212,6 +1296,24 @@ class _MovieCardState extends State<_MovieCard> {
                                   color: Colors.white.withValues(alpha: 0.48),
                                   fontSize: 10.5,
                                 )),
+                              TmdbMediaRatingBadge(
+                                title: movie.title,
+                                isTv: false,
+                                year: movie.releaseYear,
+                              ),
+                              if (UserMediaRatingStore.scorePercentFor(
+                                    AppController.instance.currentProfile?.id,
+                                    movie.id) != null) ...[
+                                const SizedBox(height: 5),
+                                UserScoreBadge(
+                                  score: UserMediaRatingStore.scoreFor(
+                                    AppController.instance.currentProfile?.id,
+                                    movie.id),
+                                  palette: UserMediaRatingStore.paletteFor(
+                                    AppController.instance.currentProfile?.id,
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: 2),
                               CountryOriginInline(media: movie, fontSize: 10.5),
                               const SizedBox(height: 3),

@@ -1,7 +1,10 @@
 // FILE: `Backend/services/rating_service.dart`.
+import 'dart:convert';
+import 'dart:io';
+
 import 'external_rating_service.dart';
-// Purpose: Stores profile-specific 0.5-5 star ratings and returns provider
-// ratings without combining provider scores with personal ratings.
+// Purpose: Stores profile-specific 0–100 personal scores (with legacy star
+// compatibility) and keeps them separate from provider ratings.
 
 class UserMediaRating {
   static const double minimumStars = 0.5;
@@ -10,19 +13,23 @@ class UserMediaRating {
   final String mediaId;
   final String profileId;
   final double stars;
+  final double score;
   final DateTime updatedAt;
 
   UserMediaRating({
     required this.mediaId,
     required this.profileId,
     required this.stars,
+    double? score,
     DateTime? updatedAt,
-  }) : updatedAt = (updatedAt ?? DateTime.now()).toUtc();
+  })  : score = score ?? (stars * 20),
+        updatedAt = (updatedAt ?? DateTime.now()).toUtc();
 
   Map<String, dynamic> toJson() => {
         'mediaId': mediaId,
         'profileId': profileId,
         'stars': stars,
+        'score': score,
         'updatedAt': updatedAt.toIso8601String(),
       };
 
@@ -30,6 +37,7 @@ class UserMediaRating {
     final mediaId = (json['mediaId'] as String?)?.trim() ?? '';
     final profileId = (json['profileId'] as String?)?.trim() ?? '';
     final starsValue = json['stars'];
+    final scoreValue = json['score'];
     final updatedAtValue = json['updatedAt'];
 
     if (mediaId.isEmpty) {
@@ -40,14 +48,15 @@ class UserMediaRating {
       throw FormatException('Profile ID is required.');
     }
 
-    final stars = starsValue is num
+    final legacyStars = starsValue is num
         ? starsValue.toDouble()
         : double.tryParse(starsValue?.toString() ?? '');
-
-    if (stars == null || !RatingService.isValidStars(stars)) {
-      throw FormatException(
-        'Rating must be between 0.5 and 5 stars in 0.5-star increments.',
-      );
+    final parsedScore = scoreValue is num
+        ? scoreValue.toDouble()
+        : double.tryParse(scoreValue?.toString() ?? '');
+    final score = parsedScore ?? (legacyStars == null ? null : legacyStars * 20);
+    if (score == null || !RatingService.isValidScore(score)) {
+      throw FormatException('Personal score must be between 0 and 100.');
     }
 
     DateTime? updatedAt;
@@ -58,7 +67,8 @@ class UserMediaRating {
     return UserMediaRating(
       mediaId: mediaId,
       profileId: profileId,
-      stars: stars,
+      stars: score / 20,
+      score: score,
       updatedAt: updatedAt,
     );
   }
@@ -69,8 +79,56 @@ class RatingService {
   final Map<String, UserMediaRating> _ratings =
       <String, UserMediaRating>{};
 
-  RatingService({ExternalRatingService? externalRatings})
-      : externalRatings = externalRatings ?? ExternalRatingService();
+  final File persistenceFile;
+  Future<void> _writeQueue = Future<void>.value();
+
+  RatingService({
+    ExternalRatingService? externalRatings,
+    File? persistenceFile,
+  })  : externalRatings = externalRatings ?? ExternalRatingService(),
+        persistenceFile = persistenceFile ??
+            File((Platform.environment['RATINGS_STORE_PATH'] ?? '').trim().isNotEmpty
+                ? Platform.environment['RATINGS_STORE_PATH']!.trim()
+                : '${File.fromUri(Platform.script).parent.path}${Platform.pathSeparator}data${Platform.pathSeparator}profile_media_ratings.json');
+
+  /// Restores profile ratings from the backend's local durable data store.
+  /// The file contains only media/profile IDs, personal scores, and timestamps—never credentials.
+  Future<void> initialize() async {
+    try {
+      if (!await persistenceFile.exists()) return;
+      final decoded = jsonDecode(await persistenceFile.readAsString());
+      if (decoded is! List) return;
+      for (final row in decoded.whereType<Map>()) {
+        try {
+          final rating = UserMediaRating.fromJson(
+            Map<String, dynamic>.from(row),
+          );
+          _ratings[_key(rating.profileId, rating.mediaId)] = rating;
+        } catch (_) {
+          // Ignore a malformed record without discarding the other ratings.
+        }
+      }
+    } catch (_) {
+      // Keep the service usable; a later successful write will recreate the file.
+    }
+  }
+
+  Future<void> _persist() {
+    final snapshot = _ratings.values.map((rating) => rating.toJson()).toList();
+    _writeQueue = _writeQueue.catchError((Object _) {}).then((_) async {
+      await persistenceFile.parent.create(recursive: true);
+      final temporary = File('${persistenceFile.path}.tmp');
+      await temporary.writeAsString(jsonEncode(snapshot), flush: true);
+      if (await persistenceFile.exists()) {
+        await persistenceFile.delete();
+      }
+      await temporary.rename(persistenceFile.path);
+    });
+    return _writeQueue;
+  }
+
+  static bool isValidScore(double score) =>
+      score.isFinite && score >= 0 && score <= 100;
 
   static bool isValidStars(double stars) {
     if (!stars.isFinite) {
@@ -122,6 +180,7 @@ class RatingService {
       title: title,
       year: year,
       imdbId: imdbId,
+      tmdbId: tmdbId,
       mediaType: mediaType,
       refresh: refresh,
     );
@@ -180,44 +239,46 @@ class RatingService {
   /// Ratings are intentionally keyed by both profile and media ID. This
   /// prevents one profile's rating from overwriting another profile's rating
   /// for the same media item.
-  UserMediaRating saveUserRating({
+  Future<UserMediaRating> saveUserRating({
     required String mediaId,
     required String profileId,
     required double stars,
   }) {
-    final normalizedMediaId = mediaId.trim();
-    final normalizedProfileId = profileId.trim();
-
-    if (normalizedMediaId.isEmpty) {
-      throw Exception('Media ID is required.');
-    }
-
-    if (normalizedProfileId.isEmpty) {
-      throw Exception('Profile ID is required.');
-    }
-
-    if (normalizedMediaId.length > 200) {
-      throw Exception('Media ID is too long.');
-    }
-
-    if (normalizedProfileId.length > 200) {
-      throw Exception('Profile ID is too long.');
-    }
-
     if (!isValidStars(stars)) {
       throw Exception(
-        'Rating must be between 0.5 and 5 stars in 0.5-star increments.',
+        'Legacy star rating must be between 0.5 and 5.0 in 0.5-star increments.',
       );
     }
+    return saveUserScore(
+      mediaId: mediaId,
+      profileId: profileId,
+      score: stars * 20,
+    );
+  }
+
+  /// Saves an exact profile score on a 0–100 scale.
+  Future<UserMediaRating> saveUserScore({
+    required String mediaId,
+    required String profileId,
+    required double score,
+  }) async {
+    final normalizedMediaId = mediaId.trim();
+    final normalizedProfileId = profileId.trim();
+    if (normalizedMediaId.isEmpty) throw Exception('Media ID is required.');
+    if (normalizedProfileId.isEmpty) throw Exception('Profile ID is required.');
+    if (normalizedMediaId.length > 200) throw Exception('Media ID is too long.');
+    if (normalizedProfileId.length > 200) throw Exception('Profile ID is too long.');
+    if (!isValidScore(score)) throw Exception('Personal score must be between 0 and 100.');
 
     final rating = UserMediaRating(
       mediaId: normalizedMediaId,
       profileId: normalizedProfileId,
-      stars: stars,
+      stars: score / 20,
+      score: score,
       updatedAt: DateTime.now().toUtc(),
     );
-
     _ratings[_key(normalizedProfileId, normalizedMediaId)] = rating;
+    await _persist();
     return rating;
   }
 

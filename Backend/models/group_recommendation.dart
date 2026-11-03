@@ -12,6 +12,7 @@ voting,
 approved,
 rejected,
 expired,
+acquired,
 }
 
 enum GroupRecommendationVote {
@@ -31,10 +32,10 @@ final String accountId;
 /// null for manually entered recommendations.
 final String? mediaId;
 
-/// The movie or TV show title entered by the user.
+/// The recommended movie, show, episode, song, or album title.
 final String title;
 
-/// Expected values include "movie" and "tvShow".
+/// Supported values include "movie", "tvShow", "episode", "song", and "album".
 final String type;
 
 /// The profile that originally submitted the recommendation.

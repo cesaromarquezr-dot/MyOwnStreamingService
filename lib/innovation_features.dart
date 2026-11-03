@@ -4243,18 +4243,246 @@ class _SmartCollectionsScreenState extends State<SmartCollectionsScreen> {
   @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const UniversalText('Smart Collections')), body: Padding(padding: const EdgeInsets.all(16), child: Column(children: [DropdownButtonFormField<String>(initialValue: rule, items: const ['Unwatched','Watched','Movies','TV Shows','Liked'].map((x) => DropdownMenuItem(value: x, child: Text(x))).toList(), onChanged: (v) => setState(() => rule = v!)), const SizedBox(height: 12), Align(alignment: Alignment.centerLeft, child: UniversalText('${items.length} titles match this live rule')), const SizedBox(height: 12), Expanded(child: ListView(children: items.map((m) => ListTile(leading: const Icon(Icons.movie_outlined), title: Text(m.title), subtitle: UniversalText('${m.releaseYear ?? ''} • ${m.type}'))).toList()))])));
 }
 
-/// Implements the `RecommendationCompetitionScreen` class for this feature or UI component.
-class RecommendationCompetitionScreen extends StatelessWidget {
+/// Account-wide recommendation voting and profile wishlist view.
+class RecommendationCompetitionScreen extends StatefulWidget {
   const RecommendationCompetitionScreen({super.key});
-  @override Widget build(BuildContext context) {
-    final recs = [...AppController.instance.groupRecommendations];
-    recs.sort((a, b) => _yes(b).compareTo(_yes(a)));
-    return Scaffold(appBar: AppBar(title: const UniversalText('Recommendation Competition')), body: ListView(padding: const EdgeInsets.all(16), children: [
-      if (recs.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(24), child: UniversalText('No active recommendations yet.'))),
-      ...recs.asMap().entries.map((entry) { final r = entry.value; return Card(child: ListTile(leading: CircleAvatar(child: UniversalText('${entry.key + 1}')), title: Text(r['title']?.toString() ?? 'Untitled'), subtitle: UniversalText('YES ${r['yesVotes'] ?? 0} • NO ${r['noVotes'] ?? 0}'), trailing: entry.key == 0 ? const Icon(Icons.emoji_events_rounded) : null)); }),
-    ]));
+
+  @override
+  State<RecommendationCompetitionScreen> createState() =>
+      _RecommendationCompetitionScreenState();
+}
+
+class _RecommendationCompetitionScreenState
+    extends State<RecommendationCompetitionScreen> {
+  Future<void> _createRecommendation() async {
+    final controller = AppController.instance;
+    final profile = controller.currentProfile;
+    if (profile == null) {
+      _showMessage('Choose a profile before making a recommendation.');
+      return;
+    }
+
+    final titleController = TextEditingController();
+    var type = 'movie';
+    final choice = await showDialog<List<String>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const UniversalText('Recommend to your account'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  autofocus: true,
+                  maxLength: 500,
+                  decoration: const InputDecoration(
+                    labelText: 'Movie, show, episode, song, or album',
+                  ),
+                ),
+                DropdownButtonFormField<String>(
+                  initialValue: type,
+                  decoration: const InputDecoration(labelText: 'Type'),
+                  items: const [
+                    DropdownMenuItem(value: 'movie', child: Text('Movie')),
+                    DropdownMenuItem(value: 'tvShow', child: Text('TV show')),
+                    DropdownMenuItem(value: 'episode', child: Text('Episode')),
+                    DropdownMenuItem(value: 'song', child: Text('Song')),
+                    DropdownMenuItem(value: 'album', child: Text('Album')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setDialogState(() => type = value);
+                  },
+                ),
+                const SizedBox(height: 8),
+                const UniversalText(
+                  'A YES majority adds it to the shared wishlist. Otherwise, each profile gets it on their wishlist.',
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const UniversalText('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final title = titleController.text.trim();
+                if (title.isNotEmpty) {
+                  Navigator.pop(dialogContext, [title, type]);
+                }
+              },
+              child: const UniversalText('Start vote'),
+            ),
+          ],
+        ),
+      ),
+    );
+    titleController.dispose();
+    if (choice == null || !mounted) return;
+
+    try {
+      await controller.createGroupRecommendation(
+        title: choice[0],
+        type: choice[1],
+        profileId: profile.id,
+      );
+    } catch (error) {
+      _showMessage(error.toString().replaceFirst('Exception: ', ''));
+    }
   }
-  static int _yes(Map<String, dynamic> r) => int.tryParse(r['yesVotes']?.toString() ?? '0') ?? 0;
+
+  Future<void> _vote(Map<String, dynamic> item, String vote) async {
+    final controller = AppController.instance;
+    final profile = controller.currentProfile;
+    final recommendationId = item['id']?.toString() ?? '';
+    if (profile == null || recommendationId.isEmpty) return;
+
+    try {
+      await controller.voteOnGroupRecommendation(
+        recommendationId: recommendationId,
+        profileId: profile.id,
+        vote: vote,
+      );
+    } catch (error) {
+      _showMessage(error.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = AppController.instance;
+    return Scaffold(
+      appBar: AppBar(
+        title: const UniversalText('Account Recommendations'),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: controller.loadGroupRecommendations,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _createRecommendation,
+        icon: const Icon(Icons.add_rounded),
+        label: const UniversalText('Recommend'),
+      ),
+      body: AnimatedBuilder(
+        animation: controller,
+        builder: (context, _) {
+          final profileId = controller.currentProfile?.id;
+          final recommendations = [...controller.groupRecommendations]
+            ..sort((a, b) => _yes(b).compareTo(_yes(a)));
+          final wishlistIds =
+              controller.currentProfile?.wishlistRecommendationIds.toSet() ??
+                  <String>{};
+          final personalWishlist = recommendations
+              .where((item) => wishlistIds.contains(item['id']?.toString()));
+
+          return RefreshIndicator(
+            onRefresh: controller.loadGroupRecommendations,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+              children: [
+                if (personalWishlist.isNotEmpty) ...[
+                  const UniversalText(
+                    'Your profile wishlist',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                  ),
+                  ...personalWishlist.map(
+                    (item) => ListTile(
+                      leading: const Icon(Icons.bookmark_added_outlined),
+                      title: Text(item['title']?.toString() ?? 'Untitled'),
+                      subtitle: UniversalText(
+                        '${item['type'] ?? 'media'} • Household vote was NO',
+                      ),
+                    ),
+                  ),
+                ],
+                if (controller.groupRecommendationsLoading &&
+                    recommendations.isEmpty)
+                  const Center(child: CircularProgressIndicator())
+                else if (recommendations.isEmpty)
+                  const Card(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: UniversalText(
+                        'No account recommendations yet. Add one for everyone to vote on.',
+                      ),
+                    ),
+                  )
+                else
+                  ...recommendations.asMap().entries.map((entry) {
+                    final item = entry.value;
+                    final votes = item['votes'] is Map
+                        ? Map<String, dynamic>.from(item['votes'] as Map)
+                        : <String, dynamic>{};
+                    final hasVoted =
+                        profileId != null && votes.containsKey(profileId);
+                    final status = item['status']?.toString() ?? 'voting';
+                    return Card(
+                      child: Column(
+                        children: [
+                          ListTile(
+                            leading: CircleAvatar(
+                              child: UniversalText('${entry.key + 1}'),
+                            ),
+                            title: Text(
+                              item['title']?.toString() ?? 'Untitled',
+                            ),
+                            subtitle: UniversalText(
+                              '${item['type'] ?? 'media'} • YES ${item['yesVotes'] ?? 0} • NO ${item['noVotes'] ?? 0} • $status',
+                            ),
+                          ),
+                          if (status == 'voting' &&
+                              !hasVoted &&
+                              profileId != null)
+                            OverflowBar(
+                              alignment: MainAxisAlignment.end,
+                              children: [
+                                OutlinedButton(
+                                  onPressed: () => _vote(item, 'no'),
+                                  child: const UniversalText('NO'),
+                                ),
+                                FilledButton(
+                                  onPressed: () => _vote(item, 'yes'),
+                                  child: const UniversalText('YES'),
+                                ),
+                              ],
+                            )
+                          else if (hasVoted)
+                            Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: UniversalText(
+                                'Your vote: ${votes[profileId]?.toString().toUpperCase()}',
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  }),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  static int _yes(Map<String, dynamic> item) =>
+      int.tryParse(item['yesVotes']?.toString() ?? '0') ?? 0;
 }
 
 /// Implements the `WatchHistoryTimelineScreen` class for this feature or UI component.

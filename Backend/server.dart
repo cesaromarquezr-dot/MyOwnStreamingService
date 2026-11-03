@@ -175,6 +175,7 @@ Future<void> main() async {
   );
 
   final ratingService = RatingService();
+  await ratingService.initialize();
 
   final shopService = ShopService(
     database: database,
@@ -467,6 +468,7 @@ Future<void> main() async {
 
   final libraryRoutes = LibraryRoutes(
     authentication: authentication,
+    groupRecommendationService: groupRecommendationService,
   );
 
   final transcodingService = TranscodingService(

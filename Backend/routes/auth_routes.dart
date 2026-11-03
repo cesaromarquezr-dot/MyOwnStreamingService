@@ -1475,7 +1475,7 @@ class AuthRoutes {
             .toList(),
         'profileCount':
             account.profiles.length,
-        'maxProfiles': 7,
+        'maxProfiles': Account.maxProfiles,
       },
     );
   }
@@ -1555,7 +1555,7 @@ class AuthRoutes {
             .toList(),
         'profileCount':
             account.profiles.length,
-        'maxProfiles': 7,
+        'maxProfiles': Account.maxProfiles,
       },
     );
   }
@@ -1612,7 +1612,7 @@ class AuthRoutes {
             .toList(),
         'profileCount':
             account.profiles.length,
-        'maxProfiles': 7,
+        'maxProfiles': Account.maxProfiles,
       },
     );
   }

@@ -19,6 +19,8 @@ import 'catalog_poster_image.dart';
 import 'library_view_modes.dart';
 import 'page_hero_banner.dart';
 import 'country_origin_style.dart';
+import 'user_rating_store.dart';
+import 'rating_system.dart';
 import 'home_streaming_discovery.dart'
     show
         HomeHeroCarousel,
@@ -37,6 +39,7 @@ class _SeriesScreenState extends State<SeriesScreen>
 
   String _searchQuery = '';
   String _sortMode = 'Default';
+  bool _prefetchingTmdbRatings = false;
   LibraryViewMode _viewMode = LibraryViewPreferenceStore.get(
     'shows',
     fallback: LibraryViewMode.grid,
@@ -47,6 +50,11 @@ class _SeriesScreenState extends State<SeriesScreen>
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
+    UserMediaRatingStore.changes.addListener(_onUserRatingsChanged);
+    TmdbMediaRatingStore.revision.addListener(_onTmdbRatingsChanged);
+    unawaited(UserMediaRatingStore.initializeForProfile(
+      AppController.instance.currentProfile?.id,
+    ).then((_) { if (mounted) setState(() {}); }));
     HomeHoverPreviewStore.clearCurrent();
 
     // Seed browseable catalog examples when Movies/TV is opened directly.
@@ -62,6 +70,30 @@ class _SeriesScreenState extends State<SeriesScreen>
     _animationController.forward();
   }
 
+  void _onUserRatingsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _onTmdbRatingsChanged() {
+    if (mounted && _sortMode.contains('Rated') && !_prefetchingTmdbRatings) {
+      setState(() {});
+    }
+  }
+
+  void _changeSortMode(String? value) {
+    if (value == null) return;
+    setState(() => _sortMode = value);
+    if (!value.contains('Rated')) return;
+    final items = AppController.instance.library
+        .where((media) => media.isSeries)
+        .toList(growable: false);
+    _prefetchingTmdbRatings = true;
+    unawaited(TmdbMediaRatingStore.prefetch(items, isTv: true).whenComplete(() {
+      _prefetchingTmdbRatings = false;
+      if (mounted && _sortMode.contains('Rated')) setState(() {});
+    }));
+  }
+
   Future<void> _reloadHeroSettings() async {
     final settings = await PageHeroSettingsStore.load('series');
     if (mounted) setState(() => _heroSettings = settings);
@@ -73,6 +105,8 @@ class _SeriesScreenState extends State<SeriesScreen>
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     PageHeroSettingsStore.revision.removeListener(_onHeroSettingsRevision);
+    UserMediaRatingStore.changes.removeListener(_onUserRatingsChanged);
+    TmdbMediaRatingStore.revision.removeListener(_onTmdbRatingsChanged);
     _animationController.dispose();
     super.dispose();
   }
@@ -141,6 +175,29 @@ class _SeriesScreenState extends State<SeriesScreen>
           return byCountry != 0 ? byCountry : a.title.toLowerCase().compareTo(b.title.toLowerCase());
         });
         break;
+      case 'Top Rated':
+      case 'Lowest Rated':
+        final lowestFirst = _sortMode == 'Lowest Rated';
+        items.sort((a, b) {
+          final scoreA = TmdbMediaRatingStore.scoreFor(
+            title: a.title, isTv: true, year: a.seriesStartYear ?? a.releaseYear,
+          );
+          final scoreB = TmdbMediaRatingStore.scoreFor(
+            title: b.title, isTv: true, year: b.seriesStartYear ?? b.releaseYear,
+          );
+          if (scoreA == null && scoreB == null) {
+            return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+          }
+          if (scoreA == null) return 1;
+          if (scoreB == null) return -1;
+          final scoreOrder = lowestFirst
+              ? scoreA.compareTo(scoreB)
+              : scoreB.compareTo(scoreA);
+          return scoreOrder != 0
+              ? scoreOrder
+              : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+        });
+        break;
       default:
         final prioritized = internationalCatalogFirst(items);
         items
@@ -152,8 +209,11 @@ class _SeriesScreenState extends State<SeriesScreen>
 
   /// Displays the TV-show organization dropdown.
   Widget _sortDropdown() {
-    return DropdownButtonHideUnderline(
-      child: DropdownButton<String>(
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
         value: _sortMode,
         dropdownColor: const Color(0xFF151515),
         icon: const Icon(Icons.unfold_more_rounded, color: Colors.white70, size: 18),
@@ -166,9 +226,22 @@ class _SeriesScreenState extends State<SeriesScreen>
           DropdownMenuItem(value: 'Countries Z-A', child: UniversalText('Countries Z-A')),
           DropdownMenuItem(value: 'Oldest to Newest', child: UniversalText('Oldest to Newest')),
           DropdownMenuItem(value: 'Newest to Oldest', child: UniversalText('Newest to Oldest')),
+          DropdownMenuItem(value: 'Top Rated', child: UniversalText('Top Rated (TMDB)')),
+          DropdownMenuItem(value: 'Lowest Rated', child: UniversalText('Lowest Rated (TMDB)')),
         ],
-        onChanged: (value) => setState(() => _sortMode = value ?? 'Default'),
-      ),
+            onChanged: _changeSortMode,
+          ),
+        ),
+        IconButton(
+          tooltip: 'Customize personal rating colors',
+          icon: const Icon(Icons.palette_outlined, size: 18),
+          onPressed: () => Navigator.of(context).push<void>(
+            MaterialPageRoute<void>(
+              builder: (_) => const RatingColorSettingsScreen(),
+            ),
+          ),
+        ),
+      ],
     );
   }
   /// Performs `_openSearch` for this feature. Update this documentation when its contract changes.
@@ -371,7 +444,20 @@ class _SeriesScreenState extends State<SeriesScreen>
         children: [
           if (show.seriesStartYear != null || show.releaseYear != null) Text((show.seriesStartYear ?? show.releaseYear).toString(), style: const TextStyle(color: Colors.white60, fontSize: 11)),
           CountryOriginInline(media: show, fontSize: 10.5),
+          TmdbMediaRatingBadge(
+            title: show.title,
+            isTv: true,
+            year: show.seriesStartYear ?? show.releaseYear,
+          ),
           AddedByProfileLabel.forMedia(show),
+          if (UserMediaRatingStore.scorePercentFor(
+                AppController.instance.currentProfile?.id, show.id) != null)
+            UserScoreBadge(
+              score: UserMediaRatingStore.scoreFor(
+                AppController.instance.currentProfile?.id, show.id),
+              palette: UserMediaRatingStore.paletteFor(
+                AppController.instance.currentProfile?.id),
+            ),
         ],
       ),
       year: show.seriesStartYear ?? show.releaseYear,
@@ -1217,6 +1303,24 @@ class _ShowCardState extends State<_ShowCard> {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
+                        TmdbMediaRatingBadge(
+                          title: show.title,
+                          isTv: true,
+                          year: show.seriesStartYear ?? show.releaseYear,
+                        ),
+                        if (UserMediaRatingStore.scorePercentFor(
+                              AppController.instance.currentProfile?.id,
+                              show.id) != null) ...[
+                          const SizedBox(height: 5),
+                          UserScoreBadge(
+                            score: UserMediaRatingStore.scoreFor(
+                              AppController.instance.currentProfile?.id,
+                              show.id),
+                            palette: UserMediaRatingStore.paletteFor(
+                              AppController.instance.currentProfile?.id,
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 2),
                         CountryOriginInline(media: show, fontSize: 10.5),
                         const SizedBox(height: 3),

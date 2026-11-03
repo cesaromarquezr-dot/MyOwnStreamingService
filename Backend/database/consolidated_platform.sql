@@ -21,11 +21,17 @@ alter table public.accounts
 alter table public.profiles
   add column if not exists governance jsonb not null default '{}'::jsonb;
 
+alter table public.profiles
+  add column if not exists wishlist_recommendation_ids jsonb not null default '[]'::jsonb;
+
 comment on column public.accounts.profile_administration_policy is
   'Account-wide profile governance policy. Owner remains authoritative.';
 
 comment on column public.profiles.governance is
   'Profile content/admin policy. Never store raw profile PINs here.';
+
+comment on column public.profiles.wishlist_recommendation_ids is
+  'Recommendation IDs saved to this profile wishlist after household votes.';
 
 -- ---------------------------------------------------------------------------
 -- MEMBER -> PROFILE ASSIGNMENTS

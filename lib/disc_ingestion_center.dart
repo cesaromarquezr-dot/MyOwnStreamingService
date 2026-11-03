@@ -222,6 +222,7 @@ class _DiscIngestionCenterScreenState extends State<DiscIngestionCenterScreen> {
     final yearController = TextEditingController(text: _yearFromPath(filePath));
     final artworkController = TextEditingController();
     final discTitleController = TextEditingController();
+    final editionNameController = TextEditingController();
     String kind = 'movie';
     String contentCategory = 'Main Feature';
     String discType = _defaultDiscType();
@@ -270,6 +271,7 @@ class _DiscIngestionCenterScreenState extends State<DiscIngestionCenterScreen> {
                       decoration: const InputDecoration(labelText: 'Content category'),
                       items: const [
                         DropdownMenuItem(value: 'Main Feature', child: Text('Main feature / movie')),
+                        DropdownMenuItem(value: 'Alternate Feature', child: Text('Alternate full-length version / cut')),
                         DropdownMenuItem(value: 'Episode', child: Text('TV episode')),
                         DropdownMenuItem(value: 'Deleted Scene', child: Text('Deleted scene')),
                         DropdownMenuItem(value: 'Audio Commentary', child: Text('Audio commentary')),
@@ -283,12 +285,26 @@ class _DiscIngestionCenterScreenState extends State<DiscIngestionCenterScreen> {
                         if (value == null) return;
                         setDialogState(() {
                           contentCategory = value;
-                          if (value == 'Main Feature' || value == 'Episode') {
+                          if (value == 'Main Feature' ||
+                              value == 'Alternate Feature' ||
+                              value == 'Episode') {
                             parentMediaId = null;
                           }
                         });
                       },
                     ),
+                    if (kind == 'movie' &&
+                        (contentCategory == 'Main Feature' ||
+                            contentCategory == 'Alternate Feature')) ...[
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: editionNameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Version / cut name (optional)',
+                          hintText: 'Theatrical, Extended, Director’s Cut',
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
                       initialValue: discType,
@@ -301,7 +317,9 @@ class _DiscIngestionCenterScreenState extends State<DiscIngestionCenterScreen> {
                       ],
                       onChanged: (value) { if (value != null) setDialogState(() => discType = value); },
                     ),
-                    if (contentCategory != 'Main Feature' && contentCategory != 'Episode') ...[
+                    if (contentCategory != 'Main Feature' &&
+                        contentCategory != 'Alternate Feature' &&
+                        contentCategory != 'Episode') ...[
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
                         initialValue: parentMediaId ?? '',
@@ -362,6 +380,7 @@ class _DiscIngestionCenterScreenState extends State<DiscIngestionCenterScreen> {
                       releaseYear: year,
                       artworkUrl: artwork,
                       discTitle: discTitleController.text,
+                      editionName: editionNameController.text,
                       contentCategory: contentCategory,
                       parentMediaId: parentMediaId,
                     );
@@ -388,6 +407,7 @@ class _DiscIngestionCenterScreenState extends State<DiscIngestionCenterScreen> {
       yearController.dispose();
       artworkController.dispose();
       discTitleController.dispose();
+      editionNameController.dispose();
     }
   }
 

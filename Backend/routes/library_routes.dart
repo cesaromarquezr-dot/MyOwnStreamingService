@@ -22,6 +22,8 @@ import 'dart:io';
 
 import '../middleware/authentication.dart';
 import '../arm/media_rights_policy.dart';
+import '../database/database.dart';
+import '../services/group_recommendation_service.dart';
 import '../services/subtitle_search_service.dart';
 import '../supabase_store.dart';
 
@@ -58,13 +60,17 @@ class LibraryRoutes {
   final AuthenticationMiddleware authentication;
   final SupabaseStore store;
   final SubtitleSearchService subtitleSearchService;
+  final GroupRecommendationService groupRecommendationService;
 
   LibraryRoutes({
     required this.authentication,
     SupabaseStore? store,
     SubtitleSearchService? subtitleSearchService,
+    GroupRecommendationService? groupRecommendationService,
   })  : store = store ?? SupabaseStore.instance,
-        subtitleSearchService = subtitleSearchService ?? SubtitleSearchService();
+        subtitleSearchService = subtitleSearchService ?? SubtitleSearchService(),
+        groupRecommendationService = groupRecommendationService ??
+            GroupRecommendationService(Database.instance);
 
   Future<void> handle(HttpRequest request) async {
     _applyCorsHeaders(request.response);
@@ -448,6 +454,12 @@ class LibraryRoutes {
           trailerUrl: _optionalString(body['trailerUrl']),
           metadata: metadata,
           fileSizeBytes: candidate.lengthSync(),
+        );
+        groupRecommendationService.reconcileImportedMedia(
+          accountId: account.id,
+          mediaId: relative,
+          title: title,
+          type: type,
         );
         await _json(request.response, HttpStatus.ok, {
           'success': true,
@@ -974,6 +986,12 @@ class LibraryRoutes {
                 if (item['artist'] != null) 'artist': item['artist'],
               },
               fileSizeBytes: fileSize,
+            );
+            groupRecommendationService.reconcileImportedMedia(
+              accountId: accountExternalId,
+              mediaId: relative,
+              title: title,
+              type: type,
             );
 
             persisted++;

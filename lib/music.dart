@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'app_core.dart';
+import 'backend_api.dart';
 import 'catalog_poster_image.dart' show AlbumArtworkImage;
 import 'music_favorites.dart';
 import 'music_genre_system.dart';
@@ -25,6 +26,8 @@ import 'cinematic_title_fonts.dart';
 import 'music_video_search_screen.dart';
 import 'library_view_modes.dart';
 import 'playback_queue_store.dart';
+import 'user_rating_store.dart';
+import 'rating_system.dart';
 
 /// A music track imported from the account's home-server library.
 class MusicTrack {
@@ -1974,6 +1977,9 @@ class _MusicScreenState extends State<MusicScreen> {
     unawaited(MusicFavoritesBridge.initializeForProfile(
       AppController.instance.currentProfile?.id,
     ));
+    unawaited(UserMediaRatingStore.initializeForProfile(
+      AppController.instance.currentProfile?.id,
+    ));
   }
 
   MusicPageCustomization get customization =>
@@ -1987,7 +1993,7 @@ class _MusicScreenState extends State<MusicScreen> {
 
     return AnimatedBuilder(
       animation: Listenable.merge(
-          <Listenable>[library, playback, MusicFavoritesBridge.changes]),
+          <Listenable>[library, playback, MusicFavoritesBridge.changes, UserMediaRatingStore.changes]),
       builder: (context, _) {
         return Scaffold(
           backgroundColor: Color(int.parse(library.homeBackground)),
@@ -2011,6 +2017,15 @@ class _MusicScreenState extends State<MusicScreen> {
                       onPressed: _openDiscover,
                       icon: const Icon(Icons.explore_rounded),
                       tooltip: 'Discover music',
+                    ),
+                    IconButton(
+                      tooltip: 'Personal rating colors',
+                      onPressed: () => Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const RatingColorSettingsScreen(),
+                        ),
+                      ),
+                      icon: const Icon(Icons.palette_outlined),
                     ),
                     IconButton(
                       onPressed: _showCustomization,
@@ -2232,7 +2247,24 @@ class _MusicScreenState extends State<MusicScreen> {
               : dates.reduce((a, b) => a.isAfter(b) ? a : b);
         }
 
-        if (settings.artistSortOrder == 'Z-A') {
+        if (settings.artistSortOrder == 'Top Rated' ||
+            settings.artistSortOrder == 'Lowest Rated') {
+          final profileId = AppController.instance.currentProfile?.id;
+          final lowestFirst = settings.artistSortOrder == 'Lowest Rated';
+          artistNames.sort((a, b) {
+            final scoreA = UserMediaRatingStore.scorePercentFor(
+              profileId, UserMediaRatingStore.artistKey(a));
+            final scoreB = UserMediaRatingStore.scorePercentFor(
+              profileId, UserMediaRatingStore.artistKey(b));
+            if (scoreA == null && scoreB == null) return a.toLowerCase().compareTo(b.toLowerCase());
+            if (scoreA == null) return 1;
+            if (scoreB == null) return -1;
+            final comparison = lowestFirst
+                ? scoreA.compareTo(scoreB)
+                : scoreB.compareTo(scoreA);
+            return comparison != 0 ? comparison : a.toLowerCase().compareTo(b.toLowerCase());
+          });
+        } else if (settings.artistSortOrder == 'Z-A') {
           artistNames
               .sort((a, b) => b.toLowerCase().compareTo(a.toLowerCase()));
         } else if (settings.artistSortOrder == 'Most Played') {
@@ -2260,6 +2292,7 @@ class _MusicScreenState extends State<MusicScreen> {
           Icons.person_rounded,
           sortOrder: settings.artistSortOrder,
           onSortChanged: (value) => _saveSortOrder('artist', value),
+          rateItems: true,
           onItemTap: (artist) {
             final normalizedArtist = artist.trim().toLowerCase();
             final seenAlbums = <String>{};
@@ -2674,6 +2707,41 @@ class _MusicScreenState extends State<MusicScreen> {
     );
   }
 
+  Future<void> _rateMusicItem({
+    required String mediaId,
+    required String title,
+    required String mediaType,
+  }) async {
+    final profile = AppController.instance.currentProfile;
+    if (profile == null) return;
+    final current = UserMediaRatingStore.scoreFor(profile.id, mediaId);
+    final selected = await showMediaScoreDialog(context, initial: current);
+    if (selected == null || !mounted) return;
+    try {
+      await AppController.instance.backendApi.saveUserScore(
+        mediaId: mediaId,
+        profileId: profile.id,
+        score: selected,
+      );
+      await UserMediaRatingStore.rememberScore(
+        profileId: profile.id,
+        mediaId: mediaId,
+        score: selected,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Saved your $mediaType rating for "$title".')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not save rating: $error')),
+        );
+      }
+    }
+  }
+
   void _saveSortOrder(String section, String value) {
     final profile = AppController.instance.currentProfile;
     final settings = MusicPageCustomizationStore.settingsFor(profile);
@@ -2707,7 +2775,13 @@ class _MusicScreenState extends State<MusicScreen> {
         items: options
             .map((option) => DropdownMenuItem<String>(
                   value: option,
-                  child: Text(option),
+                  child: Text(
+                    option == 'Top Rated'
+                        ? 'Top Rated (Personal)'
+                        : option == 'Lowest Rated'
+                            ? 'Lowest Rated (Personal)'
+                            : option,
+                  ),
                 ))
             .toList(growable: false),
         onChanged: (next) {
@@ -2758,6 +2832,24 @@ class _MusicScreenState extends State<MusicScreen> {
         final date = albumModifiedAt(b).compareTo(albumModifiedAt(a));
         return date != 0 ? date : a.toLowerCase().compareTo(b.toLowerCase());
       });
+    } else if (sortOrder == 'Top Rated' || sortOrder == 'Lowest Rated') {
+      final profileId = AppController.instance.currentProfile?.id;
+      final lowestFirst = sortOrder == 'Lowest Rated';
+      albumTitles.sort((a, b) {
+        final trackA = albumTracks[a.toLowerCase()]!;
+        final trackB = albumTracks[b.toLowerCase()]!;
+        final scoreA = UserMediaRatingStore.scorePercentFor(
+          profileId, UserMediaRatingStore.albumKey(a, trackA.artist));
+        final scoreB = UserMediaRatingStore.scorePercentFor(
+          profileId, UserMediaRatingStore.albumKey(b, trackB.artist));
+        if (scoreA == null && scoreB == null) return a.toLowerCase().compareTo(b.toLowerCase());
+        if (scoreA == null) return 1;
+        if (scoreB == null) return -1;
+        final comparison = lowestFirst
+            ? scoreA.compareTo(scoreB)
+            : scoreB.compareTo(scoreA);
+        return comparison != 0 ? comparison : a.toLowerCase().compareTo(b.toLowerCase());
+      });
     } else {
       albumTitles.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
     }
@@ -2776,6 +2868,35 @@ class _MusicScreenState extends State<MusicScreen> {
           '${track.artist} · $tracksOnAlbum track${tracksOnAlbum == 1 ? '' : 's'}',
           if (albumCreator != null) 'Added by $albumCreator',
         ].join(' · '),
+        subtitleBuilder: (context) => Wrap(
+          spacing: 6,
+          runSpacing: 3,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text('$tracksOnAlbum track${tracksOnAlbum == 1 ? '' : 's'} · ${track.artist}', style: const TextStyle(color: Colors.white60, fontSize: 11)),
+            UserScoreBadge(
+              score: UserMediaRatingStore.scoreFor(
+                AppController.instance.currentProfile?.id,
+                UserMediaRatingStore.albumKey(albumTitle, track.artist),
+              ),
+              palette: UserMediaRatingStore.paletteFor(
+                AppController.instance.currentProfile?.id,
+              ),
+            ),
+            IconButton(
+              tooltip: 'Rate album',
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+              onPressed: () => _rateMusicItem(
+                mediaId: UserMediaRatingStore.albumKey(albumTitle, track.artist),
+                title: albumTitle,
+                mediaType: 'album',
+              ),
+              icon: const Icon(Icons.star_outline_rounded, size: 16),
+            ),
+          ],
+        ),
         fallbackIcon: Icons.album_rounded,
         artworkBuilder: (context, fit) => AlbumArtworkImage(
           title: albumTitle,
@@ -2811,7 +2932,7 @@ class _MusicScreenState extends State<MusicScreen> {
                           fontSize: 20, fontWeight: FontWeight.w900))),
               _sortDropdown(
                   sortOrder,
-                  const ['A-Z', 'Z-A', 'Most Played', 'Recently Added'],
+                  const ['A-Z', 'Z-A', 'Most Played', 'Recently Added', 'Top Rated', 'Lowest Rated'],
                   onSortChanged),
             ]),
             const SizedBox(height: 4),
@@ -2884,7 +3005,8 @@ class _MusicScreenState extends State<MusicScreen> {
       String title, String subtitle, List<String> values, IconData icon,
       {ValueChanged<String>? onItemTap,
       String? sortOrder,
-      ValueChanged<String>? onSortChanged}) {
+      ValueChanged<String>? onSortChanged,
+      bool rateItems = false}) {
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
@@ -2899,7 +3021,11 @@ class _MusicScreenState extends State<MusicScreen> {
               if (sortOrder != null && onSortChanged != null)
                 _sortDropdown(
                     sortOrder,
-                    const ['A-Z', 'Z-A', 'Most Played', 'Recently Added'],
+                    <String>[
+                      'A-Z', 'Z-A', 'Most Played', 'Recently Added',
+                      if (rateItems) 'Top Rated',
+                      if (rateItems) 'Lowest Rated',
+                    ],
                     onSortChanged),
             ]),
             const SizedBox(height: 4),
@@ -2928,11 +3054,39 @@ class _MusicScreenState extends State<MusicScreen> {
                       children: [
                         Icon(icon),
                         const Spacer(),
-                        Text(values[index],
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style:
-                                const TextStyle(fontWeight: FontWeight.w700)),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(values[index],
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontWeight: FontWeight.w700)),
+                            ),
+                            if (rateItems) ...[
+                              UserScoreBadge(
+                                score: UserMediaRatingStore.scoreFor(
+                                  AppController.instance.currentProfile?.id,
+                                  UserMediaRatingStore.artistKey(values[index]),
+                                ),
+                                palette: UserMediaRatingStore.paletteFor(
+                                  AppController.instance.currentProfile?.id,
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: 'Rate artist',
+                                visualDensity: VisualDensity.compact,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+                                onPressed: () => _rateMusicItem(
+                                  mediaId: UserMediaRatingStore.artistKey(values[index]),
+                                  title: values[index],
+                                  mediaType: 'artist',
+                                ),
+                                icon: const Icon(Icons.star_outline_rounded, size: 16),
+                              ),
+                            ],
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -2975,6 +3129,22 @@ class _MusicScreenState extends State<MusicScreen> {
             ? date
             : a.title.toLowerCase().compareTo(b.title.toLowerCase());
       });
+    } else if (sortOrder == 'Top Rated' || sortOrder == 'Lowest Rated') {
+      final profileId = AppController.instance.currentProfile?.id;
+      final lowestFirst = sortOrder == 'Lowest Rated';
+      tracks.sort((a, b) {
+        final scoreA = UserMediaRatingStore.scorePercentFor(
+          profileId, UserMediaRatingStore.trackKey(a.id));
+        final scoreB = UserMediaRatingStore.scorePercentFor(
+          profileId, UserMediaRatingStore.trackKey(b.id));
+        if (scoreA == null && scoreB == null) return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+        if (scoreA == null) return 1;
+        if (scoreB == null) return -1;
+        final comparison = lowestFirst
+            ? scoreA.compareTo(scoreB)
+            : scoreB.compareTo(scoreA);
+        return comparison != 0 ? comparison : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+      });
     } else {
       tracks.sort(
           (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
@@ -2992,7 +3162,7 @@ class _MusicScreenState extends State<MusicScreen> {
                           fontSize: 20, fontWeight: FontWeight.w900))),
               _sortDropdown(
                   sortOrder,
-                  const ['A-Z', 'Z-A', 'Most Played', 'Recently Added'],
+                  const ['A-Z', 'Z-A', 'Most Played', 'Recently Added', 'Top Rated', 'Lowest Rated'],
                   onSortChanged),
             ]),
             const SizedBox(height: 4),
@@ -3025,9 +3195,33 @@ class _MusicScreenState extends State<MusicScreen> {
                     maxLines: 1, overflow: TextOverflow.ellipsis),
                 subtitle: Text(_musicTrackSubtitle(track),
                     maxLines: 1, overflow: TextOverflow.ellipsis),
-                trailing: Text('${library.listenCounts[track.id] ?? 0} plays',
-                    style:
-                        const TextStyle(color: Colors.white54, fontSize: 11)),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('${library.listenCounts[track.id] ?? 0} plays',
+                        style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                    const SizedBox(width: 8),
+                    UserScoreBadge(
+                      score: UserMediaRatingStore.scoreFor(
+                        AppController.instance.currentProfile?.id,
+                        UserMediaRatingStore.trackKey(track.id),
+                      ),
+                      palette: UserMediaRatingStore.paletteFor(
+                        AppController.instance.currentProfile?.id,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Rate song',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => _rateMusicItem(
+                        mediaId: UserMediaRatingStore.trackKey(track.id),
+                        title: track.title,
+                        mediaType: 'track',
+                      ),
+                      icon: const Icon(Icons.star_outline_rounded, size: 18),
+                    ),
+                  ],
+                ),
                 onTap: () => openMusicSearchTrack(context, track),
               );
             },
