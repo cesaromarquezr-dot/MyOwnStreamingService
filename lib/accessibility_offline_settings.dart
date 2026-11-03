@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
+import 'backend_api.dart';
 import 'app_accessibility.dart';
 import 'localization.dart';
 import 'offline_sync_queue.dart';
@@ -85,26 +86,65 @@ class _AccessibilityOfflineSettingsScreenState
   }
 
   Future<void> _savePrivacy(void Function() change) async {
+    final previous = PrivacyPreferences.fromJson(privacy.toJson());
+    final updated = PrivacyPreferences.fromJson(privacy.toJson());
+    privacy = updated;
     setState(() {
       change();
       saving = true;
+      error = null;
     });
-    try {
-      await PrivacyPreferencesStore.save(profileId: _profileId, value: privacy);
-      if (!privacy.allowOfflineMetadata) {
-        await OfflineMetadataCache(profileId: _profileId).clear();
+
+    String? presenceError;
+    String? cacheError;
+    if ((previous.sharePresence && !updated.sharePresence) ||
+        (previous.shareActivity && !updated.shareActivity)) {
+      try {
+        await AppController.instance.backendApi.setSocialProfilePresence(
+          profileId: _profileId,
+          availability: previous.sharePresence && !updated.sharePresence
+              ? 'away'
+              : null,
+          clearActivity: true,
+        );
+      } catch (e) {
+        presenceError = e.toString().replaceFirst('Exception: ', '');
       }
-      if (mounted) setState(() => saving = false);
+    }
+
+    try {
+      await PrivacyPreferencesStore.save(profileId: _profileId, value: updated);
+      if (!updated.allowOfflineMetadata) {
+        try {
+          await OfflineMetadataCache(profileId: _profileId).clear();
+        } catch (e) {
+          cacheError = e.toString().replaceFirst('Exception: ', '');
+        }
+      }
+      if (mounted) {
+        setState(() {
+          saving = false;
+          if (presenceError != null && cacheError != null) {
+            error = 'Privacy was saved. Existing shared activity may not have '
+                'been cleared: $presenceError Offline metadata could not be '
+                'cleared: $cacheError';
+          } else if (presenceError != null) {
+            error = 'Privacy was saved, but existing shared activity may not '
+                'have been cleared: $presenceError';
+          } else if (cacheError != null) {
+            error = 'Privacy was saved, but offline metadata could not be '
+                'cleared: $cacheError';
+          } else {
+            error = null;
+          }
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
           saving = false;
           error = e.toString().replaceFirst('Exception: ', '');
         });
-      }
-      await PrivacyPreferencesStore.save(profileId: _profileId, value: privacy);
-      if (!privacy.allowOfflineMetadata) {
-        await OfflineMetadataCache(profileId: _profileId).clear();
       }
     }
   }
@@ -239,6 +279,26 @@ class _AccessibilityOfflineSettingsScreenState
                     title: UniversalText('Profile privacy'),
                     subtitle: UniversalText(
                         'These options are enforced locally and by the presence API when available. Cross-device preference sync requires the production API/migration rollout.'),
+                  ),
+                  SwitchListTile(
+                    title: const UniversalText('Share presence'),
+                    subtitle: const UniversalText(
+                        'Allow this profile to appear as online or away in shared areas.'),
+                    value: privacy.sharePresence,
+                    onChanged: saving
+                        ? null
+                        : (value) => _savePrivacy(
+                            () => privacy.sharePresence = value),
+                  ),
+                  SwitchListTile(
+                    title: const UniversalText('Share viewing activity'),
+                    subtitle: const UniversalText(
+                        'Allow recent playback activity to appear in shared areas. Turning this off clears activity on the next presence update.'),
+                    value: privacy.shareActivity,
+                    onChanged: saving
+                        ? null
+                        : (value) =>
+                            _savePrivacy(() => privacy.shareActivity = value),
                   ),
                   SwitchListTile(
                     title: const UniversalText('Personalized recommendations'),

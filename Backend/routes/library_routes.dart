@@ -22,6 +22,7 @@ import 'dart:io';
 
 import '../middleware/authentication.dart';
 import '../arm/media_rights_policy.dart';
+import '../services/subtitle_search_service.dart';
 import '../supabase_store.dart';
 
 class LibraryRoutes {
@@ -36,6 +37,8 @@ class LibraryRoutes {
   static const String _deletionPath =
       '/api/v1/library/deletion-request';
   static const String _membershipPath = '/api/v1/library/membership';
+  static const String _subtitleIndexPath = '/api/v1/library/subtitles/index';
+  static const String _subtitleSearchPath = '/api/v1/library/subtitles/search';
 
   // Membership overrides live outside the media scanner's index, so a full
   // scan or server restart cannot resurrect a removed item. Writes are queued
@@ -54,11 +57,14 @@ class LibraryRoutes {
 
   final AuthenticationMiddleware authentication;
   final SupabaseStore store;
+  final SubtitleSearchService subtitleSearchService;
 
   LibraryRoutes({
     required this.authentication,
     SupabaseStore? store,
-  }) : store = store ?? SupabaseStore.instance;
+    SubtitleSearchService? subtitleSearchService,
+  })  : store = store ?? SupabaseStore.instance,
+        subtitleSearchService = subtitleSearchService ?? SubtitleSearchService();
 
   Future<void> handle(HttpRequest request) async {
     _applyCorsHeaders(request.response);
@@ -91,6 +97,50 @@ class LibraryRoutes {
     final path = request.uri.path;
 
     try {
+      if (request.method == 'POST' && path == _subtitleIndexPath) {
+        final root = _mediaRoot();
+        if (!await root.exists()) {
+          await _json(request.response, HttpStatus.notFound, <String, dynamic>{
+            'success': false,
+            'error': 'Media root does not exist.',
+          });
+          return;
+        }
+        final summary = await subtitleSearchService.index(
+          accountId: account.id,
+          mediaRoot: root,
+        );
+        await _json(request.response, HttpStatus.ok, <String, dynamic>{
+          'success': true,
+          ...summary.toJson(),
+        });
+        return;
+      }
+
+      if (request.method == 'GET' && path == _subtitleSearchPath) {
+        final query = request.uri.queryParameters['q'] ?? '';
+        SubtitleSearchResult result;
+        try {
+          result = subtitleSearchService.search(
+            accountId: account.id,
+            query: query,
+          );
+        } on StateError catch (error) {
+          await _json(
+            request.response,
+            HttpStatus.conflict,
+            <String, dynamic>{'success': false, 'error': error.message},
+          );
+          return;
+        }
+        await _json(request.response, HttpStatus.ok, <String, dynamic>{
+          'success': true,
+          'matches': result.matches.map((cue) => cue.toJson()).toList(),
+          'hasMore': result.hasMore,
+        });
+        return;
+      }
+
       // --------------------------------------------------------------
       // DURABLE PROFILE-SCOPED LIBRARY MEMBERSHIP OVERRIDES
       // --------------------------------------------------------------

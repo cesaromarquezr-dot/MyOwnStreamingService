@@ -24,6 +24,7 @@ import 'smart_search.dart';
 import 'cinematic_title_fonts.dart';
 import 'music_video_search_screen.dart';
 import 'library_view_modes.dart';
+import 'playback_queue_store.dart';
 
 /// A music track imported from the account's home-server library.
 class MusicTrack {
@@ -1187,10 +1188,70 @@ class MusicPlaybackController extends ChangeNotifier {
       ));
     }
 
+    isPlaying = false;
+    notifyListeners();
     final store = MusicLibraryStore.instance;
-    if (!store.autoAdvanceQueue || store.queue.isEmpty) return;
+    if (store.autoAdvanceQueue && store.queue.isNotEmpty) {
+      _advanceAutoQueue();
+    } else {
+      unawaited(_advanceMixedQueue());
+    }
+  }
 
-    _advanceAutoQueue();
+  Future<void> _advanceMixedQueue() async {
+    if (_advancing) return;
+    _advancing = true;
+    try {
+      final profile = AppController.instance.currentProfile;
+      if (profile == null) return;
+      final queueStore = const PlaybackQueueStore();
+      final entries = await queueStore.load(profileId: profile.id);
+      if (entries.isEmpty) return;
+      final next = entries.first;
+
+      if (next.kind == PlaybackQueueKind.music) {
+        final track = MusicLibraryStore.instance.trackById(next.id);
+        if (track == null ||
+            track.catalogOnly ||
+            track.audioUrl?.trim().isNotEmpty != true ||
+            (profileBlocksExplicitMusic(profile) && track.explicit) ||
+            (profileBlocksMatureMusic(profile) && track.matureTheme)) {
+          return;
+        }
+        await queueStore.remove(profileId: profile.id, entry: next);
+        await play(track);
+        if (!isPlaying) {
+          final remaining = await queueStore.load(profileId: profile.id);
+          await queueStore.replace(
+            profileId: profile.id,
+            entries: <PlaybackQueueEntry>[next, ...remaining],
+          );
+        }
+        return;
+      }
+
+      MediaItem? media;
+      for (final item in AppController.instance.library) {
+        if (item.id == next.id && item.isAccessibleTo(profile)) {
+          media = item;
+          break;
+        }
+      }
+      final startMedia = PlaybackQueueNavigation.playMedia;
+      if (media == null || startMedia == null) return;
+      await queueStore.remove(profileId: profile.id, entry: next);
+      if (!startMedia(media.id)) {
+        final remaining = await queueStore.load(profileId: profile.id);
+        await queueStore.replace(
+          profileId: profile.id,
+          entries: <PlaybackQueueEntry>[next, ...remaining],
+        );
+      }
+    } catch (error) {
+      debugPrint('The mixed playback queue could not advance: $error');
+    } finally {
+      _advancing = false;
+    }
   }
 
   /// Selects the next queued track and starts it automatically.

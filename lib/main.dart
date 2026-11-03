@@ -58,6 +58,8 @@ import 'energy_saver.dart';
 import 'power_performance_screen.dart';
 import 'media_artwork_auto_resolver.dart';
 import 'accessibility_offline_settings.dart';
+import 'playback_queue.dart';
+import 'playback_queue_store.dart';
 import 'production_readiness.dart';
 import 'security_settings.dart';
 import 'navigation_hubs.dart';
@@ -77,6 +79,8 @@ import 'media_extras_library.dart';
 import 'profiles_permissions_hub.dart';
 import 'coming_soon_release_screen.dart';
 import 'song_identification_screen.dart';
+import 'watch_history_calendar.dart';
+import 'dialogue_search.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -324,6 +328,24 @@ class _MyStreamingServiceState extends State<MyStreamingService> {
   void initState() {
     super.initState();
     PageCustomizationController.configure(_openPageCustomizationFor);
+    PlaybackQueueNavigation.playMedia = (mediaId) {
+      final navigator = _appNavigatorKey.currentState;
+      final profile = AppController.instance.currentProfile;
+      MediaItem? media;
+      for (final item in AppController.instance.library) {
+        if (item.id == mediaId && item.isAccessibleTo(profile)) {
+          media = item;
+          break;
+        }
+      }
+      if (navigator == null || media == null) return false;
+      unawaited(navigator.push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => PlayerScreen(media: media!),
+        ),
+      ));
+      return true;
+    };
     LanguageController.instance.addListener(_handleLanguageChanged);
   }
 
@@ -334,6 +356,7 @@ class _MyStreamingServiceState extends State<MyStreamingService> {
   @override
   void dispose() {
     LanguageController.instance.removeListener(_handleLanguageChanged);
+    PlaybackQueueNavigation.playMedia = null;
     super.dispose();
   }
 
@@ -4872,6 +4895,21 @@ void _showGlobalMore() {
         push(const AccessibilityOfflineSettingsScreen(),
             routeName: '/app/page/accessibility-offline');
       },
+      onPlaybackQueue: () {
+        Navigator.of(sheetContext).pop();
+        push(const PlaybackQueueScreen(),
+            routeName: '/app/page/playback-queue');
+      },
+      onHistoryCalendar: () {
+        Navigator.of(sheetContext).pop();
+        push(const WatchHistoryCalendarScreen(),
+            routeName: '/app/page/watch-history');
+      },
+      onDialogueSearch: () {
+        Navigator.of(sheetContext).pop();
+        push(const DialogueSearchScreen(),
+            routeName: '/app/page/dialogue-search');
+      },
       onEntertainmentStudio: () {
         Navigator.of(sheetContext).pop();
         push(const EntertainmentStudioScreen(),
@@ -5197,6 +5235,9 @@ class _MoreActionsSheet extends StatelessWidget {
   final VoidCallback onProductionReadiness;
   final VoidCallback onSecurityPrivacy;
   final VoidCallback onAccessibilityOffline;
+  final VoidCallback onPlaybackQueue;
+  final VoidCallback onHistoryCalendar;
+  final VoidCallback onDialogueSearch;
   final VoidCallback onEntertainmentStudio;
   final VoidCallback onInnovationHub;
   final VoidCallback onInterruptionMode;
@@ -5217,6 +5258,9 @@ class _MoreActionsSheet extends StatelessWidget {
     required this.onProductionReadiness,
     required this.onSecurityPrivacy,
     required this.onAccessibilityOffline,
+    required this.onPlaybackQueue,
+    required this.onHistoryCalendar,
+    required this.onDialogueSearch,
     required this.onEntertainmentStudio,
     required this.onInnovationHub,
     required this.onInterruptionMode,
@@ -5282,6 +5326,21 @@ class _MoreActionsSheet extends StatelessWidget {
               'Accessibility & Offline',
               'Text scaling, activity privacy and pending sync',
               onAccessibilityOffline),
+          _moreCard(
+              Icons.queue_play_next_rounded,
+              'Up Next',
+              'Build and reorder a private cross-media queue',
+              onPlaybackQueue),
+          _moreCard(
+              Icons.calendar_month_rounded,
+              'Watch History',
+              'Browse completed viewing and listening by date',
+              onHistoryCalendar),
+          _moreCard(
+              Icons.subtitles_rounded,
+              'Search Dialogue',
+              'Find scenes from indexed movie and episode subtitles',
+              onDialogueSearch),
         ],
       ),
     );
@@ -10588,6 +10647,15 @@ class PlaybackServerHealthCenterScreen extends StatelessWidget {
                           'Review missing posters, descriptions, and direct stream URLs.',
                       onTap: () => _open(context, const MediaHealthScreen(),
                           '/app/media-health')),
+                  _SystemActionCard(
+                      icon: Icons.fact_check_outlined,
+                      title: 'Library audit, duplicates & export',
+                      subtitle:
+                          'Review possible duplicates safely and export a sanitized library snapshot.',
+                      onTap: () => _open(
+                          context,
+                          const LibraryProtectionCenterScreen(),
+                          '/app/library-protection')),
                   _SystemActionCard(
                       icon: Icons.troubleshoot_rounded,
                       title: 'Playback Diagnostics',

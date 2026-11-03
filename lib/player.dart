@@ -14,6 +14,8 @@ import 'localization.dart';
 import 'streaming_experience.dart';
 import 'innovation_features.dart';
 import 'playback_interruption_bridge.dart';
+import 'playback_queue_store.dart';
+import 'profile_content_safety.dart';
 import 'core/services/original_language_defaults.dart';
 
 
@@ -623,12 +625,132 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (nextEpisodeTitle == null ||
         nextEpisodeTitle.trim().isEmpty ||
         autoplayCancelled) {
+      if (!autoplayCancelled) unawaited(_offerNextQueuedTitle());
       return;
     }
 
     startAutoplayCountdown(
       nextEpisodeTitle,
     );
+  }
+
+  Future<void> _offerNextQueuedTitle() async {
+    final controller = AppController.instance;
+    final profile = controller.currentProfile;
+    if (profile == null) return;
+
+    try {
+      final queueStore = const PlaybackQueueStore();
+      final queue = await queueStore.load(
+        profileId: profile.id,
+      );
+      final currentEntry = PlaybackQueueEntry(
+        kind: PlaybackQueueKind.media,
+        id: widget.media.id,
+      );
+      if (queue.any((entry) => entry.key == currentEntry.key)) {
+        await queueStore.remove(profileId: profile.id, entry: currentEntry);
+        queue.removeWhere((entry) => entry.key == currentEntry.key);
+      }
+      await MusicLibraryStore.instance.initializeForProfile(profile.id);
+      MediaItem? nextMedia;
+      MusicTrack? nextTrack;
+      PlaybackQueueEntry? nextEntry;
+      for (final entry in queue) {
+        if (entry.kind == PlaybackQueueKind.media) {
+          if (entry.id == widget.media.id) continue;
+          for (final item in controller.library) {
+            if (item.id == entry.id && item.isAccessibleTo(profile)) {
+              nextMedia = item;
+              nextEntry = entry;
+              break;
+            }
+          }
+        } else {
+          final track = MusicLibraryStore.instance.trackById(entry.id);
+          if (track != null &&
+              track.audioUrl?.trim().isNotEmpty == true &&
+              !(profileBlocksExplicitMusic(profile) && track.explicit) &&
+              !(profileBlocksMatureMusic(profile) && track.matureTheme)) {
+            nextTrack = track;
+            nextEntry = entry;
+          }
+        }
+        if (nextMedia != null || nextTrack != null) break;
+      }
+      if (!mounted || nextEntry == null) return;
+
+      final queuedEntry = nextEntry;
+      final queuedMedia = nextMedia;
+      final queuedTrack = nextTrack;
+      final queuedTitle = queuedMedia?.title ?? queuedTrack!.title;
+      final queuedSubtitle = queuedMedia?.type ??
+          '${queuedTrack!.artist} · ${queuedTrack.album}';
+      showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Up next'),
+          content: Text('$queuedTitle\n$queuedSubtitle'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Keep watching later'),
+            ),
+            FilledButton.icon(
+              onPressed: () async {
+                final navigator = Navigator.of(context);
+                final dialogNavigator = Navigator.of(dialogContext);
+                final messenger = ScaffoldMessenger.of(context);
+                try {
+                  await queueStore.remove(
+                      profileId: profile.id, entry: queuedEntry);
+                  if (!mounted ||
+                      !navigator.mounted ||
+                      !dialogNavigator.mounted) {
+                    return;
+                  }
+                  dialogNavigator.pop();
+                  if (queuedMedia != null) {
+                    navigator.pushReplacement(
+                      MaterialPageRoute<void>(
+                        builder: (_) => PlayerScreen(media: queuedMedia),
+                      ),
+                    );
+                  } else {
+                    musicWasPlayingBeforeVideo = false;
+                    navigator.pushReplacement(
+                      MaterialPageRoute<void>(
+                        builder: (_) => MusicTrackDisplayScreen(
+                          track: queuedTrack!,
+                          mode: MusicTrackDisplayMode.visualizer,
+                        ),
+                      ),
+                    );
+                    await MusicPlaybackController.instance.play(queuedTrack!);
+                  }
+                } catch (error) {
+                  if (mounted && messenger.mounted) {
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text('Could not start the queued title: $error'),
+                      ),
+                    );
+                  }
+                }
+              },
+              icon: const Icon(Icons.play_arrow_rounded),
+              label: const Text('Play next'),
+            ),
+          ],
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load the playback queue: $error')),
+        );
+      }
+    }
   }
 
   /// Performs `startAutoplayCountdown` for this feature. Update this documentation when its contract changes.

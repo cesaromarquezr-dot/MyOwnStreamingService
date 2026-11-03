@@ -21,6 +21,18 @@ import 'core/models/profile_governance.dart';
 import 'core/models/platform_server.dart';
 import 'media_graph_relationship.dart';
 
+class MediaMetadataProtection {
+  const MediaMetadataProtection._();
+
+  static Set<String> protectedFieldsFrom(dynamic value) {
+    if (value is! List) return <String>{};
+    return value.map((field) => field.toString()).toSet();
+  }
+
+  static bool allowsProviderUpdate(Set<String> protectedFields, String field) =>
+      !protectedFields.contains(field);
+}
+
 /// Keeps legacy or externally supplied metadata outside this product's media scope.
 /// MyOwnStreamingService supports movies, series, episodes, and music tracks/albums;
 /// podcasts, audiobooks, and internet radio are intentionally not product categories.
@@ -126,6 +138,9 @@ class MediaItem {
 
   /// Original release year for a movie, or the first-air year for a series.
   final int? releaseYear;
+
+  /// Catalog runtime in minutes when an authoritative value is available.
+  final int? runtimeMinutes;
 
   /// Full original release date when supplied by trusted catalog metadata.
   /// Stored as a date-only value for reliable chronological sorting.
@@ -394,6 +409,7 @@ class MediaItem {
     this.heroTitleArtworkAuthorized = false,
     this.detailTitleArtworkAuthorized = false,
     this.releaseYear,
+    this.runtimeMinutes,
     this.releaseDate,
     this.editionReleaseYear,
     this.editionReleaseDate,
@@ -695,6 +711,12 @@ class MediaItem {
             data['releaseYear'] ?? data['release_year'] ?? data['year'],
           ) ??
           parsedReleaseDate?.year,
+      runtimeMinutes: _intValue(
+        data['runtimeMinutes'] ??
+            data['runtime_minutes'] ??
+            data['durationMinutes'] ??
+            data['duration_minutes'],
+      ),
       releaseDate: parsedReleaseDate,
       editionReleaseYear: _intValue(
             data['editionReleaseYear'] ?? data['edition_release_year'],
@@ -1452,6 +1474,7 @@ class MediaItem {
       'heroTitleArtworkAuthorized': heroTitleArtworkAuthorized,
       'detailTitleArtworkAuthorized': detailTitleArtworkAuthorized,
       'releaseYear': releaseYear,
+      'runtimeMinutes': runtimeMinutes,
       'releaseDate': releaseDate?.toIso8601String().substring(0, 10),
       'editionReleaseYear': editionReleaseYear,
       'editionReleaseDate':
@@ -4517,7 +4540,7 @@ class AppController extends ChangeNotifier {
     }
 
     if (!changed) return;
-    _refreshAutomaticCollections();
+    _refreshAutomaticCollections(notify: notify);
     if (notify) notifyListeners();
   }
 
@@ -4654,6 +4677,7 @@ class AppController extends ChangeNotifier {
   /// persistence still obeys the profile's existing privacy setting.
   Future<void> mergeProviderTitleCredits({
     required String mediaId,
+    String provenanceSource = 'TMDB',
     String? posterUrl,
     List<String> actors = const <String>[],
     List<String> characters = const <String>[],
@@ -4666,8 +4690,24 @@ class AppController extends ChangeNotifier {
     String? providerLastAirDate,
     String? providerStatus,
   }) async {
-    final index = library.indexWhere((item) => item.id == mediaId);
-    if (index < 0) return;
+    if (!library.any((item) => item.id == mediaId)) return;
+    final profile = currentProfile;
+    final api = backendApi;
+    Map<String, dynamic> provenance = <String, dynamic>{};
+    if (profile != null && api.isAuthenticated) {
+      final records = await api.getAppRecords(
+        profileId: profile.id,
+        recordType: 'media_metadata_provenance',
+      );
+      for (final record in records) {
+        if (record['recordKey'] == 'media:$mediaId' && record['data'] is Map) {
+          provenance = Map<String, dynamic>.from(record['data'] as Map);
+          break;
+        }
+      }
+    }
+    final protectedFields = MediaMetadataProtection.protectedFieldsFrom(
+        provenance['protectedFields']);
 
     List<String> merge(Iterable<String> current, Iterable<String> incoming) {
       final seen = <String>{};
@@ -4691,20 +4731,46 @@ class AppController extends ChangeNotifier {
           : DateTime(parsed.year, parsed.month, parsed.day);
     }
 
+    final index = library.indexWhere((item) => item.id == mediaId);
+    if (index < 0) return;
     final current = library[index];
-    final mergedActors = merge(current.actors, actors);
-    final mergedCharacters = merge(current.characters, characters);
-    final mergedDirectors = merge(current.directors, directors);
-    final mergedWriters = merge(current.writers, writers);
-    final mergedMusic = merge(current.music, music);
-    final mergedGenres = GenreSystem.normalizeGenres(
-        <String>[...current.genres, ...providerGenres]);
-    final mergedTags = merge(current.tags, providerKeywords);
+    final mergedActors =
+        !MediaMetadataProtection.allowsProviderUpdate(protectedFields, 'actors')
+            ? current.actors
+            : merge(current.actors, actors);
+    final mergedCharacters = !MediaMetadataProtection.allowsProviderUpdate(
+            protectedFields, 'characters')
+        ? current.characters
+        : merge(current.characters, characters);
+    final mergedDirectors = !MediaMetadataProtection.allowsProviderUpdate(
+            protectedFields, 'directors')
+        ? current.directors
+        : merge(current.directors, directors);
+    final mergedWriters = !MediaMetadataProtection.allowsProviderUpdate(
+            protectedFields, 'writers')
+        ? current.writers
+        : merge(current.writers, writers);
+    final mergedMusic =
+        !MediaMetadataProtection.allowsProviderUpdate(protectedFields, 'music')
+            ? current.music
+            : merge(current.music, music);
+    final mergedGenres =
+        !MediaMetadataProtection.allowsProviderUpdate(protectedFields, 'genres')
+            ? current.genres
+            : GenreSystem.normalizeGenres(
+                <String>[...current.genres, ...providerGenres]);
+    final mergedTags =
+        !MediaMetadataProtection.allowsProviderUpdate(protectedFields, 'tags')
+            ? current.tags
+            : merge(current.tags, providerKeywords);
     final currentPoster = current.imageUrl?.trim() ?? '';
     final incomingPoster = posterUrl?.trim() ?? '';
     // Keep any existing poster selection; use TMDB only when the catalog has
     // no image at all. A catalog may intentionally use custom/title-card art.
-    final shouldFillPoster = currentPoster.isEmpty && incomingPoster.isNotEmpty;
+    final shouldFillPoster = MediaMetadataProtection.allowsProviderUpdate(
+            protectedFields, 'imageUrl') &&
+        currentPoster.isEmpty &&
+        incomingPoster.isNotEmpty;
     final parsedStart = dateOnly(providerReleaseDate);
     final parsedEnd = dateOnly(providerLastAirDate);
     final cleanStatus = providerStatus?.trim() ?? '';
@@ -4719,21 +4785,31 @@ class AppController extends ChangeNotifier {
           'ongoing',
           'airing',
         }.contains(normalizedStatus);
-    final fillMovieDate =
-        !current.isSeries && current.releaseDate == null && parsedStart != null;
-    final fillSeriesStart = current.isSeries &&
+    final protectDates = !MediaMetadataProtection.allowsProviderUpdate(
+        protectedFields, 'releaseDate');
+    final fillMovieDate = !protectDates &&
+        !current.isSeries &&
+        current.releaseDate == null &&
+        parsedStart != null;
+    final fillSeriesStart = !protectDates &&
+        current.isSeries &&
         current.seriesStartDate == null &&
         parsedStart != null;
-    final fillReleaseDate = current.releaseDate == null && parsedStart != null;
-    final fillSeriesEnd = current.isSeries &&
+    final fillReleaseDate =
+        !protectDates && current.releaseDate == null && parsedStart != null;
+    final fillSeriesEnd = !protectDates &&
+        current.isSeries &&
         current.seriesEndYear == null &&
         parsedEnd != null &&
         !providerOngoing;
-    final fillSeriesStatus = current.isSeries &&
+    final fillSeriesStatus = !protectDates &&
+        current.isSeries &&
         (current.seriesStatus?.trim().isNotEmpty != true) &&
         cleanStatus.isNotEmpty;
-    final fillSeriesOngoing =
-        current.isSeries && providerOngoing && !current.seriesOngoing;
+    final fillSeriesOngoing = !protectDates &&
+        current.isSeries &&
+        providerOngoing &&
+        !current.seriesOngoing;
     bool equal(List<String> a, List<String> b) =>
         a.length == b.length &&
         List.generate(a.length, (i) => a[i] == b[i]).every((v) => v);
@@ -4752,6 +4828,55 @@ class AppController extends ChangeNotifier {
         fillSeriesStatus ||
         fillSeriesOngoing;
     if (!coreChanged) return;
+
+    final updatedFields = <String>{};
+    if (shouldFillPoster) updatedFields.add('imageUrl');
+    if (!equal(mergedActors, current.actors)) updatedFields.add('actors');
+    if (!equal(mergedCharacters, current.characters)) {
+      updatedFields.add('characters');
+    }
+    if (!equal(mergedDirectors, current.directors)) {
+      updatedFields.add('directors');
+    }
+    if (!equal(mergedWriters, current.writers)) updatedFields.add('writers');
+    if (!equal(mergedMusic, current.music)) updatedFields.add('music');
+    if (!equal(mergedGenres, current.genres)) updatedFields.add('genres');
+    if (!equal(mergedTags, current.tags)) updatedFields.add('tags');
+    if (fillReleaseDate ||
+        fillMovieDate ||
+        fillSeriesStart ||
+        fillSeriesEnd ||
+        fillSeriesStatus ||
+        fillSeriesOngoing) {
+      updatedFields.add('releaseDate');
+    }
+
+    if (profile != null && api.isAuthenticated && updatedFields.isNotEmpty) {
+      final rawSources = provenance['sources'];
+      final sources = rawSources is Map
+          ? Map<String, dynamic>.from(rawSources)
+          : <String, dynamic>{};
+      final importedAt = DateTime.now().toUtc().toIso8601String();
+      for (final field in updatedFields) {
+        sources[field] = <String, dynamic>{
+          'source': provenanceSource,
+          'updatedAt': importedAt,
+        };
+      }
+      provenance = {
+        ...provenance,
+        'mediaId': mediaId,
+        'protectedFields': protectedFields.toList()..sort(),
+        'sources': sources,
+        'updatedAt': importedAt,
+      };
+      await api.saveAppRecord(
+        profileId: profile.id,
+        recordType: 'media_metadata_provenance',
+        recordKey: 'media:$mediaId',
+        data: provenance,
+      );
+    }
 
     final startDateText = parsedStart?.toIso8601String().substring(0, 10);
     final endDate = parsedEnd;
@@ -4783,7 +4908,6 @@ class AppController extends ChangeNotifier {
     _mergeCatalog(musicCatalog, mergedMusic);
     _refreshAutomaticCollections();
 
-    final profile = currentProfile;
     if (profile != null) {
       try {
         final visibleItems = library
@@ -7561,7 +7685,7 @@ class AppController extends ChangeNotifier {
   /// adaptation metadata identifies at least one library title. The previous
   /// implementation waited for the complete franchise count, which meant a
   /// partially owned franchise could never appear on the Collections screen.
-  void _refreshAutomaticCollections() {
+  void _refreshAutomaticCollections({bool notify = true}) {
     // User-created smart collections are recalculated from the current profile's
     // authoritative library/reaction/history state whenever that state changes.
     for (final collection
@@ -7686,6 +7810,7 @@ class AppController extends ChangeNotifier {
         id: collectionId,
         name: entry.value.first.franchiseName!,
         type: entry.value.first.franchiseType ?? 'Franchise',
+        notify: notify,
       );
       collection.mediaIds
         ..clear()
@@ -7705,6 +7830,7 @@ class AppController extends ChangeNotifier {
         id: id,
         name: definition['name'] as String,
         type: definition['type'] as String,
+        notify: notify,
       );
       collection.mediaIds
         ..clear()
@@ -7734,6 +7860,7 @@ class AppController extends ChangeNotifier {
     required String id,
     required String name,
     required String type,
+    bool notify = true,
   }) {
     final existing = collections.where(
       (collection) =>
@@ -7758,8 +7885,10 @@ class AppController extends ChangeNotifier {
     if (!featuredCollectionOrder.contains(collection.id)) {
       featuredCollectionOrder.add(collection.id);
     }
-    addNotification(
-        action: 'a new automatic collection was created: ${collection.name}');
+    if (notify) {
+      addNotification(
+          action: 'a new automatic collection was created: ${collection.name}');
+    }
     return collection;
   }
 

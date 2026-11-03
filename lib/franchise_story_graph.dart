@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
+import 'backend_api.dart';
 import 'details.dart';
 
 /// Story-oriented graph and timeline for a franchise, saga, universe or character.
@@ -32,6 +33,12 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
   List<_ActorConnection> _actorConnectionPath = const <_ActorConnection>[];
   String? _actorConnectionMessage;
   bool _actorConnectionSearched = false;
+  bool _loadingManualStoryData = false;
+  String? _manualStoryDataError;
+  List<({String sourceId, Map<String, dynamic> connection})> _manualEdges =
+      const <({String sourceId, Map<String, dynamic> connection})>[];
+  Map<String, Map<String, dynamic>> _storyPlacements =
+      const <String, Map<String, dynamic>>{};
   late String _view;
   String _continuity = 'All continuities';
   String _timelineOrder = 'Release order';
@@ -45,6 +52,7 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
     _actorFrom = TextEditingController();
     _actorTo = TextEditingController();
     _view = widget.initialView == 'Timeline' ? 'Timeline' : 'Graph';
+    _loadManualStoryData();
   }
 
   @override
@@ -55,10 +63,91 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
     super.dispose();
   }
 
-  static String _normalize(String value) => value
-      .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
-      .trim();
+  static String _normalize(String value) =>
+      value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+
+  Future<void> _loadManualStoryData() async {
+    final api = AppController.instance.backendApi;
+    if (!api.isAuthenticated) return;
+    _loadingManualStoryData = true;
+    try {
+      final records = await Future.wait([
+        api.getAppRecords(recordType: 'media_franchise_connections'),
+        api.getAppRecords(recordType: 'media_continuity'),
+      ]);
+      final edges = <({String sourceId, Map<String, dynamic> connection})>[];
+      final placements = <String, Map<String, dynamic>>{};
+      const edgePrefix = 'media_franchise_connections:';
+      const continuityPrefix = 'media_continuity:';
+      for (final record in records[0]) {
+        final key = record['recordKey']?.toString() ?? '';
+        final data = record['data'];
+        if (!key.startsWith(edgePrefix) || data is! Map) continue;
+        final sourceId = key.substring(edgePrefix.length);
+        final rawConnections = data['connections'];
+        if (rawConnections is! List) continue;
+        for (final rawConnection in rawConnections.whereType<Map>()) {
+          edges.add((
+            sourceId: sourceId,
+            connection: Map<String, dynamic>.from(rawConnection),
+          ));
+        }
+      }
+      for (final record in records[1]) {
+        final key = record['recordKey']?.toString() ?? '';
+        final data = record['data'];
+        if (!key.startsWith(continuityPrefix) || data is! Map) continue;
+        final mediaId = key.substring(continuityPrefix.length);
+        final chronology = data['storyChronology'];
+        if (chronology is Map) {
+          placements[mediaId] = Map<String, dynamic>.from(chronology);
+        }
+        final rawConnections = data['relationships'];
+        if (rawConnections is List) {
+          for (final rawConnection in rawConnections.whereType<Map>()) {
+            edges.add((
+              sourceId: mediaId,
+              connection: <String, dynamic>{
+                ...Map<String, dynamic>.from(rawConnection),
+                'relatedId': rawConnection['mediaId'],
+                'otherTitle': rawConnection['title'],
+                'relationshipType': rawConnection['type'] ?? 'Story connection',
+                'note': rawConnection['storyTime'],
+              },
+            ));
+          }
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _manualEdges = edges;
+        _storyPlacements = placements;
+        _manualStoryDataError = null;
+        _loadingManualStoryData = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _manualStoryDataError = error.toString();
+        _loadingManualStoryData = false;
+      });
+    }
+  }
+
+  Map<String, dynamic> _storyPlacement(MediaItem item) =>
+      _storyPlacements[item.id] ?? const <String, dynamic>{};
+
+  int? _manualStoryYear(MediaItem item) {
+    final raw = _storyPlacement(item)['year'];
+    if (raw is num) return raw.toInt();
+    return int.tryParse(raw?.toString() ?? '');
+  }
+
+  int? _manualStoryOrder(MediaItem item) {
+    final raw = _storyPlacement(item)['order'];
+    if (raw is num) return raw.toInt();
+    return int.tryParse(raw?.toString() ?? '');
+  }
 
   List<MediaItem> get _visibleItems {
     final profile = AppController.instance.currentProfile;
@@ -81,10 +170,13 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
 
   List<_StoryPath> get _matchingCuratedPaths {
     final query = _normalize(_search.text);
-    final isMcuSearch = query == 'mcu' || query.contains('marvel cinematic universe');
+    final isMcuSearch =
+        query == 'mcu' || query.contains('marvel cinematic universe');
     if (isMcuSearch) {
       if (_continuity == 'All continuities' || _continuity == 'MCU') {
-        return _storyPaths.where((path) => path.continuityKey == 'MCU').toList();
+        return _storyPaths
+            .where((path) => path.continuityKey == 'MCU')
+            .toList();
       }
       return const <_StoryPath>[];
     }
@@ -112,9 +204,8 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
   List<MediaItem> get _catalogMatches {
     final query = _normalize(_search.text);
     final groupContext = _isGroupContext;
-    Iterable<MediaItem> candidates = groupContext
-        ? widget.initialItems!
-        : _visibleItems;
+    Iterable<MediaItem> candidates =
+        groupContext ? widget.initialItems! : _visibleItems;
 
     if (query.isEmpty && !groupContext) {
       candidates = candidates.where((item) =>
@@ -124,7 +215,8 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
           (item.continuityName ?? '').trim().isNotEmpty ||
           item.universeMemberships.isNotEmpty);
     } else if (!groupContext && query.isNotEmpty) {
-      final mcuAlias = query == 'mcu' || query.contains('marvel cinematic universe');
+      final mcuAlias =
+          query == 'mcu' || query.contains('marvel cinematic universe');
       candidates = candidates.where((item) {
         final searchable = <String>[
           item.title,
@@ -138,7 +230,8 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
           if (item.continuityName != null) item.continuityName!,
           ...item.cinematicUniverseNames,
           ...item.universeMemberships.map((membership) =>
-              (membership['name'] ?? membership['universeName'] ?? '').toString()),
+              (membership['name'] ?? membership['universeName'] ?? '')
+                  .toString()),
         ];
         return (mcuAlias && _hasMcuMembership(item)) ||
             searchable.any((value) => _normalize(value).contains(query));
@@ -152,16 +245,91 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
       });
     }
 
-    final result = candidates.toList();
+    final visibleById = <String, MediaItem>{
+      for (final item in _visibleItems) item.id: item,
+    };
+    final visibleByTitle = <String, List<MediaItem>>{};
+    for (final item in _visibleItems) {
+      visibleByTitle
+          .putIfAbsent(_normalize(item.title), () => <MediaItem>[])
+          .add(item);
+    }
+    final resultById = <String, MediaItem>{
+      for (final item in candidates) item.id: item,
+    };
+    String? connectionTargetId(
+        Map<String, dynamic> connection, Map<String, MediaItem> itemsById) {
+      final id = (connection['relatedId'] ??
+              connection['mediaId'] ??
+              connection['otherId'])
+          ?.toString()
+          .trim();
+      if (id != null && id.isNotEmpty && itemsById.containsKey(id)) return id;
+      final title = (connection['otherTitle'] ?? connection['title'])
+              ?.toString()
+              .trim() ??
+          '';
+      final matches = visibleByTitle[_normalize(title)] ?? const <MediaItem>[];
+      return matches.length == 1 ? matches.single.id : null;
+    }
+
+    var changed = true;
+    while (changed) {
+      changed = false;
+      for (final edge in _manualEdges) {
+        final source = visibleById[edge.sourceId];
+        final targetId = connectionTargetId(edge.connection, visibleById);
+        final target = targetId == null ? null : visibleById[targetId];
+        if (source == null || target == null) continue;
+        if (_continuity != 'All continuities' &&
+            _catalogContinuityLabel(target) != _continuity) {
+          continue;
+        }
+        if (resultById.containsKey(source.id) &&
+            !resultById.containsKey(target.id)) {
+          resultById[target.id] = target;
+          changed = true;
+        }
+        if (resultById.containsKey(target.id) &&
+            !resultById.containsKey(source.id)) {
+          resultById[source.id] = source;
+          changed = true;
+        }
+      }
+    }
+
+    final result = resultById.values.toList();
     result.sort((a, b) {
       final aOrder = _timelineOrder == 'Story chronology'
-          ? (a.cinematicUniverseTimelineOrder ?? a.cinematicUniverseReleaseOrder ?? a.franchiseOrder ?? a.releaseYear ?? 9999)
-          : (a.cinematicUniverseReleaseOrder ?? a.franchiseOrder ?? a.releaseYear ?? 9999);
+          ? (_manualStoryYear(a) ??
+              a.cinematicUniverseTimelineOrder ??
+              a.cinematicUniverseReleaseOrder ??
+              a.franchiseOrder ??
+              a.releaseYear ??
+              9999)
+          : (a.cinematicUniverseReleaseOrder ??
+              a.franchiseOrder ??
+              a.releaseYear ??
+              9999);
       final bOrder = _timelineOrder == 'Story chronology'
-          ? (b.cinematicUniverseTimelineOrder ?? b.cinematicUniverseReleaseOrder ?? b.franchiseOrder ?? b.releaseYear ?? 9999)
-          : (b.cinematicUniverseReleaseOrder ?? b.franchiseOrder ?? b.releaseYear ?? 9999);
+          ? (_manualStoryYear(b) ??
+              b.cinematicUniverseTimelineOrder ??
+              b.cinematicUniverseReleaseOrder ??
+              b.franchiseOrder ??
+              b.releaseYear ??
+              9999)
+          : (b.cinematicUniverseReleaseOrder ??
+              b.franchiseOrder ??
+              b.releaseYear ??
+              9999);
       final orderCompare = aOrder.compareTo(bOrder);
       if (orderCompare != 0) return orderCompare;
+      if (_timelineOrder == 'Story chronology') {
+        final aManualOrder = _manualStoryOrder(a) ?? (1 << 30);
+        final bManualOrder = _manualStoryOrder(b) ?? (1 << 30);
+        final manualOrderCompare = aManualOrder.compareTo(bManualOrder);
+        if (manualOrderCompare != 0) return manualOrderCompare;
+      }
       return a.title.toLowerCase().compareTo(b.title.toLowerCase());
     });
     return result;
@@ -191,21 +359,29 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
       ...item.universeMemberships.map((membership) =>
           (membership['name'] ?? membership['universeName'] ?? '').toString()),
     ].map(_normalize).toList();
-    if (values.any((value) => value.contains('spider verse') || value.contains('spiderverse'))) {
+    if (values.any((value) =>
+        value.contains('spider verse') || value.contains('spiderverse'))) {
       return 'Spider-Verse';
     }
-    if (values.any((value) => value == 'mcu' || value.contains('marvel cinematic universe'))) {
+    if (values.any((value) =>
+        value == 'mcu' || value.contains('marvel cinematic universe'))) {
       return 'MCU';
     }
-    if (values.any((value) => value.contains('multiverse'))) return 'Multiverse';
-    if (values.any((value) => value.contains('spider man') || value.contains('spiderman'))) {
+    if (values.any((value) => value.contains('multiverse'))) {
+      return 'Multiverse';
+    }
+    if (values.any((value) =>
+        value.contains('spider man') || value.contains('spiderman'))) {
       return 'Multiverse';
     }
     return 'Other';
   }
 
   MediaItem? _findCatalogItem(_StoryStep step) {
-    final aliases = <String>{_normalize(step.title), ...step.aliases.map(_normalize)};
+    final aliases = <String>{
+      _normalize(step.title),
+      ...step.aliases.map(_normalize)
+    };
     for (final item in _visibleItems) {
       if (aliases.contains(_normalize(item.title))) return item;
     }
@@ -219,7 +395,8 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
       setState(() {
         _actorConnectionSearched = true;
         _actorConnectionPath = const <_ActorConnection>[];
-        _actorConnectionMessage = 'Enter both actor names to find a connection.';
+        _actorConnectionMessage =
+            'Enter both actor names to find a connection.';
       });
       return;
     }
@@ -251,8 +428,10 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
 
     String? resolveActor(String key) {
       if (displayNames.containsKey(key)) return key;
-      final matches = displayNames.keys.where((candidate) =>
-          candidate.contains(key) || key.contains(candidate)).toList();
+      final matches = displayNames.keys
+          .where(
+              (candidate) => candidate.contains(key) || key.contains(candidate))
+          .toList();
       return matches.length == 1 ? matches.single : null;
     }
 
@@ -265,7 +444,8 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
       setState(() {
         _actorConnectionSearched = true;
         _actorConnectionPath = const <_ActorConnection>[];
-        _actorConnectionMessage = 'Could not uniquely match ${missing.join(' and ')} in the accessible catalog cast credits. Add or import verified cast metadata for those actors and try again.';
+        _actorConnectionMessage =
+            'Could not uniquely match ${missing.join(' and ')} in the accessible catalog cast credits. Add or import verified cast metadata for those actors and try again.';
       });
       return;
     }
@@ -279,7 +459,11 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
       for (final title in credits[current] ?? const <MediaItem>[]) {
         for (final rawName in title.actors) {
           final next = _normalize(rawName);
-          if (next.isEmpty || next == current || !displayNames.containsKey(next)) continue;
+          if (next.isEmpty ||
+              next == current ||
+              !displayNames.containsKey(next)) {
+            continue;
+          }
           if (visited.add(next)) {
             parent[next] = (actor: current, title: title);
             if (next == goal) {
@@ -297,7 +481,8 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
       setState(() {
         _actorConnectionSearched = true;
         _actorConnectionPath = const <_ActorConnection>[];
-        _actorConnectionMessage = 'No cast-credit path was found between ${displayNames[start]} and ${displayNames[goal]} in the accessible catalog. This is a catalog-coverage result, not proof that no real-world connection exists.';
+        _actorConnectionMessage =
+            'No cast-credit path was found between ${displayNames[start]} and ${displayNames[goal]} in the accessible catalog. This is a catalog-coverage result, not proof that no real-world connection exists.';
       });
       return;
     }
@@ -333,14 +518,16 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_view == 'Graph' ? 'Connections Graph' : 'Franchise Timeline'),
+        title:
+            Text(_view == 'Graph' ? 'Connections Graph' : 'Franchise Timeline'),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Text(
             'Explore how titles connect, then switch between relationship paths and a timeline. Curated paths are examples; catalog-derived results depend on available metadata.',
-            style: TextStyle(color: Colors.white.withValues(alpha: .78), height: 1.4),
+            style: TextStyle(
+                color: Colors.white.withValues(alpha: .78), height: 1.4),
           ),
           const SizedBox(height: 14),
           Card(
@@ -352,26 +539,64 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
                   Row(children: [
                     const Icon(Icons.people_alt_outlined),
                     const SizedBox(width: 8),
-                    Expanded(child: Text('Actor-to-actor connections', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800))),
+                    Expanded(
+                        child: Text('Actor-to-actor connections',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w800))),
                   ]),
                   const SizedBox(height: 6),
-                  const Text('Find the shortest chain of co-stars. Each arrow names the movie or show where two actors share cast credits.', style: TextStyle(color: Colors.white60, height: 1.35)),
+                  const Text(
+                      'Find the shortest chain of co-stars. Each arrow names the movie or show where two actors share cast credits.',
+                      style: TextStyle(color: Colors.white60, height: 1.35)),
                   const SizedBox(height: 12),
-                  TextField(controller: _actorFrom, textInputAction: TextInputAction.next, decoration: const InputDecoration(labelText: 'Connect actor', hintText: 'Florence Pugh', border: OutlineInputBorder())),
+                  TextField(
+                      controller: _actorFrom,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                          labelText: 'Connect actor',
+                          hintText: 'Florence Pugh',
+                          border: OutlineInputBorder())),
                   const SizedBox(height: 8),
-                  TextField(controller: _actorTo, textInputAction: TextInputAction.search, onSubmitted: (_) => _findActorConnection(), decoration: const InputDecoration(labelText: 'To actor', hintText: 'Robin Williams', border: OutlineInputBorder())),
+                  TextField(
+                      controller: _actorTo,
+                      textInputAction: TextInputAction.search,
+                      onSubmitted: (_) => _findActorConnection(),
+                      decoration: const InputDecoration(
+                          labelText: 'To actor',
+                          hintText: 'Robin Williams',
+                          border: OutlineInputBorder())),
                   const SizedBox(height: 10),
-                  SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _findActorConnection, icon: const Icon(Icons.hub_outlined), label: const Text('Find actor connection'))),
+                  SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                          onPressed: _findActorConnection,
+                          icon: const Icon(Icons.hub_outlined),
+                          label: const Text('Find actor connection'))),
                   if (_actorConnectionSearched) ...[
                     const Divider(height: 24),
                     if (_actorConnectionMessage != null)
-                      Text(_actorConnectionMessage!, style: const TextStyle(color: Colors.amberAccent, height: 1.35))
+                      Text(_actorConnectionMessage!,
+                          style: const TextStyle(
+                              color: Colors.amberAccent, height: 1.35))
                     else ...[
-                      Text('Connection path · ${_actorConnectionPath.length} link(s)', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800)),
+                      Text(
+                          'Connection path · ${_actorConnectionPath.length} link(s)',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w800)),
                       const SizedBox(height: 8),
-                      for (final link in _actorConnectionPath) _ActorConnectionTile(link: link),
+                      for (final link in _actorConnectionPath)
+                        _ActorConnectionTile(link: link),
                       const SizedBox(height: 4),
-                      const Text('Connections are calculated from cast names in your accessible catalog. Missing or incomplete credits can hide valid real-world paths.', style: TextStyle(color: Colors.white38, fontSize: 11, height: 1.35)),
+                      const Text(
+                          'Connections are calculated from cast names in your accessible catalog. Missing or incomplete credits can hide valid real-world paths.',
+                          style: TextStyle(
+                              color: Colors.white38,
+                              fontSize: 11,
+                              height: 1.35)),
                     ],
                   ],
                 ],
@@ -420,12 +645,18 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
               border: OutlineInputBorder(),
             ),
             items: const [
-              DropdownMenuItem(value: 'All continuities', child: Text('All continuities')),
+              DropdownMenuItem(
+                  value: 'All continuities', child: Text('All continuities')),
               DropdownMenuItem(value: 'MCU', child: Text('MCU')),
-              DropdownMenuItem(value: 'Multiverse', child: Text('Multiverse (live-action Spider-Man)')),
-              DropdownMenuItem(value: 'Spider-Verse', child: Text('Spider-Verse (animated)')),
+              DropdownMenuItem(
+                  value: 'Multiverse',
+                  child: Text('Multiverse (live-action Spider-Man)')),
+              DropdownMenuItem(
+                  value: 'Spider-Verse',
+                  child: Text('Spider-Verse (animated)')),
             ],
-            onChanged: (value) => setState(() => _continuity = value ?? 'All continuities'),
+            onChanged: (value) =>
+                setState(() => _continuity = value ?? 'All continuities'),
           ),
           const SizedBox(height: 10),
           Wrap(
@@ -455,23 +686,49 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
                 border: OutlineInputBorder(),
               ),
               items: const [
-                DropdownMenuItem(value: 'Release order', child: Text('Release order')),
-                DropdownMenuItem(value: 'Story chronology', child: Text('Story chronology (when known)')),
+                DropdownMenuItem(
+                    value: 'Release order', child: Text('Release order')),
+                DropdownMenuItem(
+                    value: 'Story chronology',
+                    child: Text('Story chronology (when known)')),
               ],
-              onChanged: (value) => setState(() => _timelineOrder = value ?? 'Release order'),
+              onChanged: (value) =>
+                  setState(() => _timelineOrder = value ?? 'Release order'),
             ),
           ],
           const SizedBox(height: 16),
+          if (_loadingManualStoryData) const LinearProgressIndicator(),
+          if (_manualStoryDataError != null)
+            Card(
+              color: Colors.red.withValues(alpha: .12),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(
+                  'Could not load your saved story connections and timeline placements: $_manualStoryDataError',
+                  style: const TextStyle(color: Colors.redAccent),
+                ),
+              ),
+            ),
           if (groupLabel != null) ...[
-            Text(groupLabel, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+            Text(groupLabel,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w900)),
             const SizedBox(height: 4),
-            Text('${catalogItems.length} matching catalog title(s)', style: const TextStyle(color: Colors.white60)),
+            Text('${catalogItems.length} matching catalog title(s)',
+                style: const TextStyle(color: Colors.white60)),
             const SizedBox(height: 12),
           ],
           if (curatedPaths.isNotEmpty) ...[
             Text(
-              _isWandaSearch ? 'Wanda Maximoff — connected story path' : 'Spider-Man — continuity paths',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+              _isWandaSearch
+                  ? 'Wanda Maximoff — connected story path'
+                  : 'Spider-Man — continuity paths',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 5),
             Text(
@@ -488,8 +745,13 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
             if (catalogItems.isNotEmpty) ...[
               const Divider(height: 30),
               Text(
-                groupLabel == null ? 'Also matching the visible catalog' : 'Full catalog group',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                groupLabel == null
+                    ? 'Also matching the visible catalog'
+                    : 'Full catalog group',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 5),
               Text(
@@ -499,13 +761,20 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
                 style: const TextStyle(color: Colors.white60, height: 1.35),
               ),
               const SizedBox(height: 10),
-              if (_view == 'Graph') _buildCatalogGraph(context, catalogItems, groupLabel)
-              else _buildCatalogTimeline(context, catalogItems),
+              if (_view == 'Graph')
+                _buildCatalogGraph(context, catalogItems, groupLabel)
+              else
+                _buildCatalogTimeline(context, catalogItems),
             ],
           ] else if (catalogItems.isNotEmpty) ...[
             Text(
-              _view == 'Graph' ? 'Catalog relationship graph' : 'Catalog timeline',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+              _view == 'Graph'
+                  ? 'Catalog relationship graph'
+                  : 'Catalog timeline',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 5),
             Text(
@@ -515,13 +784,16 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
               style: const TextStyle(color: Colors.white60, height: 1.35),
             ),
             const SizedBox(height: 10),
-            if (_view == 'Graph') _buildCatalogGraph(context, catalogItems, groupLabel)
-            else _buildCatalogTimeline(context, catalogItems),
+            if (_view == 'Graph')
+              _buildCatalogGraph(context, catalogItems, groupLabel)
+            else
+              _buildCatalogTimeline(context, catalogItems),
           ] else if (_search.text.trim().isEmpty) ...[
             const _ExplorerHintCard(
               icon: Icons.hub_rounded,
               title: 'Choose a character or universe',
-              description: 'Search Wanda to follow her MCU story, Spider-Man to split live-action multiverse, Spider-Verse and MCU paths, or enter a saga/franchise name.',
+              description:
+                  'Search Wanda to follow her MCU story, Spider-Man to split live-action multiverse, Spider-Verse and MCU paths, or enter a saga/franchise name.',
             ),
             const SizedBox(height: 10),
             _buildCatalogBrowseGroups(context),
@@ -529,7 +801,8 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
             const _ExplorerHintCard(
               icon: Icons.info_outline_rounded,
               title: 'No matching links found',
-              description: 'No accessible catalog titles or curated story path matched this search and continuity. Add verified character, continuity, franchise and prerequisite metadata to expand this graph.',
+              description:
+                  'No accessible catalog titles or curated story path matched this search and continuity. Add verified character, continuity, franchise and prerequisite metadata to expand this graph.',
             ),
           ],
           const SizedBox(height: 20),
@@ -552,9 +825,12 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(path.name, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
+            Text(path.name,
+                style:
+                    const TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
             const SizedBox(height: 4),
-            Text(path.description, style: const TextStyle(color: Colors.white60, height: 1.35)),
+            Text(path.description,
+                style: const TextStyle(color: Colors.white60, height: 1.35)),
             const SizedBox(height: 12),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -630,29 +906,99 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
     String? groupLabel,
   ) {
     final byId = <String, MediaItem>{for (final item in items) item.id: item};
-    final edges = <({MediaItem source, MediaItem target})>[];
+    final edges = <({
+      MediaItem source,
+      MediaItem target,
+      String relationship,
+      String? note,
+      bool manual,
+    })>[];
     for (final target in items) {
       for (final prerequisiteId in target.narrativePrerequisiteIds) {
         final source = byId[prerequisiteId];
-        if (source != null && source.id != target.id &&
-            !edges.any((edge) => edge.source.id == source.id && edge.target.id == target.id)) {
-          edges.add((source: source, target: target));
+        if (source != null &&
+            source.id != target.id &&
+            !edges.any((edge) =>
+                edge.source.id == source.id &&
+                edge.target.id == target.id &&
+                !edge.manual)) {
+          edges.add((
+            source: source,
+            target: target,
+            relationship: 'Story prerequisite',
+            note: null,
+            manual: false,
+          ));
         }
       }
+    }
+    final titleLookup = <String, List<MediaItem>>{};
+    for (final item in items) {
+      titleLookup
+          .putIfAbsent(_normalize(item.title), () => <MediaItem>[])
+          .add(item);
+    }
+    for (final manualEdge in _manualEdges) {
+      final source = byId[manualEdge.sourceId];
+      final relatedId = (manualEdge.connection['relatedId'] ??
+              manualEdge.connection['mediaId'] ??
+              manualEdge.connection['otherId'])
+          ?.toString()
+          .trim();
+      MediaItem? target = relatedId == null ? null : byId[relatedId];
+      if (target == null) {
+        final title = (manualEdge.connection['otherTitle'] ??
+                manualEdge.connection['title'])
+            ?.toString()
+            .trim();
+        final matches = title == null
+            ? const <MediaItem>[]
+            : titleLookup[_normalize(title)] ?? const <MediaItem>[];
+        if (matches.length == 1) target = matches.single;
+      }
+      if (source == null || target == null || source.id == target.id) continue;
+      final relationship =
+          (manualEdge.connection['relationshipType'] ?? 'Related to')
+              .toString()
+              .trim();
+      final note = (manualEdge.connection['note'] ??
+              manualEdge.connection['description'] ??
+              manualEdge.connection['storyTime'])
+          ?.toString()
+          .trim();
+      if (edges.any((edge) =>
+          edge.source.id == source.id &&
+          edge.target.id == target!.id &&
+          edge.relationship == relationship)) {
+        continue;
+      }
+      edges.add((
+        source: source,
+        target: target,
+        relationship: relationship.isEmpty ? 'Related to' : relationship,
+        note: note?.isEmpty == true ? null : note,
+        manual: true,
+      ));
     }
 
     // A second, data-driven relationship type: the same named fictional
     // character appears in two titles. This is distinct from shared cast or
     // franchise membership, and is shown even when no prerequisite was entered.
-    String characterKey(String value) => value.trim().toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
-    final characterEdges = <({MediaItem source, MediaItem target, List<String> characters})>[];
+    String characterKey(String value) => value
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .trim();
+    final characterEdges =
+        <({MediaItem source, MediaItem target, List<String> characters})>[];
     for (var i = 0; i < items.length; i++) {
       final left = items[i];
       final leftCharacters = <String, String>{};
       for (final character in left.characters) {
         final key = characterKey(character);
-        if (key.isNotEmpty) leftCharacters.putIfAbsent(key, () => character.trim());
+        if (key.isNotEmpty) {
+          leftCharacters.putIfAbsent(key, () => character.trim());
+        }
       }
       if (leftCharacters.isEmpty) continue;
       for (var j = i + 1; j < items.length; j++) {
@@ -660,14 +1006,18 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
         final rightCharacters = <String, String>{};
         for (final character in right.characters) {
           final key = characterKey(character);
-          if (key.isNotEmpty) rightCharacters.putIfAbsent(key, () => character.trim());
+          if (key.isNotEmpty) {
+            rightCharacters.putIfAbsent(key, () => character.trim());
+          }
         }
-        final sharedKeys = leftCharacters.keys.where(rightCharacters.containsKey).toList();
+        final sharedKeys =
+            leftCharacters.keys.where(rightCharacters.containsKey).toList();
         if (sharedKeys.isNotEmpty) {
           characterEdges.add((
             source: left,
             target: right,
-            characters: sharedKeys.map((key) => leftCharacters[key]!).toList()..sort(),
+            characters: sharedKeys.map((key) => leftCharacters[key]!).toList()
+              ..sort(),
           ));
         }
       }
@@ -682,27 +1032,41 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
               const Icon(Icons.hub_rounded, size: 30),
               const SizedBox(width: 10),
               Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(groupLabel ?? _search.text.trim(), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
-                  const Text('Shared universe / franchise hub', style: TextStyle(color: Colors.white60)),
-                ]),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(groupLabel ?? _search.text.trim(),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w900, fontSize: 17)),
+                      const Text('Shared universe / franchise hub',
+                          style: TextStyle(color: Colors.white60)),
+                    ]),
               ),
-              Text('${items.length} titles', style: const TextStyle(color: Colors.white60, fontSize: 12)),
+              Text('${items.length} titles',
+                  style: const TextStyle(color: Colors.white60, fontSize: 12)),
             ]),
           ),
         ),
         if (edges.isNotEmpty) ...[
           const Padding(
             padding: EdgeInsets.only(top: 14, bottom: 8),
-            child: Text('Story connections · arrows', style: TextStyle(fontWeight: FontWeight.w800)),
+            child: Text('Story connections · arrows',
+                style: TextStyle(fontWeight: FontWeight.w800)),
           ),
           for (final edge in edges)
             Card(
               child: ListTile(
-                leading: const Icon(Icons.arrow_forward_rounded),
+                leading: Icon(edge.manual
+                    ? Icons.edit_outlined
+                    : Icons.arrow_forward_rounded),
                 title: Text('${edge.source.title}  →  ${edge.target.title}'),
-                subtitle: const Text('Recorded story prerequisite: the source title leads into the target title'),
-                onTap: () => Navigator.of(context).push<void>(MaterialPageRoute<void>(
+                subtitle: Text([
+                  edge.relationship,
+                  if (edge.note?.isNotEmpty == true) edge.note!,
+                  if (edge.manual) 'Manually defined',
+                ].join(' · ')),
+                onTap: () =>
+                    Navigator.of(context).push<void>(MaterialPageRoute<void>(
                   builder: (_) => MediaDetailsScreen(media: edge.target),
                 )),
               ),
@@ -711,18 +1075,22 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
         if (characterEdges.isNotEmpty) ...[
           const Padding(
             padding: EdgeInsets.only(top: 14, bottom: 8),
-            child: Text('Shared characters · title-to-title links', style: TextStyle(fontWeight: FontWeight.w800)),
+            child: Text('Shared characters · title-to-title links',
+                style: TextStyle(fontWeight: FontWeight.w800)),
           ),
           const Padding(
             padding: EdgeInsets.only(bottom: 8),
-            child: Text('Each arrow connects two titles whose catalog metadata names the same character. These links show character overlap, not necessarily a direct plot prerequisite.', style: TextStyle(color: Colors.white60, height: 1.35)),
+            child: Text(
+                'Each arrow connects two titles whose catalog metadata names the same character. These links show character overlap, not necessarily a direct plot prerequisite.',
+                style: TextStyle(color: Colors.white60, height: 1.35)),
           ),
           for (final edge in characterEdges)
             Card(
               child: ListTile(
                 leading: const Icon(Icons.people_alt_rounded),
                 title: Text('${edge.source.title}  ⟶  ${edge.target.title}'),
-                subtitle: Text('Appears in both: ${edge.characters.join(', ')}'),
+                subtitle:
+                    Text('Appears in both: ${edge.characters.join(', ')}'),
                 isThreeLine: edge.characters.length > 2,
                 onTap: () => showModalBottomSheet<void>(
                   context: context,
@@ -734,27 +1102,43 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Shared characters', style: Theme.of(sheetContext).textTheme.titleLarge),
+                          Text('Shared characters',
+                              style:
+                                  Theme.of(sheetContext).textTheme.titleLarge),
                           const SizedBox(height: 8),
-                          Text('${edge.source.title}  →  ${edge.target.title}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                          Text('${edge.source.title}  →  ${edge.target.title}',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w700)),
                           const SizedBox(height: 8),
                           for (final character in edge.characters)
-                            ListTile(dense: true, leading: const Icon(Icons.person_outline_rounded), title: Text(character)),
+                            ListTile(
+                                dense: true,
+                                leading:
+                                    const Icon(Icons.person_outline_rounded),
+                                title: Text(character)),
                           const SizedBox(height: 8),
                           Wrap(spacing: 8, children: [
                             OutlinedButton.icon(
                               onPressed: () {
                                 Navigator.of(sheetContext).pop();
-                                Navigator.of(context).push<void>(MaterialPageRoute<void>(builder: (_) => MediaDetailsScreen(media: edge.source)));
+                                Navigator.of(context).push<void>(
+                                    MaterialPageRoute<void>(
+                                        builder: (_) => MediaDetailsScreen(
+                                            media: edge.source)));
                               },
-                              icon: const Icon(Icons.movie_outlined), label: Text(edge.source.title),
+                              icon: const Icon(Icons.movie_outlined),
+                              label: Text(edge.source.title),
                             ),
                             FilledButton.icon(
                               onPressed: () {
                                 Navigator.of(sheetContext).pop();
-                                Navigator.of(context).push<void>(MaterialPageRoute<void>(builder: (_) => MediaDetailsScreen(media: edge.target)));
+                                Navigator.of(context).push<void>(
+                                    MaterialPageRoute<void>(
+                                        builder: (_) => MediaDetailsScreen(
+                                            media: edge.target)));
                               },
-                              icon: const Icon(Icons.movie_outlined), label: Text(edge.target.title),
+                              icon: const Icon(Icons.movie_outlined),
+                              label: Text(edge.target.title),
                             ),
                           ]),
                         ],
@@ -766,13 +1150,17 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
             ),
         ],
         if (edges.isEmpty && characterEdges.isEmpty)
-          const Card(child: Padding(
+          const Card(
+              child: Padding(
             padding: EdgeInsets.all(14),
-            child: Text('No direct title-to-title links can be proven from the current metadata yet. Add shared character names or narrative prerequisite IDs to the titles to draw specific connections. The titles below remain grouped by their verified franchise/universe membership.', style: TextStyle(color: Colors.white70, height: 1.35)),
+            child: Text(
+                'No direct title-to-title links can be proven from the current metadata yet. Add shared character names or narrative prerequisite IDs to the titles to draw specific connections. The titles below remain grouped by their verified franchise/universe membership.',
+                style: TextStyle(color: Colors.white70, height: 1.35)),
           )),
         const Padding(
           padding: EdgeInsets.only(top: 14, bottom: 8),
-          child: Text('Titles linked to this hub', style: TextStyle(fontWeight: FontWeight.w800)),
+          child: Text('Titles linked to this hub',
+              style: TextStyle(fontWeight: FontWeight.w800)),
         ),
         Wrap(
           spacing: 8,
@@ -781,8 +1169,10 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
             for (final item in items)
               ActionChip(
                 avatar: Icon(_iconForItem(item), size: 16),
-                label: Text('${item.title}${item.releaseYear == null ? '' : ' (${item.releaseYear})'}'),
-                onPressed: () => Navigator.of(context).push<void>(MaterialPageRoute<void>(
+                label: Text(
+                    '${item.title}${item.releaseYear == null ? '' : ' (${item.releaseYear})'}'),
+                onPressed: () =>
+                    Navigator.of(context).push<void>(MaterialPageRoute<void>(
                   builder: (_) => MediaDetailsScreen(media: item),
                 )),
               ),
@@ -798,14 +1188,36 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
         for (var index = 0; index < items.length; index++)
           _TimelineTitleTile(
             title: items[index].title,
-            year: items[index].releaseYear ?? items[index].seriesStartYear,
+            year: _timelineOrder == 'Story chronology'
+                ? (_manualStoryYear(items[index]) ??
+                    items[index].cinematicUniverseTimelineOrder ??
+                    items[index].releaseYear ??
+                    items[index].seriesStartYear)
+                : items[index].releaseYear ?? items[index].seriesStartYear,
             yearLabel: _timelineOrder == 'Story chronology'
-                ? items[index].cinematicUniverseTimelineLabel
+                ? (_storyPlacement(items[index])['placement']?.toString() ??
+                    items[index].cinematicUniverseTimelineLabel)
                 : null,
-            subtitle: '${items[index].type}${items[index].continuityName == null ? '' : ' · ${items[index].continuityName}'}${_timelineOrder == 'Story chronology' && items[index].cinematicUniverseTimelineLabel?.trim().isNotEmpty == true ? ' · Story order: ${items[index].cinematicUniverseTimelineLabel}' : ''}',
+            subtitle: [
+              items[index].type,
+              if (items[index].continuityName != null)
+                items[index].continuityName!,
+              if (_timelineOrder == 'Story chronology' &&
+                  _manualStoryOrder(items[index]) != null)
+                'Story order: ${_manualStoryOrder(items[index])}',
+              if (_timelineOrder == 'Story chronology' &&
+                  (_storyPlacement(items[index])['note']?.toString() ?? '')
+                      .trim()
+                      .isNotEmpty)
+                _storyPlacement(items[index])['note'].toString(),
+              if (_timelineOrder == 'Story chronology' &&
+                  _manualStoryYear(items[index]) != null)
+                'Manual story placement',
+            ].join(' · '),
             imageUrl: items[index].imageUrl,
             isLast: index == items.length - 1,
-            onTap: () => Navigator.of(context).push<void>(MaterialPageRoute<void>(
+            onTap: () =>
+                Navigator.of(context).push<void>(MaterialPageRoute<void>(
               builder: (_) => MediaDetailsScreen(media: items[index]),
             )),
           ),
@@ -817,10 +1229,16 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
     final groups = <String, List<MediaItem>>{};
     for (final item in _visibleItems) {
       final names = <String>{
-        if ((item.franchiseName ?? '').trim().isNotEmpty) item.franchiseName!.trim(),
-        ...item.franchiseNames.map((name) => name.trim()).where((name) => name.isNotEmpty),
-        ...item.cinematicUniverseNames.map((name) => name.trim()).where((name) => name.isNotEmpty),
-        if ((item.continuityName ?? '').trim().isNotEmpty) item.continuityName!.trim(),
+        if ((item.franchiseName ?? '').trim().isNotEmpty)
+          item.franchiseName!.trim(),
+        ...item.franchiseNames
+            .map((name) => name.trim())
+            .where((name) => name.isNotEmpty),
+        ...item.cinematicUniverseNames
+            .map((name) => name.trim())
+            .where((name) => name.isNotEmpty),
+        if ((item.continuityName ?? '').trim().isNotEmpty)
+          item.continuityName!.trim(),
       };
       for (final name in names) {
         groups.putIfAbsent(name, () => <MediaItem>[]);
@@ -835,20 +1253,23 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
       return const _ExplorerHintCard(
         icon: Icons.library_books_outlined,
         title: 'No grouped catalog titles yet',
-        description: 'Add verified franchise, universe or continuity metadata to titles to make them appear here.',
+        description:
+            'Add verified franchise, universe or continuity metadata to titles to make them appear here.',
       );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Browse catalog groups', style: TextStyle(fontWeight: FontWeight.w800)),
+        const Text('Browse catalog groups',
+            style: TextStyle(fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
         for (final entry in entries.take(40))
           Card(
             child: ListTile(
               leading: const Icon(Icons.account_tree_outlined),
               title: Text(entry.key),
-              subtitle: Text('${entry.value.length} connected catalog title(s)'),
+              subtitle:
+                  Text('${entry.value.length} connected catalog title(s)'),
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () {
                 _search.text = entry.key;
@@ -864,7 +1285,9 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
 
   IconData _iconForItem(MediaItem item) {
     final type = item.type.toLowerCase();
-    if (type.contains('series') || type.contains('show') || type.contains('episode')) {
+    if (type.contains('series') ||
+        type.contains('show') ||
+        type.contains('episode')) {
       return Icons.tv_rounded;
     }
     return Icons.movie_outlined;
@@ -879,7 +1302,8 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('${step.title} is shown in the example path, but no matching title is in the visible catalog yet.'),
+      content: Text(
+          '${step.title} is shown in the example path, but no matching title is in the visible catalog yet.'),
       action: SnackBarAction(
         label: 'Search title',
         onPressed: () {
@@ -894,7 +1318,8 @@ class _FranchiseStoryGraphScreenState extends State<FranchiseStoryGraphScreen> {
 }
 
 class _ActorConnection {
-  const _ActorConnection({required this.fromActor, required this.title, required this.toActor});
+  const _ActorConnection(
+      {required this.fromActor, required this.title, required this.toActor});
   final String fromActor;
   final MediaItem title;
   final String toActor;
@@ -911,17 +1336,32 @@ class _ActorConnectionTile extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(child: _actorPill(link.fromActor)),
-            const Padding(padding: EdgeInsets.symmetric(horizontal: 5), child: Icon(Icons.arrow_forward_rounded, size: 20, color: Colors.lightBlueAccent)),
+            const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 5),
+                child: Icon(Icons.arrow_forward_rounded,
+                    size: 20, color: Colors.lightBlueAccent)),
             Expanded(
               child: Column(
                 children: [
-                  const Icon(Icons.movie_outlined, size: 17, color: Colors.white60),
-                  Text(link.title.title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, height: 1.2)),
-                  if (link.title.releaseYear != null) Text(link.title.releaseYear.toString(), style: const TextStyle(fontSize: 10, color: Colors.white54)),
+                  const Icon(Icons.movie_outlined,
+                      size: 17, color: Colors.white60),
+                  Text(link.title.title,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          height: 1.2)),
+                  if (link.title.releaseYear != null)
+                    Text(link.title.releaseYear.toString(),
+                        style: const TextStyle(
+                            fontSize: 10, color: Colors.white54)),
                 ],
               ),
             ),
-            const Padding(padding: EdgeInsets.symmetric(horizontal: 5), child: Icon(Icons.arrow_forward_rounded, size: 20, color: Colors.lightBlueAccent)),
+            const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 5),
+                child: Icon(Icons.arrow_forward_rounded,
+                    size: 20, color: Colors.lightBlueAccent)),
             Expanded(child: _actorPill(link.toActor)),
           ],
         ),
@@ -929,8 +1369,14 @@ class _ActorConnectionTile extends StatelessWidget {
 
   Widget _actorPill(String name) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 9),
-        decoration: BoxDecoration(color: Colors.white.withValues(alpha: .06), borderRadius: BorderRadius.circular(9), border: Border.all(color: Colors.white12)),
-        child: Text(name, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, height: 1.2)),
+        decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .06),
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(color: Colors.white12)),
+        child: Text(name,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w700, height: 1.2)),
       );
 }
 
@@ -944,11 +1390,15 @@ class _GraphConnector extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.arrow_forward_rounded, color: Colors.white70, size: 25),
+            const Icon(Icons.arrow_forward_rounded,
+                color: Colors.white70, size: 25),
             if (label.trim().isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, color: Colors.white60, height: 1.2)),
+                child: Text(label,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 10, color: Colors.white60, height: 1.2)),
               ),
           ],
         ),
@@ -982,17 +1432,32 @@ class _StoryNodeCard extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Row(children: [
-                    Icon(item == null ? Icons.movie_outlined : Icons.check_circle_outline, size: 17, color: item == null ? Colors.white38 : Colors.greenAccent),
+                    Icon(
+                        item == null
+                            ? Icons.movie_outlined
+                            : Icons.check_circle_outline,
+                        size: 17,
+                        color:
+                            item == null ? Colors.white38 : Colors.greenAccent),
                     const SizedBox(width: 6),
-                    Expanded(child: Text(year?.toString() ?? 'Year unknown', style: const TextStyle(color: Colors.white60, fontSize: 12))),
+                    Expanded(
+                        child: Text(year?.toString() ?? 'Year unknown',
+                            style: const TextStyle(
+                                color: Colors.white60, fontSize: 12))),
                   ]),
                   const SizedBox(height: 8),
-                  Text(step.title, style: const TextStyle(fontWeight: FontWeight.w800, height: 1.2)),
+                  Text(step.title,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w800, height: 1.2)),
                   const SizedBox(height: 7),
-                  Text(step.type, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                  Text(step.type,
+                      style:
+                          const TextStyle(color: Colors.white54, fontSize: 11)),
                   if (item == null) ...[
                     const SizedBox(height: 5),
-                    const Text('Example node · not in catalog', style: TextStyle(color: Colors.amberAccent, fontSize: 10)),
+                    const Text('Example node · not in catalog',
+                        style:
+                            TextStyle(color: Colors.amberAccent, fontSize: 10)),
                   ],
                 ],
               ),
@@ -1048,7 +1513,11 @@ class _TimelineTitleTile extends StatelessWidget {
                 ),
               ),
               if (!isLast)
-                Container(width: 2, height: 62, margin: const EdgeInsets.symmetric(vertical: 3), color: Colors.white24),
+                Container(
+                    width: 2,
+                    height: 62,
+                    margin: const EdgeInsets.symmetric(vertical: 3),
+                    color: Colors.white24),
             ],
           ),
         ),
@@ -1057,10 +1526,19 @@ class _TimelineTitleTile extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 12),
             child: ListTile(
               leading: image != null && image.isNotEmpty
-                  ? SizedBox(width: 46, height: 58, child: Image.network(image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.movie_outlined)))
-                  : const SizedBox(width: 42, child: Icon(Icons.movie_outlined)),
-              title: Text(displayTitle, style: const TextStyle(fontWeight: FontWeight.w800)),
-              subtitle: Text(subtitle, style: const TextStyle(color: Colors.white60)),
+                  ? SizedBox(
+                      width: 46,
+                      height: 58,
+                      child: Image.network(image,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) =>
+                              const Icon(Icons.movie_outlined)))
+                  : const SizedBox(
+                      width: 42, child: Icon(Icons.movie_outlined)),
+              title: Text(displayTitle,
+                  style: const TextStyle(fontWeight: FontWeight.w800)),
+              subtitle:
+                  Text(subtitle, style: const TextStyle(color: Colors.white60)),
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: onTap,
             ),
@@ -1072,7 +1550,8 @@ class _TimelineTitleTile extends StatelessWidget {
 }
 
 class _ExplorerHintCard extends StatelessWidget {
-  const _ExplorerHintCard({required this.icon, required this.title, required this.description});
+  const _ExplorerHintCard(
+      {required this.icon, required this.title, required this.description});
   final IconData icon;
   final String title;
   final String description;
@@ -1084,11 +1563,18 @@ class _ExplorerHintCard extends StatelessWidget {
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Icon(icon, size: 30, color: Theme.of(context).colorScheme.primary),
             const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-              const SizedBox(height: 5),
-              Text(description, style: const TextStyle(color: Colors.white60, height: 1.4)),
-            ])),
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text(title,
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 5),
+                  Text(description,
+                      style:
+                          const TextStyle(color: Colors.white60, height: 1.4)),
+                ])),
           ]),
         ),
       );
@@ -1132,38 +1618,124 @@ const List<_StoryPath> _storyPaths = <_StoryPath>[
   _StoryPath(
     id: 'wanda-mcu',
     name: 'MCU · Wanda Maximoff',
-    description: 'A character-focused path from the Winter Soldier post-credit scene through WandaVision and Doctor Strange in the Multiverse of Madness.',
+    description:
+        'A character-focused path from the Winter Soldier post-credit scene through WandaVision and Doctor Strange in the Multiverse of Madness.',
     continuityKey: 'MCU',
     steps: <_StoryStep>[
-      _StoryStep(title: 'Captain America: The Winter Soldier', continuity: 'MCU', type: 'Movie · post-credit setup', releaseYear: 2014, storyYear: 2014, aliases: <String>['The Winter Soldier']),
-      _StoryStep(title: 'Avengers: Age of Ultron', continuity: 'MCU', type: 'Movie', releaseYear: 2015, storyYear: 2015, relationFromPrevious: 'Hydra post-credit setup leads into Wanda and Pietro', aliases: <String>['Age of Ultron']),
-      _StoryStep(title: 'Captain America: Civil War', continuity: 'MCU', type: 'Movie', releaseYear: 2016, storyYear: 2016, relationFromPrevious: 'Sokovia fallout and the Avengers split'),
-      _StoryStep(title: 'Avengers: Endgame', continuity: 'MCU', type: 'Movie', releaseYear: 2019, storyYear: 2023, relationFromPrevious: 'The Blip and final battle change Wanda’s circumstances'),
-      _StoryStep(title: 'WandaVision', continuity: 'MCU', type: 'TV series', releaseYear: 2021, storyYear: 2023, relationFromPrevious: 'Wanda processes the aftermath of Endgame'),
-      _StoryStep(title: 'Doctor Strange in the Multiverse of Madness', continuity: 'MCU', type: 'Movie', releaseYear: 2022, storyYear: 2023, relationFromPrevious: 'Wanda’s story expands into the multiverse', aliases: <String>['Doctor Strange 2']),
+      _StoryStep(
+          title: 'Captain America: The Winter Soldier',
+          continuity: 'MCU',
+          type: 'Movie · post-credit setup',
+          releaseYear: 2014,
+          storyYear: 2014,
+          aliases: <String>['The Winter Soldier']),
+      _StoryStep(
+          title: 'Avengers: Age of Ultron',
+          continuity: 'MCU',
+          type: 'Movie',
+          releaseYear: 2015,
+          storyYear: 2015,
+          relationFromPrevious:
+              'Hydra post-credit setup leads into Wanda and Pietro',
+          aliases: <String>['Age of Ultron']),
+      _StoryStep(
+          title: 'Captain America: Civil War',
+          continuity: 'MCU',
+          type: 'Movie',
+          releaseYear: 2016,
+          storyYear: 2016,
+          relationFromPrevious: 'Sokovia fallout and the Avengers split'),
+      _StoryStep(
+          title: 'Avengers: Endgame',
+          continuity: 'MCU',
+          type: 'Movie',
+          releaseYear: 2019,
+          storyYear: 2023,
+          relationFromPrevious:
+              'The Blip and final battle change Wanda’s circumstances'),
+      _StoryStep(
+          title: 'WandaVision',
+          continuity: 'MCU',
+          type: 'TV series',
+          releaseYear: 2021,
+          storyYear: 2023,
+          relationFromPrevious: 'Wanda processes the aftermath of Endgame'),
+      _StoryStep(
+          title: 'Doctor Strange in the Multiverse of Madness',
+          continuity: 'MCU',
+          type: 'Movie',
+          releaseYear: 2022,
+          storyYear: 2023,
+          relationFromPrevious: 'Wanda’s story expands into the multiverse',
+          aliases: <String>['Doctor Strange 2']),
     ],
   ),
   _StoryPath(
     id: 'spider-raimi',
     name: 'Multiverse · Tobey Maguire / Raimi films',
-    description: 'The original live-action film branch that converges with No Way Home.',
+    description:
+        'The original live-action film branch that converges with No Way Home.',
     continuityKey: 'Multiverse',
     steps: <_StoryStep>[
-      _StoryStep(title: 'Spider-Man', continuity: 'Multiverse', type: 'Movie', releaseYear: 2002, storyYear: 2002),
-      _StoryStep(title: 'Spider-Man 2', continuity: 'Multiverse', type: 'Movie', releaseYear: 2004, storyYear: 2004),
-      _StoryStep(title: 'Spider-Man 3', continuity: 'Multiverse', type: 'Movie', releaseYear: 2007, storyYear: 2007),
-      _StoryStep(title: 'Spider-Man: No Way Home', continuity: 'Multiverse crossover', type: 'Movie · crossover', releaseYear: 2021, storyYear: 2024, relationFromPrevious: 'Raimi universe crosses into the MCU multiverse', aliases: <String>['No Way Home']),
+      _StoryStep(
+          title: 'Spider-Man',
+          continuity: 'Multiverse',
+          type: 'Movie',
+          releaseYear: 2002,
+          storyYear: 2002),
+      _StoryStep(
+          title: 'Spider-Man 2',
+          continuity: 'Multiverse',
+          type: 'Movie',
+          releaseYear: 2004,
+          storyYear: 2004),
+      _StoryStep(
+          title: 'Spider-Man 3',
+          continuity: 'Multiverse',
+          type: 'Movie',
+          releaseYear: 2007,
+          storyYear: 2007),
+      _StoryStep(
+          title: 'Spider-Man: No Way Home',
+          continuity: 'Multiverse crossover',
+          type: 'Movie · crossover',
+          releaseYear: 2021,
+          storyYear: 2024,
+          relationFromPrevious:
+              'Raimi universe crosses into the MCU multiverse',
+          aliases: <String>['No Way Home']),
     ],
   ),
   _StoryPath(
     id: 'spider-amazing',
     name: 'Multiverse · The Amazing Spider-Man films',
-    description: 'A second live-action branch that also converges with No Way Home.',
+    description:
+        'A second live-action branch that also converges with No Way Home.',
     continuityKey: 'Multiverse',
     steps: <_StoryStep>[
-      _StoryStep(title: 'The Amazing Spider-Man', continuity: 'Multiverse', type: 'Movie', releaseYear: 2012, storyYear: 2012, aliases: <String>['Amazing Spider-Man']),
-      _StoryStep(title: 'The Amazing Spider-Man 2', continuity: 'Multiverse', type: 'Movie', releaseYear: 2014, storyYear: 2014, aliases: <String>['Amazing Spider-Man 2']),
-      _StoryStep(title: 'Spider-Man: No Way Home', continuity: 'Multiverse crossover', type: 'Movie · crossover', releaseYear: 2021, storyYear: 2024, relationFromPrevious: 'Amazing Spider-Man universe crosses into the MCU multiverse', aliases: <String>['No Way Home']),
+      _StoryStep(
+          title: 'The Amazing Spider-Man',
+          continuity: 'Multiverse',
+          type: 'Movie',
+          releaseYear: 2012,
+          storyYear: 2012,
+          aliases: <String>['Amazing Spider-Man']),
+      _StoryStep(
+          title: 'The Amazing Spider-Man 2',
+          continuity: 'Multiverse',
+          type: 'Movie',
+          releaseYear: 2014,
+          storyYear: 2014,
+          aliases: <String>['Amazing Spider-Man 2']),
+      _StoryStep(
+          title: 'Spider-Man: No Way Home',
+          continuity: 'Multiverse crossover',
+          type: 'Movie · crossover',
+          releaseYear: 2021,
+          storyYear: 2024,
+          relationFromPrevious:
+              'Amazing Spider-Man universe crosses into the MCU multiverse',
+          aliases: <String>['No Way Home']),
     ],
   ),
   _StoryPath(
@@ -1172,24 +1744,88 @@ const List<_StoryPath> _storyPaths = <_StoryPath>[
     description: 'Keep the animated Spider-Verse as its own continuity lane.',
     continuityKey: 'Spider-Verse',
     steps: <_StoryStep>[
-      _StoryStep(title: 'Spider-Man: Into the Spider-Verse', continuity: 'Spider-Verse', type: 'Animated movie', releaseYear: 2018, storyYear: 2018, aliases: <String>['Into the Spider-Verse']),
-      _StoryStep(title: 'Spider-Man: Across the Spider-Verse', continuity: 'Spider-Verse', type: 'Animated movie', releaseYear: 2023, storyYear: 2023, relationFromPrevious: 'Direct continuation', aliases: <String>['Across the Spider-Verse']),
-      _StoryStep(title: 'Spider-Man: Beyond the Spider-Verse', continuity: 'Spider-Verse', type: 'Upcoming animated movie', releaseYear: 2027, storyYear: 2027, relationFromPrevious: 'Planned next chapter', aliases: <String>['Beyond the Spider-Verse']),
+      _StoryStep(
+          title: 'Spider-Man: Into the Spider-Verse',
+          continuity: 'Spider-Verse',
+          type: 'Animated movie',
+          releaseYear: 2018,
+          storyYear: 2018,
+          aliases: <String>['Into the Spider-Verse']),
+      _StoryStep(
+          title: 'Spider-Man: Across the Spider-Verse',
+          continuity: 'Spider-Verse',
+          type: 'Animated movie',
+          releaseYear: 2023,
+          storyYear: 2023,
+          relationFromPrevious: 'Direct continuation',
+          aliases: <String>['Across the Spider-Verse']),
+      _StoryStep(
+          title: 'Spider-Man: Beyond the Spider-Verse',
+          continuity: 'Spider-Verse',
+          type: 'Upcoming animated movie',
+          releaseYear: 2027,
+          storyYear: 2027,
+          relationFromPrevious: 'Planned next chapter',
+          aliases: <String>['Beyond the Spider-Verse']),
     ],
   ),
   _StoryPath(
     id: 'spider-mcu',
     name: 'MCU · Peter Parker',
-    description: 'The example MCU path requested. Iron Man 2 is shown as shared MCU context, not as a Spider-Man appearance.',
+    description:
+        'The example MCU path requested. Iron Man 2 is shown as shared MCU context, not as a Spider-Man appearance.',
     continuityKey: 'MCU',
     steps: <_StoryStep>[
-      _StoryStep(title: 'Iron Man 2', continuity: 'MCU', type: 'Movie · MCU context', releaseYear: 2010, storyYear: 2010),
-      _StoryStep(title: 'Captain America: Civil War', continuity: 'MCU', type: 'Movie · Peter Parker introduced', releaseYear: 2016, storyYear: 2016, relationFromPrevious: 'Shared MCU continuity; Peter Parker enters the story'),
-      _StoryStep(title: 'Spider-Man: Homecoming', continuity: 'MCU', type: 'Movie', releaseYear: 2017, storyYear: 2016, relationFromPrevious: 'Peter’s first solo MCU film'),
-      _StoryStep(title: 'Avengers: Infinity War', continuity: 'MCU', type: 'Movie', releaseYear: 2018, storyYear: 2018, relationFromPrevious: 'Spider-Man joins the wider Avengers conflict'),
-      _StoryStep(title: 'Avengers: Endgame', continuity: 'MCU', type: 'Movie', releaseYear: 2019, storyYear: 2023, relationFromPrevious: 'The aftermath reshapes Peter’s world'),
-      _StoryStep(title: 'Spider-Man: Far From Home', continuity: 'MCU', type: 'Movie', releaseYear: 2019, storyYear: 2024, relationFromPrevious: 'Peter travels after the events of Endgame'),
-      _StoryStep(title: 'Spider-Man: Brand New Day', continuity: 'MCU', type: 'Movie', releaseYear: 2026, storyYear: 2026, relationFromPrevious: 'Next MCU Spider-Man chapter', aliases: <String>['Brand New Day']),
+      _StoryStep(
+          title: 'Iron Man 2',
+          continuity: 'MCU',
+          type: 'Movie · MCU context',
+          releaseYear: 2010,
+          storyYear: 2010),
+      _StoryStep(
+          title: 'Captain America: Civil War',
+          continuity: 'MCU',
+          type: 'Movie · Peter Parker introduced',
+          releaseYear: 2016,
+          storyYear: 2016,
+          relationFromPrevious:
+              'Shared MCU continuity; Peter Parker enters the story'),
+      _StoryStep(
+          title: 'Spider-Man: Homecoming',
+          continuity: 'MCU',
+          type: 'Movie',
+          releaseYear: 2017,
+          storyYear: 2016,
+          relationFromPrevious: 'Peter’s first solo MCU film'),
+      _StoryStep(
+          title: 'Avengers: Infinity War',
+          continuity: 'MCU',
+          type: 'Movie',
+          releaseYear: 2018,
+          storyYear: 2018,
+          relationFromPrevious: 'Spider-Man joins the wider Avengers conflict'),
+      _StoryStep(
+          title: 'Avengers: Endgame',
+          continuity: 'MCU',
+          type: 'Movie',
+          releaseYear: 2019,
+          storyYear: 2023,
+          relationFromPrevious: 'The aftermath reshapes Peter’s world'),
+      _StoryStep(
+          title: 'Spider-Man: Far From Home',
+          continuity: 'MCU',
+          type: 'Movie',
+          releaseYear: 2019,
+          storyYear: 2024,
+          relationFromPrevious: 'Peter travels after the events of Endgame'),
+      _StoryStep(
+          title: 'Spider-Man: Brand New Day',
+          continuity: 'MCU',
+          type: 'Movie',
+          releaseYear: 2026,
+          storyYear: 2026,
+          relationFromPrevious: 'Next MCU Spider-Man chapter',
+          aliases: <String>['Brand New Day']),
     ],
   ),
 ];

@@ -4,6 +4,27 @@ import 'package:my_own_streaming_service/app_core.dart';
 import 'package:my_own_streaming_service/media_graph_relationship.dart';
 
 void main() {
+  group('MediaMetadataProtection', () {
+    test('blocks imports only for explicitly protected fields', () {
+      final protected = MediaMetadataProtection.protectedFieldsFrom(
+        <dynamic>['actors', 'releaseDate'],
+      );
+
+      expect(
+        MediaMetadataProtection.allowsProviderUpdate(protected, 'actors'),
+        isFalse,
+      );
+      expect(
+        MediaMetadataProtection.allowsProviderUpdate(protected, 'genres'),
+        isTrue,
+      );
+      expect(
+        MediaMetadataProtection.protectedFieldsFrom(null),
+        isEmpty,
+      );
+    });
+  });
+
   group('MediaGraphRelationship', () {
     test('parses provenance fields and normalizes percentage confidence', () {
       final relationship = MediaGraphRelationship.fromJson(

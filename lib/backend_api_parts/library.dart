@@ -136,6 +136,51 @@ extension BackendApiLibraryMethods on BackendApi {
     );
   }
 
+  /// Builds a bounded, server-local dialogue index from media sidecar captions.
+  Future<Map<String, dynamic>> indexLibrarySubtitles() async {
+    _requireAuthentication();
+    final response = await _networkClient.post(
+      Uri.parse('$baseUrl/library/subtitles/index'),
+      headers: _headers,
+    );
+    return _requireSuccess(
+      response,
+      'Unable to index home-server subtitles.',
+    );
+  }
+
+  /// Searches the authenticated account's in-memory subtitle index.
+  Future<Map<String, dynamic>> searchLibrarySubtitles(String query) async {
+    _requireAuthentication();
+    final cleanQuery = query.trim();
+    if (cleanQuery.length < 2 || cleanQuery.length > 160) {
+      throw BackendApiException(
+        'Search terms must contain 2 to 160 characters.',
+      );
+    }
+    final uri = Uri.parse('$baseUrl/library/subtitles/search').replace(
+      queryParameters: <String, String>{'q': cleanQuery},
+    );
+    final response = await _networkClient.get(uri, headers: _headers);
+    final result = await _requireSuccess(
+      response,
+      'Unable to search home-server subtitles.',
+    );
+    final rawMatches = result['matches'];
+    if (rawMatches is! List) {
+      throw BackendApiException(
+        'The subtitle search response did not contain matches.',
+      );
+    }
+    return <String, dynamic>{
+      'matches': rawMatches
+          .whereType<Map>()
+          .map((match) => Map<String, dynamic>.from(match))
+          .toList(growable: false),
+      'hasMore': result['hasMore'] == true,
+    };
+  }
+
   /// Persists a reviewed ARM rip in the home server's indexed library.
   /// The backend verifies that the output file exists inside MEDIA_ROOT.
   Future<List<Map<String, dynamic>>> getScheduledLibraryAdditions() async {

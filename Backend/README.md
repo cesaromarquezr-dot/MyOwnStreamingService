@@ -24,7 +24,7 @@ The project now treats the home server as the source of truth for server-managed
 ### Backend environment
 
 - `SERVER_HOST=0.0.0.0` — bind the API to the LAN.
-- `SERVER_PUBLIC_URL=http://<server-ip>:8080` — URL clients should use.
+- `SERVER_PUBLIC_URL=https://<trusted-server-host>:8080` — HTTPS URL clients should use. Configure a certificate valid for that host.
 - `ARM_SERVER_URL=http://<arm-host>:<port>` — ARM web/API address.
 - `MEDIA_ROOT=/path/to/media` — root of Movies/Series/Music storage.
 - `MOVIES_PATH`, `SERIES_PATH`, `MUSIC_PATH` — optional category paths.

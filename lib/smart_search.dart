@@ -516,6 +516,12 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
   List<MusicTrack> musicResults = [];
   List<Map<String, dynamic>> albumResults = <Map<String, dynamic>>[];
   String selectedSearchCategory = 'All';
+  String? selectedDiscoveryMood;
+  String? selectedDiscoveryGenre;
+  String? selectedDiscoveryLanguage;
+  String? selectedDiscoveryEra;
+  String? selectedRuntimeBand;
+  bool unwatchedOnly = false;
   List<Object?> productResults = <Object?>[];
   List<Map<String, dynamic>> peopleResults = <Map<String, dynamic>>[];
   List<Map<String, dynamic>> characterResults = <Map<String, dynamic>>[];
@@ -2109,6 +2115,9 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
                           child: _buildSearchBar(theme),
                         ),
                         SliverToBoxAdapter(
+                          child: _buildDiscoveryFilters(),
+                        ),
+                        SliverToBoxAdapter(
                           child: _buildResultsHeader(),
                         ),
                         _buildResultsList(isDesktop),
@@ -2259,11 +2268,329 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     );
   }
 
+  Widget _buildDiscoveryFilters() {
+    if (results.isEmpty && musicResults.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final genres = <String>[
+      ...results.expand((media) => media.genres),
+      ...musicResults.expand((track) => track.allGenreTags),
+    ]
+        .map((genre) => genre.trim())
+        .where((genre) => genre.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final languages = results
+        .map((media) =>
+            (media.originalLanguage?.trim().isNotEmpty == true
+                ? media.originalLanguage
+                : media.language)
+                ?.trim() ??
+            '')
+        .where((language) => language.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    int? releaseYear(MediaItem media) =>
+        media.releaseYear ?? media.seriesStartYear ?? media.releaseDate?.year;
+    final eras = results
+        .map(releaseYear)
+        .whereType<int>()
+        .map((year) => year < 1980 ? 'Before 1980' : '${year ~/ 10 * 10}s')
+        .toSet()
+        .toList()
+      ..sort((a, b) => b.compareTo(a));
+    final hasRuntime = results.any((media) => media.runtimeMinutes != null) ||
+        musicResults.any((track) => track.duration > Duration.zero);
+    const moods = <String>[
+      'Feel-good',
+      'Thought-provoking',
+      'High-energy',
+      'Cozy',
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 12, 22, 2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const UniversalText(
+            'Refine titles',
+            style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 5),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              FilterChip(
+                label: const Text('Unwatched'),
+                selected: unwatchedOnly,
+                onSelected: (value) => setState(() => unwatchedOnly = value),
+              ),
+              for (final mood in moods)
+                FilterChip(
+                  label: Text(mood),
+                  selected: selectedDiscoveryMood == mood,
+                  onSelected: (value) => setState(() {
+                    selectedDiscoveryMood = value ? mood : null;
+                  }),
+                ),
+              if (genres.isNotEmpty)
+                DropdownButton<String>(
+                  value: genres.any(
+                          (genre) => genre == selectedDiscoveryGenre)
+                      ? selectedDiscoveryGenre
+                      : '',
+                  dropdownColor: const Color(0xFF202027),
+                  hint: const Text('Genre'),
+                  items: <DropdownMenuItem<String>>[
+                    const DropdownMenuItem<String>(
+                      value: '',
+                      child: Text('Any genre'),
+                    ),
+                    for (final genre in genres)
+                      DropdownMenuItem<String>(
+                        value: genre,
+                        child: Text(genre),
+                      ),
+                  ],
+                  onChanged: (value) => setState(() {
+                    selectedDiscoveryGenre =
+                        value == null || value.isEmpty ? null : value;
+                  }),
+                ),
+              if (languages.isNotEmpty)
+                DropdownButton<String>(
+                  value: languages.contains(selectedDiscoveryLanguage)
+                      ? selectedDiscoveryLanguage
+                      : '',
+                  dropdownColor: const Color(0xFF202027),
+                  hint: const Text('Language'),
+                  items: <DropdownMenuItem<String>>[
+                    const DropdownMenuItem<String>(
+                      value: '',
+                      child: Text('Any language'),
+                    ),
+                    for (final language in languages)
+                      DropdownMenuItem<String>(
+                        value: language,
+                        child: Text(language),
+                      ),
+                  ],
+                  onChanged: (value) => setState(() {
+                    selectedDiscoveryLanguage =
+                        value == null || value.isEmpty ? null : value;
+                  }),
+                ),
+              if (eras.isNotEmpty)
+                DropdownButton<String>(
+                  value: eras.contains(selectedDiscoveryEra)
+                      ? selectedDiscoveryEra
+                      : '',
+                  dropdownColor: const Color(0xFF202027),
+                  hint: const Text('Release era'),
+                  items: <DropdownMenuItem<String>>[
+                    const DropdownMenuItem<String>(
+                      value: '',
+                      child: Text('Any era'),
+                    ),
+                    for (final era in eras)
+                      DropdownMenuItem<String>(value: era, child: Text(era)),
+                  ],
+                  onChanged: (value) => setState(() {
+                    selectedDiscoveryEra =
+                        value == null || value.isEmpty ? null : value;
+                  }),
+                ),
+              if (hasRuntime)
+                DropdownButton<String>(
+                  value: const <String>{
+                            'Under 90 min',
+                            '90-150 min',
+                            'Over 150 min',
+                          }.contains(selectedRuntimeBand)
+                      ? selectedRuntimeBand
+                      : '',
+                  dropdownColor: const Color(0xFF202027),
+                  hint: const Text('Runtime'),
+                  items: const <DropdownMenuItem<String>>[
+                    DropdownMenuItem<String>(
+                        value: '', child: Text('Any runtime')),
+                    DropdownMenuItem<String>(
+                        value: 'Under 90 min', child: Text('Under 90 min')),
+                    DropdownMenuItem<String>(
+                        value: '90-150 min', child: Text('90-150 min')),
+                    DropdownMenuItem<String>(
+                        value: 'Over 150 min', child: Text('Over 150 min')),
+                  ],
+                  onChanged: (value) => setState(() {
+                    selectedRuntimeBand =
+                        value == null || value.isEmpty ? null : value;
+                  }),
+                ),
+              if (unwatchedOnly ||
+                  selectedDiscoveryMood != null ||
+                  selectedDiscoveryGenre != null ||
+                  selectedDiscoveryLanguage != null ||
+                  selectedDiscoveryEra != null ||
+                  selectedRuntimeBand != null)
+                TextButton(
+                  onPressed: () => setState(() {
+                    unwatchedOnly = false;
+                    selectedDiscoveryMood = null;
+                    selectedDiscoveryGenre = null;
+                    selectedDiscoveryLanguage = null;
+                    selectedDiscoveryEra = null;
+                    selectedRuntimeBand = null;
+                  }),
+                  child: const Text('Clear filters'),
+                ),
+            ],
+          ),
+          const Text(
+            'Mood uses saved genres and tags. Runtime filters appear when the catalog provides runtime metadata.',
+            style: TextStyle(color: Colors.white38, fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<MediaItem> _applyDiscoveryFilters(Iterable<MediaItem> media) {
+    const moodTerms = <String, List<String>>{
+      'Feel-good': <String>[
+        'comedy',
+        'family',
+        'animation',
+        'romance',
+        'feel good',
+      ],
+      'Thought-provoking': <String>[
+        'documentary',
+        'drama',
+        'science fiction',
+        'sci-fi',
+        'mystery',
+        'thought provoking',
+      ],
+      'High-energy': <String>[
+        'action',
+        'adventure',
+        'sport',
+        'thriller',
+        'high energy',
+      ],
+      'Cozy': <String>['family', 'animation', 'romance', 'comedy', 'cozy'],
+    };
+    final terms = moodTerms[selectedDiscoveryMood];
+    return media.where((item) {
+      if (unwatchedOnly && AppController.instance.isWatched(item.id)) {
+        return false;
+      }
+      if (selectedDiscoveryGenre != null &&
+          !item.genres.any(
+            (genre) =>
+                genre.toLowerCase() == selectedDiscoveryGenre!.toLowerCase(),
+          )) {
+        return false;
+      }
+      if (selectedDiscoveryLanguage != null) {
+        final language =
+            (item.originalLanguage?.trim().isNotEmpty == true
+                ? item.originalLanguage
+                : item.language)
+            ?.trim();
+        if (language?.toLowerCase() !=
+            selectedDiscoveryLanguage!.toLowerCase()) {
+          return false;
+        }
+      }
+      if (selectedDiscoveryEra != null) {
+        final year =
+            item.releaseYear ?? item.seriesStartYear ?? item.releaseDate?.year;
+        if (year == null) return false;
+        final era = year < 1980 ? 'Before 1980' : '${year ~/ 10 * 10}s';
+        if (era != selectedDiscoveryEra) return false;
+      }
+      if (selectedRuntimeBand != null) {
+        final runtime = item.runtimeMinutes;
+        if (runtime == null) return false;
+        switch (selectedRuntimeBand) {
+          case 'Under 90 min':
+            if (runtime >= 90) return false;
+          case '90-150 min':
+            if (runtime < 90 || runtime > 150) return false;
+          case 'Over 150 min':
+            if (runtime <= 150) return false;
+        }
+      }
+      if (terms != null) {
+        final descriptors = <String>[...item.genres, ...item.tags]
+            .join(' ')
+            .toLowerCase();
+        if (!terms.any((term) => descriptors.contains(term))) return false;
+      }
+      return true;
+    }).toList(growable: false);
+  }
+
+  List<MusicTrack> _applyMusicDiscoveryFilters(
+    Iterable<MusicTrack> tracks,
+  ) {
+    const moodTerms = <String, List<String>>{
+      'Feel-good': <String>['comedy', 'family', 'animation', 'romance'],
+      'Thought-provoking': <String>[
+        'documentary',
+        'drama',
+        'science fiction',
+        'sci-fi',
+        'mystery',
+      ],
+      'High-energy': <String>['action', 'adventure', 'sport', 'thriller'],
+      'Cozy': <String>['family', 'animation', 'romance', 'comedy', 'cozy'],
+    };
+    final terms = moodTerms[selectedDiscoveryMood];
+    final listens = MusicLibraryStore.instance.listenCounts;
+    return tracks.where((track) {
+      if (unwatchedOnly && (listens[track.id] ?? 0) > 0) return false;
+      if (selectedDiscoveryLanguage != null || selectedDiscoveryEra != null) {
+        return false;
+      }
+      if (selectedDiscoveryGenre != null &&
+          !track.allGenreTags.any(
+            (genre) =>
+                genre.toLowerCase() == selectedDiscoveryGenre!.toLowerCase(),
+          )) {
+        return false;
+      }
+      if (selectedRuntimeBand != null) {
+        final runtime = track.duration.inMinutes;
+        if (runtime <= 0) return false;
+        switch (selectedRuntimeBand) {
+          case 'Under 90 min':
+            if (runtime >= 90) return false;
+          case '90-150 min':
+            if (runtime < 90 || runtime > 150) return false;
+          case 'Over 150 min':
+            if (runtime <= 150) return false;
+        }
+      }
+      if (terms != null) {
+        final descriptors = track.allGenreTags.join(' ').toLowerCase();
+        if (!terms.any((term) => descriptors.contains(term))) return false;
+      }
+      return true;
+    }).toList(growable: false);
+  }
+
   /// Performs `_buildResultsHeader` for this feature. Update this documentation when its contract changes.
   Widget _buildResultsHeader() {
     if (controller.text.trim().isEmpty) return const SizedBox.shrink();
-    final count = results.length +
-        musicResults.length +
+    final count = _applyDiscoveryFilters(results).length +
+        _applyMusicDiscoveryFilters(musicResults).length +
         albumResults.length +
         productResults.length +
         peopleResults.length +
@@ -2344,6 +2671,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
 
   /// Performs `_buildResultsList` for this feature. Update this documentation when its contract changes.
   Widget _buildResultsList(bool isDesktop) {
+    final filteredMusicResults = _applyMusicDiscoveryFilters(musicResults);
     if (controller.text.trim().isEmpty) {
       return SliverToBoxAdapter(
         child: SearchDiscoveryLanding(onSearch: useSuggestion),
@@ -2351,7 +2679,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     }
 
     if (results.isEmpty &&
-        musicResults.isEmpty &&
+        filteredMusicResults.isEmpty &&
         albumResults.isEmpty &&
         productResults.isEmpty &&
         peopleResults.isEmpty &&
@@ -2378,13 +2706,14 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
       );
     }
 
-    final movieResults = results
+    final discoveryResults = _applyDiscoveryFilters(results);
+    final movieResults = discoveryResults
         .where((media) => SmartSearch._isMovie(media.type.toLowerCase()))
         .toList(growable: false);
-    final seriesResults = results
+    final seriesResults = discoveryResults
         .where((media) => SmartSearch._isTvShow(media.type.toLowerCase()))
         .toList(growable: false);
-    final otherMediaResults = results
+    final otherMediaResults = discoveryResults
         .where((media) =>
             !SmartSearch._isMovie(media.type.toLowerCase()) &&
             !SmartSearch._isTvShow(media.type.toLowerCase()))
@@ -2437,7 +2766,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
         .where((person) => !isArtistPerson(person) && !isActorPerson(person))
         .toList(growable: false);
     final hasSelectedCategoryResults = switch (filter) {
-      'Songs' => musicResults.isNotEmpty,
+      'Songs' => filteredMusicResults.isNotEmpty,
       'Albums' => albumResults.isNotEmpty,
       'Artists' => artistPeople.isNotEmpty,
       'Actors' => actorPeople.isNotEmpty,
@@ -2745,14 +3074,14 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
                 ),
               ),
           ],
-          if (showSongs && musicResults.isNotEmpty) ...[
+          if (showSongs && filteredMusicResults.isNotEmpty) ...[
             const Padding(
               padding: EdgeInsets.only(top: 18, bottom: 8),
               child: UniversalText('Songs',
                   style: TextStyle(
                       color: Colors.white70, fontWeight: FontWeight.w800)),
             ),
-            for (final track in musicResults)
+            for (final track in filteredMusicResults)
               Card(
                 color: Colors.white.withValues(alpha: .055),
                 child: ListTile(

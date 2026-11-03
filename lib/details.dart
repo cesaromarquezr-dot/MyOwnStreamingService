@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 import 'app_core.dart';
+import 'backend_api.dart';
 import 'music_catalog_screen.dart';
 import 'cinematic_title.dart';
 import 'artwork_gallery_screen.dart';
@@ -117,6 +118,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
+    unawaited(_loadPreferredEdition());
     unawaited(_loadDefaultLanguageTracks());
     unawaited(EnergySaverController.instance
         .ensureLoaded(
@@ -198,7 +200,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         unawaited(_loadEpisodesForSelectedSeason());
       }
       if (metadata != null) {
-        unawaited(AppController.instance.mergeProviderTitleCredits(
+        unawaited(AppController.instance
+            .mergeProviderTitleCredits(
           mediaId: media.id,
           posterUrl: _selectedPosterPath == null
               ? metadata.posterUrl
@@ -213,7 +216,14 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           providerReleaseDate: metadata.releaseDate,
           providerLastAirDate: metadata.lastAirDate,
           providerStatus: metadata.status,
-        ));
+        )
+            .catchError((Object error) {
+          if (!mounted) return;
+          setState(() {
+            _providerMetadataError =
+                'Metadata update failed: ${error.toString().replaceFirst('Exception: ', '')}';
+          });
+        }));
       }
     } catch (error) {
       if (!mounted) return;
@@ -361,6 +371,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           _buildEditionSelector(),
           for (final section in customization.sectionOrder)
             _buildSection(section),
+          MediaMetadataProvenancePanel(media: media),
           _buildStoryAdaptationsSection(),
           MediaContinuityPanel(mediaId: media.id, mediaTitle: media.title),
           MediaFranchiseConnectionsPanel(
@@ -640,8 +651,13 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     if (workId == null || workId.isEmpty) return <MediaItem>[media];
 
     final byId = <String, MediaItem>{media.id: media};
+    final profile = AppController.instance.currentProfile;
     for (final candidate in AppController.instance.library) {
-      if (candidate.id == media.id || candidate.isSeries) continue;
+      if (candidate.id == media.id ||
+          candidate.isSeries ||
+          !candidate.isAccessibleTo(profile)) {
+        continue;
+      }
       if (candidate.canonicalWorkId?.trim() == workId) {
         byId.putIfAbsent(candidate.id, () => candidate);
       }
@@ -650,6 +666,78 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       ..sort((a, b) => (a.editionReleaseYear ?? a.releaseYear ?? 0)
           .compareTo(b.editionReleaseYear ?? b.releaseYear ?? 0));
     return editions;
+  }
+
+  String get _editionPreferenceKey =>
+      'media_edition_preference:${media.canonicalWorkId?.trim().isNotEmpty == true ? media.canonicalWorkId!.trim() : media.id}';
+
+  Future<void> _loadPreferredEdition() async {
+    final profile = AppController.instance.currentProfile;
+    final api = AppController.instance.backendApi;
+    if (profile == null || !api.isAuthenticated) return;
+    try {
+      final records = await api.getAppRecords(
+        profileId: profile.id,
+        recordType: 'media_edition_preference',
+      );
+      for (final record in records) {
+        if (record['recordKey'] != _editionPreferenceKey ||
+            record['data'] is! Map) {
+          continue;
+        }
+        final data = Map<String, dynamic>.from(record['data'] as Map);
+        final preferredId = data['editionId']?.toString();
+        if (preferredId != null &&
+            _linkedEditions().any((edition) => edition.id == preferredId) &&
+            mounted) {
+          setState(() => _selectedEditionId = preferredId);
+        }
+        return;
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Could not load your preferred edition: $error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _selectEdition(String? editionId) async {
+    setState(() => _selectedEditionId = editionId);
+    if (editionId == null) return;
+    final profile = AppController.instance.currentProfile;
+    final api = AppController.instance.backendApi;
+    if (profile == null || !api.isAuthenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Sign in to save your preferred edition to your profile.'),
+        ),
+      );
+      return;
+    }
+    try {
+      await api.saveAppRecord(
+        profileId: profile.id,
+        recordType: 'media_edition_preference',
+        recordKey: _editionPreferenceKey,
+        data: {
+          'mediaId': media.id,
+          'canonicalWorkId': media.canonicalWorkId,
+          'editionId': editionId,
+          'updatedAt': DateTime.now().toUtc().toIso8601String(),
+        },
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Could not save your preferred edition: $error')),
+        );
+      }
+    }
   }
 
   MediaItem? get _selectedEdition {
@@ -681,7 +769,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
             const SizedBox(height: 5),
             const UniversalText(
-              'Select the exact version you want to watch before pressing Play.',
+              'Choose a version to watch. Your selection is saved to your profile.',
               style: TextStyle(color: Colors.white60, fontSize: 12),
             ),
             const SizedBox(height: 10),
@@ -703,7 +791,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                       overflow: TextOverflow.ellipsis),
                 );
               }).toList(),
-              onChanged: (value) => setState(() => _selectedEditionId = value),
+              onChanged: _selectEdition,
             ),
             if (_selectedEdition == null) ...[
               const SizedBox(height: 8),

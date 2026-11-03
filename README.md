@@ -24,7 +24,7 @@ The project now treats the home server as the source of truth for server-managed
 ### Backend environment
 
 - `SERVER_HOST=0.0.0.0` — bind the API to the LAN.
-- `SERVER_PUBLIC_URL=http://<server-ip>:8080` — URL clients should use.
+- `SERVER_PUBLIC_URL=https://<trusted-server-host>:8080` — HTTPS URL clients should use. Configure a certificate valid for that host.
 - `ARM_SERVER_URL=http://<arm-host>:<port>` — ARM web/API address.
 - `MEDIA_ROOT=/path/to/media` — root of Movies/Series/Music storage.
 - `MOVIES_PATH`, `SERIES_PATH`, `MUSIC_PATH` — optional category paths.
@@ -53,6 +53,8 @@ The project now uses a consolidated architecture model for the larger roadmap. T
 See [`docs/CANONICAL_ARCHITECTURE.md`](docs/CANONICAL_ARCHITECTURE.md) for the canonical shared capability architecture, Universal Media Actions, integration ownership, and delivery order.
 
 See [`docs/MASTER_CAPABILITY_ROADMAP.md`](docs/MASTER_CAPABILITY_ROADMAP.md) for the carried-forward Phase 1/2 foundation, the numbered Phase 3 additions through #116, and the separate productionization track.
+
+See [`docs/INTELLIGENT_ENTERTAINMENT_ROADMAP.md`](docs/INTELLIGENT_ENTERTAINMENT_ROADMAP.md) for the prioritized large-library roadmap, shared reliability gates, and explicit product-scope guardrails.
 
 The feature map for media versions, universal profile actions, dynamic collections, and relationship graph ownership is included in the canonical architecture document.
 

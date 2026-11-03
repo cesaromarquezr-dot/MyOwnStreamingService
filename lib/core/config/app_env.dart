@@ -31,9 +31,16 @@ class AppEnv {
         const String.fromEnvironment('SUPABASE_ANON_KEY'),
       ]);
 
-  static String get backendApiUrl => _firstNonEmpty(<String>[
-        _fileValue('BACKEND_API_URL'),
-        const String.fromEnvironment('BACKEND_API_URL'),
-        'https://127.0.0.1:8080/api/v1',
-      ]);
+  static String get backendApiUrl {
+    final value = _firstNonEmpty(<String>[
+      _fileValue('BACKEND_API_URL'),
+      const String.fromEnvironment('BACKEND_API_URL'),
+      'https://127.0.0.1:8080/api/v1',
+    ]);
+    final uri = Uri.tryParse(value);
+    if (uri == null || !uri.hasAuthority || uri.scheme.toLowerCase() != 'https') {
+      throw StateError('BACKEND_API_URL must be an absolute HTTPS URL.');
+    }
+    return value;
+  }
 }

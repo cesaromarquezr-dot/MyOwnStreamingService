@@ -37,6 +37,7 @@ import 'energy_saver.dart';
 import 'page_hero_banner.dart';
 import 'home_hero_hover_preview.dart';
 import 'themed_episode_engine.dart';
+import 'themed_movie_engine.dart';
 
 export 'home_hero_hover_preview.dart'
     show HomeHoverPreviewStore, HomeHeroHoverPreviewRegion;
@@ -1845,6 +1846,8 @@ class _ThemedEpisodeEntry {
   final String themeKey;
   final int confidence;
   final int seasonalPriority;
+  final String? moodKey;
+  final String? moodLabel;
 
   const _ThemedEpisodeEntry({
     required this.parent,
@@ -1853,6 +1856,8 @@ class _ThemedEpisodeEntry {
     required this.themeKey,
     required this.confidence,
     required this.seasonalPriority,
+    this.moodKey,
+    this.moodLabel,
     this.episode,
     this.imageUrl,
   });
@@ -2043,6 +2048,23 @@ class _HomeThemedEpisodesSectionState extends State<HomeThemedEpisodesSection> {
             imageUrl: media.imageUrl,
           ));
         }
+        if (ThemedMovieEngine.isMovie(media)) {
+          for (final match in ThemedMovieEngine.curveballMatchesForMovie(media,
+              date: date)) {
+            entries.add(_ThemedEpisodeEntry(
+              parent: media,
+              title: media.title,
+              detail:
+                  '${match.holidayLabel} • ${match.moodLabel} • ${media.type}',
+              themeKey: match.holidayKey,
+              confidence: match.confidence,
+              seasonalPriority: match.seasonalPriority,
+              moodKey: match.moodKey,
+              moodLabel: match.moodLabel,
+              imageUrl: media.imageUrl,
+            ));
+          }
+        }
       }
     }
 
@@ -2057,7 +2079,7 @@ class _HomeThemedEpisodesSectionState extends State<HomeThemedEpisodesSection> {
           '';
       final key = episodeId.isNotEmpty
           ? '${entry.parent.id}:$episodeId'
-          : '${entry.parent.id}:$seasonNumber:$episodeNumber:${ThemedEpisodeEngine.normalize(entry.title)}:${entry.themeKey}';
+          : '${entry.parent.id}:$seasonNumber:$episodeNumber:${ThemedEpisodeEngine.normalize(entry.title)}:${entry.themeKey}:${entry.moodKey ?? ''}';
       final previous = unique[key];
       if (previous == null || entry.confidence > previous.confidence) {
         unique[key] = entry;
@@ -2211,7 +2233,14 @@ class _HomeThemedEpisodesSectionState extends State<HomeThemedEpisodesSection> {
     // its exact playable episode while movie/show cards open that media item.
     final groupedEpisodes = <String, List<_ThemedEpisodeEntry>>{};
     final groupedMedia = <String, List<_ThemedEpisodeEntry>>{};
+    final groupedCurveballs = <String, List<_ThemedEpisodeEntry>>{};
     for (final entry in entries) {
+      if (entry.moodKey != null) {
+        groupedCurveballs
+            .putIfAbsent(entry.moodKey!, () => <_ThemedEpisodeEntry>[])
+            .add(entry);
+        continue;
+      }
       final target = entry.episode == null ? groupedMedia : groupedEpisodes;
       target
           .putIfAbsent(entry.themeKey, () => <_ThemedEpisodeEntry>[])
@@ -2353,6 +2382,53 @@ class _HomeThemedEpisodesSectionState extends State<HomeThemedEpisodesSection> {
                         title: entry.title,
                         subtitle:
                             entry.detail.replaceFirst('$themeLabel • ', ''),
+                        imageUrl: entry.imageUrl,
+                        media: entry.parent,
+                        onTap: () => _openEntry(context, entry),
+                        width: 148,
+                      );
+                    },
+                  ),
+                ],
+              );
+            }),
+          if (groupedCurveballs.isNotEmpty)
+            _HolidaySectionHeader(
+              title: 'Holiday curveballs',
+              subtitle:
+                  'The holiday setting and the movie’s genre or tone are treated separately.',
+              themeKey: currentThemeKey,
+            ),
+          for (final moodKey in groupedCurveballs.keys)
+            Builder(builder: (context) {
+              final rankedEntries = groupedCurveballs[moodKey]!
+                ..sort((a, b) {
+                  final confidence = b.confidence.compareTo(a.confidence);
+                  if (confidence != 0) return confidence;
+                  return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+                });
+              final themedEntries = rankedEntries.toList(growable: false);
+              final moodLabel = themedEntries.first.moodLabel ?? moodKey;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _HolidaySectionHeader(
+                    title: moodLabel,
+                    subtitle:
+                        'From your library • a different take on the holiday',
+                    themeKey: themedEntries.first.themeKey,
+                  ),
+                  HomeArrowRail(
+                    height: 210,
+                    itemCount: themedEntries.length,
+                    separatorExtent: 12,
+                    padding: const EdgeInsets.symmetric(horizontal: 48),
+                    itemBuilder: (context, index) {
+                      final entry = themedEntries[index];
+                      return _DiscoveryMediaCard(
+                        title: entry.title,
+                        subtitle:
+                            '${ThemedEpisodeEngine.labelFor(entry.themeKey)} • ${entry.parent.type}',
                         imageUrl: entry.imageUrl,
                         media: entry.parent,
                         onTap: () => _openEntry(context, entry),
