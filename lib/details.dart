@@ -256,22 +256,38 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     final preferences = await StreamingExperiencePreferences.load(
       profileId: AppController.instance.currentProfile?.id,
     );
-    final targetLanguage = OriginalLanguageDefaults.resolveForMedia(media);
-    final audio = OriginalLanguageDefaults.bestTrack(
+    final originalLanguage = OriginalLanguageDefaults.resolveForMedia(media);
+    final targetAudioLanguage = preferences.preferredAudioLanguage.isNotEmpty
+        ? preferences.preferredAudioLanguage
+        : (preferences.preferOriginalAudio ? originalLanguage : null);
+    final targetSubtitleLanguage = preferences.preferredSubtitleLanguage.isNotEmpty
+        ? preferences.preferredSubtitleLanguage
+        : (preferences.preferOriginalSubtitles ? originalLanguage : null);
+    final savedTracks = await PlaybackTrackSelectionStore.load(
+      profileId: AppController.instance.currentProfile?.id ?? 'default',
+      mediaId: media.id,
+    );
+    final automaticAudio = OriginalLanguageDefaults.bestTrack(
           media.audioTracks,
-          targetLanguage:
-              preferences.preferOriginalLanguageTracks ? targetLanguage : null,
+          targetLanguage: targetAudioLanguage,
         ) ??
         'Default';
-    final subtitle = preferences.subtitlesEnabled
+    final savedAudio = savedTracks['audio'];
+    final audio = media.audioTracks.contains(savedAudio)
+        ? savedAudio!
+        : automaticAudio;
+    final savedSubtitle = savedTracks['subtitle'];
+    final automaticSubtitle = preferences.subtitlesEnabled
         ? OriginalLanguageDefaults.bestTrack(
             media.subtitles,
-            targetLanguage: preferences.preferOriginalLanguageTracks
-                ? targetLanguage
-                : null,
+            targetLanguage: targetSubtitleLanguage,
             subtitles: true,
           )
         : null;
+    final subtitle = !preferences.subtitlesEnabled ||
+            (savedTracks.containsKey('subtitle') && savedSubtitle == '')
+        ? null
+        : (media.subtitles.contains(savedSubtitle) ? savedSubtitle : automaticSubtitle);
     if (!mounted) return;
     setState(() {
       selectedAudio = audio;
@@ -2872,6 +2888,10 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   /// Performs `_buildAudioSubtitles` for this feature. Update this documentation when its contract changes.
   Widget _buildAudioSubtitles() {
     final originalLanguage = OriginalLanguageDefaults.resolveForMedia(media);
+    final originalAudioTrack = OriginalLanguageDefaults.matchingTrack(
+      media.audioTracks,
+      targetLanguage: originalLanguage,
+    );
     return Padding(
       padding: const EdgeInsets.only(bottom: 22),
       child: Column(
@@ -2881,7 +2901,10 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
               (media.language != null && media.language!.trim().isNotEmpty) ||
               media.audioTracks.isNotEmpty ||
               media.subtitles.isNotEmpty ||
-              media.extras.isNotEmpty)
+              media.extras.isNotEmpty ||
+              (media.countryOfOrigin?.trim().isNotEmpty ?? false) ||
+              media.culturalSettings.isNotEmpty ||
+              media.culturalInspirations.isNotEmpty)
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(14),
@@ -2889,8 +2912,17 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (originalLanguage != null)
-                      Text(
-                          'Original-language default: ${OriginalLanguageDefaults.displayName(originalLanguage)} (audio and subtitles when available)'),
+                      Text(originalAudioTrack == null
+                          ? 'Original audio: ${OriginalLanguageDefaults.displayName(originalLanguage)} (no matching track identified in this file)'
+                          : 'Original audio: ${OriginalLanguageDefaults.displayName(originalLanguage)} · $originalAudioTrack'),
+                    if (originalLanguage == null)
+                      const Text('Original audio language: not verified in metadata; no language is inferred from cultural inspiration.'),
+                    if (media.countryOfOrigin != null && media.countryOfOrigin!.trim().isNotEmpty)
+                      Text('Production origin: ${media.countryOfOrigin}'),
+                    if (media.culturalSettings.isNotEmpty)
+                      Text('Cultural setting: ${media.culturalSettings.join(', ')}'),
+                    if (media.culturalInspirations.isNotEmpty)
+                      Text('Cultural inspiration: ${media.culturalInspirations.join(', ')}'),
                     if (media.language != null &&
                         media.language!.trim().isNotEmpty)
                       Text('Language: ${media.language}'),
@@ -2940,16 +2972,33 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           selectedAudio: selectedAudio,
           subtitlesEnabled: subtitlesEnabled,
           selectedSubtitle: selectedSubtitle,
+          originalAudioLanguage: OriginalLanguageDefaults.resolveForMedia(media),
+          originalAudioTrack: OriginalLanguageDefaults.matchingTrack(
+            media.audioTracks,
+            targetLanguage: OriginalLanguageDefaults.resolveForMedia(media),
+          ),
           onAudioChanged: (value) {
             setState(() {
               selectedAudio = value;
             });
+            unawaited(PlaybackTrackSelectionStore.save(
+              profileId: AppController.instance.currentProfile?.id ?? 'default',
+              mediaId: media.id,
+              kind: 'audio',
+              value: value,
+            ));
           },
           onSubtitleChanged: (value) {
             setState(() {
               selectedSubtitle = value;
               subtitlesEnabled = value != null;
             });
+            unawaited(PlaybackTrackSelectionStore.save(
+              profileId: AppController.instance.currentProfile?.id ?? 'default',
+              mediaId: media.id,
+              kind: 'subtitle',
+              value: value ?? '',
+            ));
           },
         );
       },

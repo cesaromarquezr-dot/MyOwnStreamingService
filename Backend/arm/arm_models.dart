@@ -1495,6 +1495,7 @@ class ArmDisc {
   final String? discType;
   final String? region;
   final bool detected;
+  final String? discFingerprint;
   final List<ArmDiscTitle> titles;
 
   ArmDisc({
@@ -1504,6 +1505,7 @@ class ArmDisc {
     this.discType,
     this.region,
     required this.detected,
+    this.discFingerprint,
     this.titles = const [],
   });
 
@@ -1520,6 +1522,7 @@ class ArmDisc {
       title: title,
       discType: ArmDiscTypeExtension.fromValue(discType),
       region: region,
+      discFingerprint: discFingerprint,
       contents: titles
           .map(
             (title) => title.toDiscContent(
@@ -1545,6 +1548,7 @@ class ArmDisc {
         discType: json['discType']?.toString(),
         region: json['region']?.toString(),
         detected: json['detected'] == true,
+        discFingerprint: json['discFingerprint']?.toString(),
         titles: json['titles'] is List
             ? (json['titles'] as List)
                 .whereType<Map>()
@@ -1564,6 +1568,7 @@ class ArmDisc {
         'discType': discType,
         'region': region,
         'detected': detected,
+        'discFingerprint': discFingerprint,
         'titles': titles
             .map((title) => title.toJson())
             .toList(),

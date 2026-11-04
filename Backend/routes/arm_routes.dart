@@ -164,41 +164,53 @@ class ArmRoutes {
   Future<void> _scan(
     HttpRequest request,
   ) async {
-    if (!_authenticate(request)) {
+    final account = authentication.authenticate(request);
+    if (account == null) {
       await _sendUnauthorized(request.response);
       return;
     }
 
     final body = await _readJson(request);
-    final driveId = _requiredString(
-      body,
-      'driveId',
-    );
-
+    final driveId = _requiredString(body, 'driveId');
     if (driveId == null) {
-      await _sendJson(
-        request.response,
-        HttpStatus.badRequest,
-        {
-          'success': false,
-          'error': 'driveId is required.',
-        },
-      );
+      await _sendJson(request.response, HttpStatus.badRequest, {
+        'success': false,
+        'error': 'driveId is required.',
+      });
       return;
     }
 
-    final disc = await armService.scanDisc(
-      driveId: driveId,
-    );
+    final disc = await armService.scanDisc(driveId: driveId);
+    final discJson = disc.toJson();
+    final profileId = body['profileId']?.toString().trim() ?? '';
+    if (profileId.isNotEmpty) {
+      final profile = account.getProfileById(profileId);
+      if (profile == null) {
+        await _sendJson(request.response, HttpStatus.notFound, {
+          'success': false,
+          'error': 'Profile not found.',
+        });
+        return;
+      }
+      final rawMappings = profile.experienceData['discMappings'];
+      final mappings = rawMappings is List
+          ? rawMappings.whereType<Map>().map((row) => Map<String, dynamic>.from(row))
+          : const <Map<String, dynamic>>[];
+      final fingerprint = disc.discFingerprint;
+      if (fingerprint != null && fingerprint.isNotEmpty) {
+        for (final mapping in mappings) {
+          if (mapping['discFingerprint']?.toString() == fingerprint) {
+            discJson['rememberedEpisodeMapping'] = mapping;
+            break;
+          }
+        }
+      }
+    }
 
-    await _sendJson(
-      request.response,
-      HttpStatus.ok,
-      {
-        'success': true,
-        'disc': disc.toJson(),
-      },
-    );
+    await _sendJson(request.response, HttpStatus.ok, {
+      'success': true,
+      'disc': discJson,
+    });
   }
 
   Future<void> _import(

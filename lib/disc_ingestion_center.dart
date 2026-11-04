@@ -1,10 +1,14 @@
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_core.dart';
+import 'backend_api.dart';
 import 'core/services/disc_ingestion_service.dart';
+import 'personal_media_intelligence_center.dart';
 
 const _discAccent = Color(0xFF8B7CFF);
 
@@ -140,6 +144,48 @@ class _DiscIngestionCenterScreenState extends State<DiscIngestionCenterScreen> {
     } finally {
       if (mounted) setState(() => _testingDestination = false);
     }
+  }
+
+  void _openEpisodeNotebook() {
+    MakeMkvDrive? drive;
+    for (final item in _drives) {
+      if (item.index == _selectedDrive) { drive = item; break; }
+    }
+    final discLabel = drive?.discName.trim().isNotEmpty == true
+        ? drive!.discName.trim()
+        : 'Disc on ${drive?.name ?? 'drive'}';
+    // Hash the detected MakeMKV title manifest rather than the drive number:
+    // the same disc can then be recognized in another optical drive. This is
+    // a title-layout fingerprint, not a cryptographic proof of disc identity.
+    int durationSeconds(String value) {
+      final match = RegExp(r'^(\d+):([0-5]\d):([0-5]\d)$').firstMatch(value.trim());
+      if (match == null) return 0;
+      final hours = int.tryParse(match.group(1) ?? '') ?? 0;
+      final minutes = int.tryParse(match.group(2) ?? '') ?? 0;
+      final seconds = int.tryParse(match.group(3) ?? '') ?? 0;
+      return (hours * 3600 + minutes * 60 + seconds).clamp(0, 86400).toInt();
+    }
+    final manifest = _discTitles.map((title) => <String, dynamic>{
+      'index': title.index,
+      'durationSeconds': durationSeconds(title.duration),
+      'chapters': title.chapters,
+      'name': title.name.trim().toLowerCase(),
+    }).toList()..sort((a, b) => (a['index'] as int).compareTo(b['index'] as int));
+    final fingerprint = 'title-manifest-v1:${sha256.convert(utf8.encode(jsonEncode(manifest)))}';
+    final summaries = _discTitles.map((title) => <String, dynamic>{
+      'title': 'Title ${title.index + 1}: ${title.name}',
+      'duration': title.duration,
+      'titleIndex': title.index,
+      'chapters': title.chapters,
+    }).toList(growable: false);
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => PersonalMediaIntelligenceCenterScreen(
+        initialTab: 1,
+        initialDiscLabel: discLabel,
+        initialDiscFingerprint: fingerprint,
+        detectedTitleSummaries: summaries,
+      ),
+    ));
   }
 
   Future<void> _startRip() async {
@@ -384,6 +430,25 @@ class _DiscIngestionCenterScreenState extends State<DiscIngestionCenterScreen> {
                       contentCategory: contentCategory,
                       parentMediaId: parentMediaId,
                     );
+                    final profileId = AppController.instance.currentProfile?.id.trim() ?? '';
+                    if (AppController.instance.isBackendAuthenticated && profileId.isNotEmpty) {
+                      try {
+                        await AppController.instance.backendApi.savePreservationRecord(
+                          profileId: profileId,
+                          id: 'mkv_${item.id}',
+                          title: item.title,
+                          mediaType: kind,
+                          source: 'MakeMKV',
+                          status: 'completed',
+                          verificationStatus: 'header-checked',
+                          fileSizeBytes: validation.sizeBytes,
+                          discLabel: discTitleController.text.trim().isEmpty ? null : discTitleController.text.trim(),
+                          mediaId: item.id,
+                        );
+                      } catch (_) {
+                        // Library import succeeds even if the optional remote preservation ledger is offline.
+                      }
+                    }
                     if (!dialogContext.mounted) return;
                     Navigator.pop(dialogContext);
                     if (mounted) {
@@ -555,6 +620,8 @@ class _DiscIngestionCenterScreenState extends State<DiscIngestionCenterScreen> {
                 )),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(onPressed: _selectedTitleIndexes.isEmpty ? null : () { final indexes = _selectedTitleIndexes.toList()..sort(); _titleSelectorController.text = indexes.join(','); _message('Selected title indexes prepared. Verify the selector before starting a rip.'); }, icon: const Icon(Icons.playlist_add_check), label: const Text('Use selected titles in rip selector')),
+                const SizedBox(height: 6),
+                FilledButton.tonalIcon(onPressed: _openEpisodeNotebook, icon: const Icon(Icons.tv_rounded), label: const Text('Identify TV episodes and remember this disc')),
                 const SizedBox(height: 6),
                 const Text('Review safeguard: duration is a hint, not proof of movie identity. Compare names and durations manually; this screen does not automatically merge titles or claim to identify alternate cuts.', style: TextStyle(fontSize: 12)),
               ],

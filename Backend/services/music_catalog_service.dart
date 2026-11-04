@@ -618,122 +618,169 @@ class MusicCatalogService {
     };
   }
 
-  /// Finds artist candidates using shared Spotify genre tags. Spotify's related-
-  /// artists endpoint is unavailable to many Development Mode apps, so this
-  /// deliberately labels its result as a genre-based similarity, not a listener graph.
+  /// Builds an artist-radio discovery list with ListenBrainz collaborative
+  /// listening data. MusicBrainz supplies the stable seed artist MBID; Spotify
+  /// credentials are not required for this feature.
   Future<Map<String, dynamic>> relatedArtists({
     required String artistName,
     int limit = 12,
   }) async {
     final cleanName = artistName.trim();
-    if (cleanName.isEmpty)
+    if (cleanName.isEmpty) {
       throw const FormatException('An artist name is required.');
-    if (!spotifyConfigured) {
+    }
+
+    final matches = await _searchMusicBrainzEntity(
+      entity: 'artist',
+      queryField: 'artist',
+      query: cleanName,
+      limit: 10,
+      resultKey: 'artists',
+    );
+    String normalize(String value) =>
+        value.toLowerCase().trim().replaceAll(RegExp(r'[\s._\-&,/()]+'), '');
+    final target = normalize(cleanName);
+    Map<String, dynamic>? seed;
+    for (final candidate in matches) {
+      if (normalize(candidate['name']?.toString() ?? '') == target) {
+        seed = candidate;
+        break;
+      }
+    }
+    if (seed == null && matches.length == 1) seed = matches.first;
+    if (seed == null || !_isMbid(seed['id']?.toString() ?? '')) {
       return <String, dynamic>{
         'success': true,
-        'configured': false,
+        'configured': true,
+        'source': 'MusicBrainz + ListenBrainz',
         'items': <Map<String, dynamic>>[],
-        'message': 'Spotify is not configured.'
+        'candidates': matches.take(5).toList(growable: false),
+        'message': matches.isEmpty
+            ? 'No MusicBrainz artist match was found.'
+            : 'Several possible artists were found. Refine the artist name to avoid choosing the wrong recording artist.',
       };
     }
-    final seedSearch =
-        await _searchSpotify(cleanName, type: 'artist', limit: 5);
-    final rawArtists = seedSearch['artists'] is List
-        ? (seedSearch['artists'] as List)
+
+    final artistMbid = seed['id']!.toString();
+    final request = _listenBrainzQueue.then(
+      (_) => _fetchListenBrainzArtistRadio(artistMbid),
+    );
+    _listenBrainzQueue = request.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    final radio = await request;
+    final items = radio['items'] is List
+        ? (radio['items'] as List)
             .whereType<Map>()
             .map((row) => Map<String, dynamic>.from(row))
             .toList()
         : <Map<String, dynamic>>[];
-    String norm(String value) =>
-        value.toLowerCase().trim().replaceAll(RegExp(r'[\s._\-&,/()]+'), '');
-    final targetNorm = norm(cleanName);
-    Map<String, dynamic>? seed;
-    for (final row in rawArtists) {
-      if (norm(row['name']?.toString() ?? '') == targetNorm) {
-        seed = row;
-        break;
-      }
-    }
-    seed ??= rawArtists.isEmpty ? null : rawArtists.first;
-    if (seed == null || (seed['id']?.toString() ?? '').isEmpty) {
-      return <String, dynamic>{
-        'success': true,
-        'configured': true,
-        'items': <Map<String, dynamic>>[],
-        'message': 'No exact Spotify artist match was found.'
-      };
-    }
-    final seedGenres = seed['genres'] is List
-        ? (seed['genres'] as List)
-            .map((value) => value.toString().trim())
-            .where((value) => value.isNotEmpty)
-            .toList()
-        : <String>[];
-    if (seedGenres.isEmpty) {
-      return <String, dynamic>{
-        'success': true,
-        'configured': true,
-        'seedArtist': seed,
-        'items': <Map<String, dynamic>>[],
-        'message': 'Spotify has no genre tags for this artist yet.'
-      };
-    }
-    final candidateRows = <Map<String, dynamic>>[];
-    for (final genre in seedGenres.take(4)) {
-      try {
-        final escapedGenre = genre.replaceAll('"', '');
-        final results = await _searchSpotify('genre:"$escapedGenre"',
-            type: 'artist', limit: 10);
-        final rows = results['artists'];
-        if (rows is List)
-          candidateRows.addAll(rows
-              .whereType<Map>()
-              .map((row) => Map<String, dynamic>.from(row)));
-      } catch (_) {
-        // Keep useful matches from other genre queries if one provider query fails.
-      }
-    }
-    final seedId = seed['id']?.toString() ?? '';
-    final byId = <String, Map<String, dynamic>>{};
-    for (final candidate in candidateRows) {
-      final id = candidate['id']?.toString() ?? '';
-      if (id.isEmpty || id == seedId) continue;
-      final candidateGenres = candidate['genres'] is List
-          ? (candidate['genres'] as List)
-              .map((value) => value.toString())
-              .toList()
-          : <String>[];
-      final shared = candidateGenres
-          .where((genre) => seedGenres.any(
-              (seedGenre) => seedGenre.toLowerCase() == genre.toLowerCase()))
-          .toSet()
-          .toList();
-      if (shared.isEmpty) continue;
-      final existing = byId[id];
-      final score = shared.length * 100;
-      final previousScore =
-          (existing?['similarityScore'] as num?)?.toInt() ?? -1;
-      if (score > previousScore) {
-        byId[id] = <String, dynamic>{
-          ...candidate,
-          'similarityScore': score,
-          'similarityReason': 'Shares ${shared.take(3).join(', ')}'
-        };
-      }
-    }
-    final items = byId.values.toList()
-      ..sort((a, b) => ((b['similarityScore'] as num?)?.toInt() ?? 0)
-          .compareTo((a['similarityScore'] as num?)?.toInt() ?? 0));
     return <String, dynamic>{
       'success': true,
       'configured': true,
+      'source': 'ListenBrainz collaborative listening radio',
       'seedArtist': seed,
-      'seedGenres': seedGenres,
+      'seedArtistMbid': artistMbid,
+      'mode': 'medium',
       'items': items.take(limit.clamp(1, 20).toInt()).toList(growable: false),
-      'source': 'Spotify artist genre metadata',
-      'message':
-          'Similar-sounding artists are ranked from shared Spotify genre tags. This is not an official Spotify Fans Also Like ranking.',
+      'message': items.isEmpty
+          ? 'ListenBrainz has no related-artist recordings for this seed yet.'
+          : 'Related artists are drawn from ListenBrainz collaborative listening data. This is a discovery list; it does not start a continuous playback queue.',
     };
+  }
+
+  Future<Map<String, dynamic>> _fetchListenBrainzArtistRadio(
+    String artistMbid,
+  ) async {
+    final elapsed =
+        DateTime.now().toUtc().difference(_lastListenBrainzRequestAt);
+    if (elapsed < const Duration(seconds: 1)) {
+      await Future<void>.delayed(const Duration(seconds: 1) - elapsed);
+    }
+    final uri = Uri.https(
+      'api.listenbrainz.org',
+      '/1/lb-radio/artist/$artistMbid',
+      <String, String>{
+        'mode': 'medium',
+        'max_similar_artists': '20',
+        'max_recordings_per_artist': '5',
+        'pop_begin': '0',
+        'pop_end': '100',
+      },
+    );
+    final request =
+        await _client.getUrl(uri).timeout(const Duration(seconds: 10));
+    request.headers
+      ..set(HttpHeaders.acceptHeader, 'application/json')
+      ..set(
+        HttpHeaders.userAgentHeader,
+        userAgent.trim().isNotEmpty
+            ? userAgent.trim()
+            : 'MyOwnStreamingService/1.0 (self-hosted)',
+      );
+    final response = await request.close().timeout(const Duration(seconds: 15));
+    _lastListenBrainzRequestAt = DateTime.now().toUtc();
+    if (response.statusCode == HttpStatus.noContent) {
+      await response.drain<void>();
+      return <String, dynamic>{'items': <Map<String, dynamic>>[]};
+    }
+    final body = await response
+        .transform(utf8.decoder)
+        .join()
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw MusicCatalogUpstreamException(
+        response.statusCode,
+        'ListenBrainz artist radio request failed.',
+      );
+    }
+    final decoded = jsonDecode(body);
+    if (decoded is! Map) {
+      throw const FormatException(
+        'ListenBrainz returned an unexpected artist-radio response.',
+      );
+    }
+    final payload =
+        decoded['payload'] is Map ? decoded['payload'] as Map : decoded;
+    final byArtist = <String, Map<String, dynamic>>{};
+    for (final entry in payload.entries) {
+      final relatedArtistMbid = entry.key.toString();
+      // The upstream response includes the seed artist itself; radio shelves
+      // should contain discoveries rather than repeat the artist being explored.
+      if (relatedArtistMbid == artistMbid) continue;
+      if (entry.value is! List) continue;
+      final recordings = (entry.value as List)
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList();
+      if (recordings.isEmpty) continue;
+      final artistName = recordings.first['similar_artist_name']?.toString() ??
+          'Unknown artist';
+      final listenCount = recordings.fold<int>(
+        0,
+        (total, row) =>
+            total + ((row['total_listen_count'] as num?)?.toInt() ?? 0),
+      );
+      byArtist[relatedArtistMbid] = <String, dynamic>{
+        'id': relatedArtistMbid,
+        'name': artistName,
+        'listenCount': listenCount,
+        'recordingCount': recordings.length,
+        'recordings': recordings
+            .map((row) => <String, dynamic>{
+                  'recordingMbid': row['recording_mbid']?.toString() ?? '',
+                  'listenCount': row['total_listen_count'] ?? 0,
+                })
+            .toList(growable: false),
+        'similarityReason': 'ListenBrainz collaborative listening radio',
+        'similarityScore': listenCount,
+      };
+    }
+    final items = byArtist.values.toList()
+      ..sort((a, b) => ((b['listenCount'] as num?)?.toInt() ?? 0)
+          .compareTo((a['listenCount'] as num?)?.toInt() ?? 0));
+    return <String, dynamic>{'items': items};
   }
 
   /// Returns Spotify Search's best-ranked tracks for an artist. Spotify removed
@@ -1793,6 +1840,60 @@ class MusicCatalogService {
       if (bDate.isEmpty) return -1;
       return aDate.compareTo(bDate);
     });
+    return items;
+  }
+
+  /// Lists recordings explicitly credited to one MusicBrainz artist MBID.
+  /// Stable artist IDs avoid merging performers who share similar names.
+  Future<List<Map<String, dynamic>>> artistRecordings({
+    required String artistMbid,
+    int limit = 100,
+  }) async {
+    if (!_isMbid(artistMbid)) {
+      throw const FormatException(
+          'A valid MusicBrainz artist MBID is required.');
+    }
+    final uri =
+        Uri.https('musicbrainz.org', '/ws/2/recording/', <String, String>{
+      'query': 'arid:$artistMbid',
+      'fmt': 'json',
+      'limit': '${limit.clamp(1, 100)}',
+    });
+    final payload = await _musicBrainzGet(uri);
+    final raw = payload['recordings'];
+    if (raw is! List) return <Map<String, dynamic>>[];
+    final items = <Map<String, dynamic>>[];
+    for (final value in raw.whereType<Map>()) {
+      final item = Map<String, dynamic>.from(value);
+      final artistCredits = item['artist-credit'];
+      final artistIds = <String>[];
+      if (artistCredits is List) {
+        for (final credit in artistCredits.whereType<Map>()) {
+          final artist = credit['artist'];
+          if (artist is Map) {
+            final id = artist['id']?.toString().trim() ?? '';
+            if (id.isNotEmpty) artistIds.add(id);
+          }
+        }
+      }
+      // MusicBrainz search is query-based; verify the result's actual credit
+      // before attaching it to this performer profile.
+      if (!artistIds.contains(artistMbid)) continue;
+      final recordingId = item['id']?.toString().trim() ?? '';
+      final title = item['title']?.toString().trim() ?? '';
+      if (recordingId.isEmpty || title.isEmpty) continue;
+      items.add(<String, dynamic>{
+        'id': recordingId,
+        'title': title,
+        'artist': _musicBrainzArtistCredits(artistCredits),
+        'artistIds': artistIds,
+        'lengthMs': item['length'],
+        'disambiguation': item['disambiguation']?.toString() ?? '',
+        'firstReleaseDate': item['first-release-date']?.toString() ?? '',
+        'source': 'MusicBrainz',
+        'type': 'recording',
+      });
+    }
     return items;
   }
 

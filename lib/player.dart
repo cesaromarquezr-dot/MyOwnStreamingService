@@ -141,10 +141,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (!mounted) return;
     final preferredAudioLanguage = preferences.preferredAudioLanguage.isNotEmpty
         ? preferences.preferredAudioLanguage
-        : (preferences.preferOriginalLanguageTracks ? originalLanguage : null);
+        : (preferences.preferOriginalAudio ? originalLanguage : null);
     final preferredSubtitleLanguage = preferences.preferredSubtitleLanguage.isNotEmpty
         ? preferences.preferredSubtitleLanguage
-        : (preferences.preferOriginalLanguageTracks ? originalLanguage : null);
+        : (preferences.preferOriginalSubtitles ? originalLanguage : null);
     final automaticAudio = OriginalLanguageDefaults.bestTrack(
           audioTracks,
           targetLanguage: preferredAudioLanguage,
@@ -891,6 +891,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
           selectedAudio: selectedAudio,
           subtitlesEnabled: subtitlesEnabled,
           selectedSubtitle: selectedSubtitle,
+          originalAudioLanguage: OriginalLanguageDefaults.resolveForMedia(widget.media),
+          originalAudioTrack: OriginalLanguageDefaults.matchingTrack(
+            widget.media.audioTracks,
+            targetLanguage: OriginalLanguageDefaults.resolveForMedia(widget.media),
+          ),
           onAudioChanged: _changeAudioTrack,
           onSubtitleChanged: _changeSubtitleTrack,
         );
@@ -2103,6 +2108,8 @@ class AudioSubtitleOptions extends StatefulWidget {
   final String selectedAudio;
   final bool subtitlesEnabled;
   final String? selectedSubtitle;
+  final String? originalAudioLanguage;
+  final String? originalAudioTrack;
 
   final ValueChanged<String> onAudioChanged;
 
@@ -2115,6 +2122,8 @@ class AudioSubtitleOptions extends StatefulWidget {
     required this.selectedAudio,
     required this.subtitlesEnabled,
     required this.selectedSubtitle,
+    this.originalAudioLanguage,
+    this.originalAudioTrack,
     required this.onAudioChanged,
     required this.onSubtitleChanged,
   });
@@ -2193,6 +2202,32 @@ class _AudioSubtitleOptionsState extends State<AudioSubtitleOptions> {
                 ],
               ),
               const SizedBox(height: 18),
+              if (widget.originalAudioLanguage != null)
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 14),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.verified_outlined, color: Colors.greenAccent, size: 19),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Text(
+                          widget.originalAudioTrack != null
+                              ? 'Original audio: ${OriginalLanguageDefaults.displayName(widget.originalAudioLanguage)} · ${widget.originalAudioTrack}. Other available tracks, including dubs, remain selectable.'
+                              : 'Original language: ${OriginalLanguageDefaults.displayName(widget.originalAudioLanguage)}. A matching track was not identified in this file; the listed audio tracks remain available.',
+                          style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.35),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               if (hasAudio)
                 DecoratedBox(
                   decoration: BoxDecoration(
@@ -2216,7 +2251,10 @@ class _AudioSubtitleOptionsState extends State<AudioSubtitleOptions> {
                       icon: const Icon(Icons.expand_more_rounded),
                       items: audioOptions
                           .map((option) => DropdownMenuItem(
-                              value: option, child: Text(option)))
+                              value: option,
+                              child: Text(option == widget.originalAudioTrack
+                                  ? '$option · Original'
+                                  : option)))
                           .toList(),
                       onChanged: (value) {
                         if (value == null) return;
@@ -2233,7 +2271,14 @@ class _AudioSubtitleOptionsState extends State<AudioSubtitleOptions> {
                   subtitle:
                       'This imported disc does not include audio metadata yet.',
                 ),
-              if (hasAudio) const SizedBox(height: 14),
+              if (hasAudio) ...[
+                const SizedBox(height: 6),
+                const Text(
+                  'Your per-title choice is remembered by profile. The current adaptive video_player source does not expose audio-track switching yet, so changing this selection may not change an active HLS/DASH stream.',
+                  style: TextStyle(color: Colors.white54, fontSize: 11, height: 1.35),
+                ),
+                const SizedBox(height: 14),
+              ],
               if (hasSubtitles)
                 DecoratedBox(
                   decoration: BoxDecoration(

@@ -50,6 +50,9 @@ class Media {
   final List<String> genres;
   final List<String> tags;
   final List<String> themes;
+  final List<String> tones;
+  final List<String> culturalSettings;
+  final List<String> culturalInspirations;
 
   // People involved with the media.
   final List<String> actors;
@@ -63,6 +66,11 @@ class Media {
 
   // Music associated with the media.
   final List<String> music;
+
+  /// Production entities are separate from distributors and parent companies
+  /// so studio discovery does not accidentally conflate those relationships.
+  final List<String> studios;
+  final List<String> companies;
 
   // TV information.
   final String? seriesId;
@@ -154,6 +162,9 @@ class Media {
     this.genres = const [],
     this.tags = const [],
     this.themes = const [],
+    this.tones = const [],
+    this.culturalSettings = const [],
+    this.culturalInspirations = const [],
     this.actors = const [],
     this.characters = const [],
     this.directors = const [],
@@ -161,6 +172,8 @@ class Media {
     this.franchises = const [],
     this.references = const [],
     this.music = const [],
+    this.studios = const [],
+    this.companies = const [],
     this.seriesId,
     this.seriesTitle,
     this.seasonNumber,
@@ -267,6 +280,9 @@ class Media {
       'genres': List<String>.from(genres),
       'tags': List<String>.from(tags),
       'themes': List<String>.from(themes),
+      'tones': List<String>.from(tones),
+      'culturalSettings': List<String>.from(culturalSettings),
+      'culturalInspirations': List<String>.from(culturalInspirations),
 
       'actors': List<String>.from(actors),
       'characters': List<String>.from(characters),
@@ -277,6 +293,8 @@ class Media {
       'references': List<String>.from(references),
 
       'music': List<String>.from(music),
+      'studios': List<String>.from(studios),
+      'companies': List<String>.from(companies),
 
       'seriesId': seriesId,
       'seriesTitle': seriesTitle,
@@ -351,6 +369,9 @@ class Media {
       genres: _stringList(json['genres']),
       tags: _stringList(json['tags']),
       themes: _stringList(json['themes']),
+      tones: _stringList(json['tones']),
+      culturalSettings: _stringList(json['culturalSettings'] ?? json['cultural_settings']),
+      culturalInspirations: _stringList(json['culturalInspirations'] ?? json['cultural_inspirations']),
 
       actors: _stringList(json['actors']),
       characters: _stringList(json['characters']),
@@ -361,6 +382,8 @@ class Media {
       references: _stringList(json['references']),
 
       music: _stringList(json['music']),
+      studios: _stringList(json['studios'] ?? json['productionStudios'] ?? json['production_studios']),
+      companies: _stringList(json['companies'] ?? json['productionCompanies'] ?? json['production_companies']),
 
       seriesId: _nullableString(json['seriesId'] ?? json['series_id']),
       seriesTitle: _nullableString(json['seriesTitle'] ?? json['series_title']),
@@ -439,6 +462,9 @@ class Media {
     List<String>? genres,
     List<String>? tags,
     List<String>? themes,
+    List<String>? tones,
+    List<String>? culturalSettings,
+    List<String>? culturalInspirations,
     List<String>? actors,
     List<String>? characters,
     List<String>? directors,
@@ -446,6 +472,8 @@ class Media {
     List<String>? franchises,
     List<String>? references,
     List<String>? music,
+    List<String>? studios,
+    List<String>? companies,
     String? seriesId,
     String? seriesTitle,
     int? seasonNumber,
@@ -538,6 +566,9 @@ class Media {
       genres: genres ?? this.genres,
       tags: tags ?? this.tags,
       themes: themes ?? this.themes,
+      tones: tones ?? this.tones,
+      culturalSettings: culturalSettings ?? this.culturalSettings,
+      culturalInspirations: culturalInspirations ?? this.culturalInspirations,
 
       actors: actors ?? this.actors,
       characters: characters ?? this.characters,
@@ -547,6 +578,8 @@ class Media {
       franchises: franchises ?? this.franchises,
       references: references ?? this.references,
       music: music ?? this.music,
+      studios: studios ?? this.studios,
+      companies: companies ?? this.companies,
 
       seriesId: clearSeriesId ? null : (seriesId ?? this.seriesId),
       seriesTitle: clearSeriesTitle ? null : (seriesTitle ?? this.seriesTitle),

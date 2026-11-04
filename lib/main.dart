@@ -83,6 +83,11 @@ import 'coming_soon_release_screen.dart';
 import 'song_identification_screen.dart';
 import 'watch_history_calendar.dart';
 import 'dialogue_search.dart';
+import 'discovery_center.dart';
+import 'performer_universe.dart';
+import 'personal_media_intelligence_center.dart';
+import 'interface_experience_studio.dart';
+import 'interface_experience.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -376,6 +381,15 @@ class _MyStreamingServiceState extends State<MyStreamingService> {
       ],
       navigatorKey: _appNavigatorKey,
       navigatorObservers: <NavigatorObserver>[_appPageRouteObserver],
+      routes: <String, WidgetBuilder>{
+        '/app/page/performer-universe': (context) {
+          final argument = ModalRoute.of(context)?.settings.arguments;
+          final performerName = argument is String ? argument.trim() : '';
+          return PerformerUniverseScreen(
+            performerName: performerName.isEmpty ? 'Unknown performer' : performerName,
+          );
+        },
+      },
       title: tr('My Personal Streaming Service'),
       builder: (context, child) {
         // Keep one Overlay above the app Navigator. The Navigator itself
@@ -4831,6 +4845,11 @@ void _showGlobalMore() {
         Navigator.of(sheetContext).pop();
         push(const AccountSettingsScreen(), routeName: '/app/page/settings');
       },
+      onInterfaceExperience: () {
+        Navigator.of(sheetContext).pop();
+        push(const InterfaceExperienceStudioScreen(),
+            routeName: '/app/page/interface-experience');
+      },
       onPowerPerformance: () {
         Navigator.of(sheetContext).pop();
         push(const PowerPerformanceScreen(),
@@ -4951,6 +4970,18 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   Widget _pageFor(PrimaryDestination destination) {
     switch (destination) {
       case PrimaryDestination.home:
+        final experienceConfig =
+            InterfaceExperienceRepository.instance.notifier.value;
+        final experienceMode = parseInterfaceExperienceMode(
+          experienceConfig?.activeExperience,
+        );
+        if (experienceConfig != null &&
+            experienceMode != InterfaceExperienceMode.classic) {
+          return ExperiencePreviewScreen(
+            mode: experienceMode,
+            config: experienceConfig,
+          );
+        }
         return HomeScreen(
           showAppBar: false,
           onRefresh: () => setState(() {}),
@@ -4985,14 +5016,25 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     super.initState();
     _visitedDestinations.add(selected);
     _activeMainScreenState = this;
+    InterfaceExperienceRepository.instance.notifier.addListener(
+      _handleInterfaceExperienceChanged,
+    );
+    unawaited(InterfaceExperienceRepository.instance.load());
     unawaited(EnergySaverController.instance.ensureLoaded(
       profileId: AppController.instance.currentProfile?.id,
     ));
     LanguageController.instance.loadForCurrentProfile();
   }
 
+  void _handleInterfaceExperienceChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    InterfaceExperienceRepository.instance.notifier.removeListener(
+      _handleInterfaceExperienceChanged,
+    );
     if (identical(_activeMainScreenState, this)) {
       _activeMainScreenState = null;
     }
@@ -5211,6 +5253,16 @@ class _AppShellHeaderState extends State<AppShellHeader> {
               onPressed: widget.onSurpriseMe,
               icon: const Icon(Icons.shuffle_rounded),
             ),
+          IconButton(
+            tooltip: 'Switch interface experience',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                settings: const RouteSettings(name: '/app/page/interface-experience'),
+                builder: (_) => const InterfaceExperienceStudioScreen(),
+              ),
+            ),
+            icon: const Icon(Icons.dashboard_customize_rounded),
+          ),
           PageCustomizeButton(pageId: widget.pageId),
         ],
       ),
@@ -5229,6 +5281,7 @@ class _MoreChoice {
 
 class _MoreActionsSheet extends StatelessWidget {
   final VoidCallback onSettings;
+  final VoidCallback onInterfaceExperience;
   final VoidCallback onPowerPerformance;
   final VoidCallback onStreamingExperience;
   final VoidCallback onPerfectStreaming;
@@ -5253,6 +5306,7 @@ class _MoreActionsSheet extends StatelessWidget {
 
   const _MoreActionsSheet({
     required this.onSettings,
+    required this.onInterfaceExperience,
     required this.onPowerPerformance,
     required this.onStreamingExperience,
     required this.onPerfectStreaming,
@@ -5308,6 +5362,11 @@ class _MoreActionsSheet extends StatelessWidget {
               'Settings',
               'Account, subscription, device, playback and support settings',
               onSettings),
+          _moreCard(
+              Icons.dashboard_customize_rounded,
+              'Interface Experience',
+              'Switch and customize Classic, Virtual Store, Redbox and Theater',
+              onInterfaceExperience),
           _moreCard(
               Icons.energy_savings_leaf_rounded,
               'Power & Performance',
@@ -7457,6 +7516,63 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
     super.dispose();
   }
 
+  List<Map<String, dynamic>> _armEpisodeTitleSummaries(dynamic rawTitles) {
+    if (rawTitles is! List) return <Map<String, dynamic>>[];
+    return rawTitles.whereType<Map>().toList().asMap().entries.map((entry) {
+      final row = Map<String, dynamic>.from(entry.value);
+      final metadata = row['metadata'] is Map
+          ? Map<String, dynamic>.from(row['metadata'] as Map)
+          : <String, dynamic>{};
+      final nestedMetadata = metadata['metadata'] is Map
+          ? Map<String, dynamic>.from(metadata['metadata'] as Map)
+          : <String, dynamic>{};
+      final rawIndex = metadata['titleIndex'] ?? metadata['title_index'] ??
+          metadata['index'] ?? metadata['titleNumber'] ?? metadata['title_number'] ??
+          nestedMetadata['titleIndex'] ?? nestedMetadata['title_index'] ??
+          nestedMetadata['index'] ?? nestedMetadata['titleNumber'] ??
+          nestedMetadata['title_number'];
+      final parsedIndex = rawIndex is num
+          ? rawIndex.toInt()
+          : int.tryParse(rawIndex?.toString() ?? '');
+      final isTitleNumber = metadata.containsKey('titleNumber') ||
+          metadata.containsKey('title_number') ||
+          nestedMetadata.containsKey('titleNumber') ||
+          nestedMetadata.containsKey('title_number');
+      final index = parsedIndex == null
+          ? entry.key
+          : isTitleNumber ? (parsedIndex - 1).clamp(0, 10000).toInt() : parsedIndex;
+      final rawDuration = metadata['durationSeconds'] ?? metadata['duration_seconds'] ??
+          metadata['duration'] ?? metadata['runtime'] ?? metadata['length'] ??
+          nestedMetadata['durationSeconds'] ?? nestedMetadata['duration_seconds'] ??
+          nestedMetadata['duration'] ?? nestedMetadata['runtime'] ?? nestedMetadata['length'];
+      final rawDurationText = rawDuration?.toString() ?? '';
+      final clock = RegExp(r'^(\d+):([0-5]\d):([0-5]\d)$').firstMatch(rawDurationText);
+      final clockSeconds = clock == null ? 0 :
+          (int.tryParse(clock.group(1) ?? '') ?? 0) * 3600 +
+          (int.tryParse(clock.group(2) ?? '') ?? 0) * 60 +
+          (int.tryParse(clock.group(3) ?? '') ?? 0);
+      final seconds = (row['durationSeconds'] as num?)?.round() ??
+          (row['duration'] as num?)?.round() ??
+          (rawDuration is num ? rawDuration.round() :
+              int.tryParse(rawDurationText) ?? clockSeconds);
+      final duration = seconds > 0
+          ? '${(seconds ~/ 3600).toString().padLeft(2, '0')}:${((seconds % 3600) ~/ 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}'
+          : '';
+      final rawChapters = metadata['chapters'] ?? metadata['chapterCount'] ??
+          metadata['chapter_count'] ?? nestedMetadata['chapters'] ??
+          nestedMetadata['chapterCount'] ?? nestedMetadata['chapter_count'];
+      final chapters = rawChapters is num
+          ? rawChapters.toInt()
+          : int.tryParse(rawChapters?.toString() ?? '') ?? 0;
+      return <String, dynamic>{
+        'title': 'Title ${index + 1}: ${row['title'] ?? row['name'] ?? 'Detected title'}',
+        'duration': duration,
+        'titleIndex': index,
+        'chapters': chapters,
+      };
+    }).toList(growable: false);
+  }
+
   /// Performs `_startArmImport` for this feature. Update this documentation when its contract changes.
   Future<void> _startArmImport() async {
     if (importing) return;
@@ -7499,16 +7615,73 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
       // Preflight any metadata the connected ARM adapter already exposes.
       // A missing rights signal is unknown, not a declaration that a disc is
       // legitimate; explicit blocked signals prevent this app from proceeding.
-      final preflight = await api.scanArmDisc(driveId: driveId!);
+      final activeProfileId = AppController.instance.currentProfile?.id.trim();
+      final preflight = await api.scanArmDisc(
+        driveId: driveId!,
+        profileId: activeProfileId,
+      );
       final scannedDisc = preflight['disc'];
       if (scannedDisc is Map) {
-        final reason = _rightsBlockReasonFor(
-          Map<String, dynamic>.from(scannedDisc),
-        );
+        final discData = Map<String, dynamic>.from(scannedDisc);
+        final reason = _rightsBlockReasonFor(discData);
         if (reason != null) {
           throw BackendApiException(
             'We do not allow pirated content in this service. $reason',
           );
+        }
+
+        final fingerprint = discData['discFingerprint']?.toString() ?? '';
+        final summaries = _armEpisodeTitleSummaries(discData['titles']);
+        if (fingerprint.isNotEmpty && summaries.isNotEmpty) {
+          final remembered = discData['rememberedEpisodeMapping'] is Map
+              ? Map<String, dynamic>.from(discData['rememberedEpisodeMapping'] as Map)
+              : null;
+          final mappingRows = remembered?['titleMappings'] is List
+              ? (remembered!['titleMappings'] as List).whereType<Map>().toList()
+              : const <Map>[];
+          final mappingSummary = mappingRows.map((row) {
+            final number = row['titleNumber'] ?? ((row['titleIndex'] as num?)?.toInt() ?? 0) + 1;
+            final episode = row['episodeNumber'] == null ? 'not assigned' : 'S${((remembered?['seasonNumber'] as num?)?.toInt() ?? 0).toString().padLeft(2, '0')}E${((row['episodeNumber'] as num?)?.toInt() ?? 0).toString().padLeft(2, '0')}';
+            final title = (row['episodeTitle'] ?? '').toString();
+            return 'Title $number → $episode${title.isEmpty ? '' : ' · $title'}';
+          }).join('\n');
+
+          // The disc preflight above awaits backend calls. Do not use this
+          // State's BuildContext unless the screen is still mounted.
+          if (!mounted) return;
+
+          final openNotebook = await showDialog<bool>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              title: Text(remembered == null
+                  ? 'Identify TV episodes before ripping?'
+                  : 'Remembered TV disc mapping found'),
+              content: Text(remembered == null
+                  ? 'ARM exposed ${summaries.length} title(s). For a TV disc, use the Episode Notebook to match each title to an episode and add opening-scene clues. You can also continue without episode mapping.'
+                  : '${remembered['seriesTitle'] ?? 'TV show'} · Season ${remembered['seasonNumber'] ?? '?'}\n\n$mappingSummary\n\nReview this mapping before continuing, or continue without opening the notebook.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Continue to ARM'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: Text(remembered == null ? 'Identify episodes' : 'Review mapping'),
+                ),
+              ],
+            ),
+          );
+          if (openNotebook == true && mounted) {
+            await Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => PersonalMediaIntelligenceCenterScreen(
+                initialTab: 1,
+                initialDiscLabel: discData['title']?.toString(),
+                initialDiscFingerprint: fingerprint,
+                detectedTitleSummaries: summaries,
+              ),
+            ));
+            if (!mounted) return;
+          }
         }
       }
 
@@ -9917,6 +10090,22 @@ class HomeMediaIntelligenceToolsShelf extends StatelessWidget {
         color: const Color(0xFFB9B4FF),
         page: const MediaUniverseScreen(),
         route: '/app/media-universe'
+      ),
+      (
+        title: 'Discovery Center',
+        subtitle: 'For You, Performer Universe, studios, stories and music links',
+        icon: Icons.auto_awesome_rounded,
+        color: const Color(0xFFBDAAFF),
+        page: const DiscoveryCenterScreen(),
+        route: '/app/discovery-center'
+      ),
+      (
+        title: 'Personal Media Intelligence',
+        subtitle: 'Music Memory, Music Wrapped, episode identification and media preservation',
+        icon: Icons.auto_awesome_mosaic_rounded,
+        color: const Color(0xFF9CC8FF),
+        page: const PersonalMediaIntelligenceCenterScreen(),
+        route: '/app/personal-media-intelligence'
       ),
       (
         title: 'Profiles & Permissions',

@@ -44,6 +44,75 @@ extension BackendApiGroupMethods on BackendApi {
     );
   }
 
+  Future<Map<String, dynamic>> getRecommendationPreferences({
+    required String profileId,
+  }) async {
+    _requireAuthentication();
+    final uri = Uri.parse('$baseUrl/recommendations/preferences')
+        .replace(queryParameters: <String, String>{'profileId': profileId});
+    return _requireSuccess(
+      await _networkClient.get(uri, headers: _headers),
+      'Unable to load discovery preferences.',
+    );
+  }
+
+  Future<Map<String, dynamic>> updateRecommendationPreferences({
+    required String profileId,
+    required Map<String, dynamic> preferences,
+  }) async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await _networkClient.put(
+        Uri.parse('$baseUrl/recommendations/preferences'),
+        headers: _headers,
+        body: jsonEncode(<String, dynamic>{
+          'profileId': profileId,
+          'preferences': preferences,
+        }),
+      ),
+      'Unable to save discovery preferences.',
+    );
+  }
+
+  Future<Map<String, dynamic>> saveRecommendationFeedback({
+    required String profileId,
+    required String mediaId,
+    required String action,
+  }) async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await _networkClient.post(
+        Uri.parse('$baseUrl/recommendations/feedback'),
+        headers: _headers,
+        body: jsonEncode(<String, String>{
+          'profileId': profileId,
+          'mediaId': mediaId,
+          'action': action,
+        }),
+      ),
+      'Unable to save recommendation feedback.',
+    );
+  }
+
+  Future<Map<String, dynamic>> compareRecommendationTitles({
+    required String profileId,
+    required String sourceId,
+    required String targetId,
+  }) async {
+    _requireAuthentication();
+    final uri = Uri.parse('$baseUrl/recommendations/similarity').replace(
+      queryParameters: <String, String>{
+        'profileId': profileId,
+        'sourceId': sourceId,
+        'targetId': targetId,
+      },
+    );
+    return _requireSuccess(
+      await _networkClient.get(uri, headers: _headers),
+      'Unable to compare these titles.',
+    );
+  }
+
   // ==========================================================
   // GROUP RECOMMENDATIONS
   // ==========================================================

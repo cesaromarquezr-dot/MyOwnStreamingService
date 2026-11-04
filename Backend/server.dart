@@ -72,6 +72,7 @@ import 'routes/live_shopping_routes.dart';
 import 'routes/location_routes.dart';
 import 'routes/media_intelligence_routes.dart';
 import 'routes/payment_routes.dart';
+import 'routes/personal_experience_routes.dart';
 import 'routes/physical_item_routes.dart';
 import 'routes/platform_routes.dart';
 import 'routes/platform_server_routes.dart';
@@ -445,6 +446,11 @@ Future<void> main() async {
     authentication: authentication,
   );
 
+  final personalExperienceRoutes = PersonalExperienceRoutes(
+    authentication: authentication,
+    database: database,
+  );
+
   // ------------------------------------------------------------
   // ADDITIONAL SERVICES / ROUTES
   // ------------------------------------------------------------
@@ -563,6 +569,7 @@ Future<void> main() async {
       paymentRoutes,
       groupRoutes,
       armRoutes,
+      personalExperienceRoutes,
       remoteAccessRoutes,
       storageRoutes,
       platformRoutes,
@@ -616,6 +623,7 @@ Future<void> _handleRequest(
   PaymentRoutes paymentRoutes,
   GroupRoutes groupRoutes,
   ArmRoutes armRoutes,
+  PersonalExperienceRoutes personalExperienceRoutes,
   RemoteAccessRoutes remoteAccessRoutes,
   StorageRoutes storageRoutes,
   PlatformRoutes platformRoutes,
@@ -889,7 +897,8 @@ Future<void> _handleRequest(
     // RECOMMENDATIONS
     // ----------------------------------------------------------
 
-    if (path == '/api/v1/recommendations') {
+    if (path == '/api/v1/recommendations' ||
+        path.startsWith('/api/v1/recommendations/')) {
       await recommendationsRoutes.handle(
         request,
       );
@@ -1135,6 +1144,16 @@ Future<void> _handleRequest(
         request,
       );
 
+      responseStarted = true;
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // PERSONAL ENTERTAINMENT MEMORY
+    // ----------------------------------------------------------
+
+    if (path == '/api/v1/experience' || path.startsWith('/api/v1/experience/')) {
+      await personalExperienceRoutes.handle(request);
       responseStarted = true;
       return;
     }

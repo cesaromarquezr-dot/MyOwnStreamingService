@@ -1161,6 +1161,16 @@ class MusicPlaybackController extends ChangeNotifier {
       await controller.play();
       isPlaying = true;
       MusicLibraryStore.instance.recordListen(track.id);
+      unawaited(AppController.instance.recordMusicListeningEvent(
+        title: track.title,
+        artist: track.artist,
+        album: track.album,
+        trackId: track.id,
+        genre: track.allGenreTags.join(', '),
+        durationSeconds: 0,
+        artworkUrl: track.artworkUrl,
+        source: 'music-player',
+      ));
     } catch (_) {
       isPlaying = false;
     } finally {
@@ -1179,6 +1189,18 @@ class MusicPlaybackController extends ChangeNotifier {
     if (finishedTrack != null &&
         !_wrappedCompletionRecordedForCurrentPlayback) {
       _wrappedCompletionRecordedForCurrentPlayback = true;
+      unawaited(AppController.instance.recordMusicListeningEvent(
+        title: finishedTrack.title,
+        artist: finishedTrack.artist,
+        album: finishedTrack.album,
+        trackId: finishedTrack.id,
+        genre: finishedTrack.allGenreTags.join(', '),
+        durationSeconds: finishedTrack.duration.inSeconds,
+        artworkUrl: finishedTrack.artworkUrl,
+        source: 'music-player',
+        eventType: 'completed',
+        profileIdOverride: _playbackProfileId,
+      ));
       unawaited(AppController.instance.recordWrappedActivityDetails(
         mediaId: finishedTrack.id,
         canonicalWorkId: finishedTrack.id,
@@ -4100,6 +4122,12 @@ class MusicArtistProfileScreen extends StatelessWidget {
                                   _searchArtist(context, artistName),
                               icon: const Icon(Icons.travel_explore_rounded),
                               label: const UniversalText('Discover artist')),
+                          OutlinedButton.icon(
+                              onPressed: () => Navigator.of(context).pushNamed(
+                                  '/app/page/performer-universe',
+                                  arguments: artistName),
+                              icon: const Icon(Icons.theater_comedy_rounded),
+                              label: const UniversalText('Explore full career')),
                         ]),
                       ]),
                 ),

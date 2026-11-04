@@ -131,8 +131,8 @@ class _PersonMediaScreen extends StatelessWidget {
                   return Card(
                     child: ListTile(
                       leading: const Icon(Icons.timeline_rounded),
-                      title: const UniversalText('Career timeline', style: TextStyle(fontWeight: FontWeight.w800)),
-                      subtitle: const UniversalText('Combine acting and other career credits'),
+                      title: const UniversalText('Performer Universe', style: TextStyle(fontWeight: FontWeight.w800)),
+                      subtitle: const UniversalText('Explore movies, TV, music and the complete career'),
                       trailing: const Icon(Icons.chevron_right_rounded),
                       onTap: () => Navigator.push(context, MaterialPageRoute(
                         builder: (_) => PeopleCareerTimelineScreen(personName: person, localCredits: localCredits),

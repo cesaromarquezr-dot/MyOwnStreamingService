@@ -18,6 +18,7 @@ part 'backend_api_parts/admin.dart';
 part 'backend_api_parts/discovery.dart';
 part 'backend_api_parts/collaboration.dart';
 part 'backend_api_parts/devices.dart';
+part 'backend_api_parts/personal_experience.dart';
 part 'backend_api_parts/support.dart';
 
 /// Implements the `BackendApiException` class for this feature or UI component.
@@ -306,8 +307,9 @@ class BackendApi {
     );
   }
 
-  /// Finds genre-adjacent artists using Spotify artist metadata. This is not
-  /// presented as an official listener-derived Spotify related-artists graph.
+  /// Finds related artists through MusicBrainz artist resolution and
+  /// ListenBrainz collaborative listening radio. Spotify credentials are not
+  /// required for this endpoint.
   Future<Map<String, dynamic>> getRelatedMusicArtists(
     String artistName, {
     int limit = 12,
@@ -395,6 +397,25 @@ class BackendApi {
     return _requireSuccess(
       response,
       'Unable to load this artist discography.',
+    );
+  }
+
+  /// Lists MusicBrainz recordings explicitly credited to one artist MBID.
+  /// This endpoint is independent of Spotify credentials.
+  Future<Map<String, dynamic>> getMusicArtistRecordings(
+    String artistMbid, {
+    int limit = 100,
+  }) async {
+    _requireAuthentication();
+    final endpoint = Uri.parse('$baseUrl/music-catalog/artist-recordings').replace(
+      queryParameters: <String, String>{
+        'mbid': artistMbid.trim(),
+        'limit': '${limit.clamp(1, 100)}',
+      },
+    );
+    return _requireSuccess(
+      await _networkClient.get(endpoint, headers: _headers),
+      'Unable to load this artist’s recording credits.',
     );
   }
 

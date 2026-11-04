@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_core.dart';
+import 'backend_api.dart';
 import 'song_audio_capture.dart';
 
 class SongIdentificationScreen extends StatefulWidget {
@@ -87,6 +88,27 @@ class _SongIdentificationScreenState extends State<SongIdentificationScreen> {
       final sample = await _capture.stop();
       final payload = await AppController.instance.backendApi
           .identifySongFromAudio(sample.bytes, mimeType: sample.mimeType);
+      if (payload['matched'] == true) {
+        final profileId = AppController.instance.currentProfile?.id.trim() ?? '';
+        final title = payload['title']?.toString().trim() ?? '';
+        final artist = payload['artist']?.toString().trim() ?? '';
+        if (profileId.isNotEmpty && title.isNotEmpty && artist.isNotEmpty) {
+          try {
+            await AppController.instance.backendApi.recordMusicExperience(
+              profileId: profileId,
+              title: title,
+              artist: artist,
+              album: payload['album']?.toString(),
+              trackId: payload['trackId']?.toString() ?? payload['musicBrainzRecordingId']?.toString(),
+              source: 'identify-song',
+              eventType: 'identified',
+              artworkUrl: payload['artworkUrl']?.toString(),
+            );
+          } catch (_) {
+            // Recognition remains successful if the history write is temporarily unavailable.
+          }
+        }
+      }
       if (!mounted) return;
       setState(() {
         _identified = payload['matched'] == true

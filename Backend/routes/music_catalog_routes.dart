@@ -304,6 +304,31 @@ class MusicCatalogRoutes {
         return;
       }
 
+      if (path == '$_prefix/artist-recordings') {
+        final mbid = request.uri.queryParameters['mbid']?.trim() ?? '';
+        if (mbid.isEmpty) {
+          await _json(request, HttpStatus.badRequest, <String, dynamic>{
+            'success': false,
+            'error': 'A MusicBrainz artist MBID is required.',
+          });
+          return;
+        }
+        final limit =
+            int.tryParse(request.uri.queryParameters['limit'] ?? '100') ?? 100;
+        final items = await service.artistRecordings(
+          artistMbid: mbid,
+          limit: limit,
+        );
+        await _json(request, HttpStatus.ok, <String, dynamic>{
+          'success': true,
+          'mbid': mbid,
+          'items': items,
+          'count': items.length,
+          'source': 'MusicBrainz',
+        });
+        return;
+      }
+
       if (path == '$_prefix/discography') {
         final mbid = request.uri.queryParameters['mbid']?.trim() ?? '';
         if (mbid.isEmpty) {

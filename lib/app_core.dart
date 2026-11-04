@@ -216,7 +216,11 @@ class MediaItem {
   final String? parentMediaId;
   final String? discMarketCountry;
   final String? originalTitle;
+  /// ISO-639 language code for the language originally recorded for the work.
+  /// This describes the production's original audio, not the story's culture.
   final String? originalLanguage;
+  /// Production country/countries. This is deliberately separate from the
+  /// cultural setting and cultural inspiration fields below.
   final String? countryOfOrigin;
   final String? canonicalTitle;
   final String? language;
@@ -286,6 +290,13 @@ class MediaItem {
   final String? primaryGenre;
   final String? genreBlendLabelOverride;
   final List<String> tags;
+  final List<String> themes;
+  final List<String> tones;
+  /// Countries/regions represented in the story; never used to infer audio.
+  final List<String> culturalSettings;
+  /// Traditions, folklore, history, or communities that inspired the work.
+  /// This is not the production origin and never determines its original audio.
+  final List<String> culturalInspirations;
 
   /// Production studios and companies discovered by the content intelligence/import pipeline.
   final List<String> studios;
@@ -372,6 +383,10 @@ class MediaItem {
     String? primaryGenre,
     String? genreBlendLabelOverride,
     List<String>? tags,
+    List<String>? themes,
+    List<String>? tones,
+    List<String>? culturalSettings,
+    List<String>? culturalInspirations,
     List<String>? studios,
     List<String>? companies,
     List<String>? chapters,
@@ -445,6 +460,10 @@ class MediaItem {
         genreBlendLabelOverride =
             _normalizeGenreBlendLabel(genreBlendLabelOverride),
         tags = tags ?? <String>[],
+        themes = themes ?? <String>[],
+        tones = tones ?? <String>[],
+        culturalSettings = culturalSettings ?? <String>[],
+        culturalInspirations = culturalInspirations ?? <String>[],
         studios = studios ?? <String>[],
         companies = companies ?? <String>[],
         chapters = chapters ?? <String>[],
@@ -936,6 +955,10 @@ class MediaItem {
               data['genre_blend_label_override'])
           ?.toString(),
       tags: _stringList(data['tags']),
+      themes: _stringList(data['themes']),
+      tones: _stringList(data['tones']),
+      culturalSettings: _stringList(data['culturalSettings'] ?? data['cultural_settings']),
+      culturalInspirations: _stringList(data['culturalInspirations'] ?? data['cultural_inspirations']),
       studios: _combinedCreditNameList([
         data['studios'],
         data['productionStudios'],
@@ -1570,6 +1593,10 @@ class MediaItem {
       'primaryGenre': primaryGenre,
       'genreBlendLabelOverride': genreBlendLabelOverride,
       'tags': tags,
+      'themes': themes,
+      'tones': tones,
+      'culturalSettings': culturalSettings,
+      'culturalInspirations': culturalInspirations,
       'studios': studios,
       'companies': companies,
       'chapters': chapters,
@@ -2990,6 +3017,10 @@ class AppController extends ChangeNotifier {
   final Set<String> activeProfileIds = <String>{};
 
   List<MediaItem> recommendations = <MediaItem>[];
+
+  /// Raw recommendation envelopes retain match explanations and availability
+  /// state alongside the MediaItem instances used by existing UI rails.
+  List<Map<String, dynamic>> recommendationDetails = <Map<String, dynamic>>[];
 
   bool recommendationsLoading = false;
 
@@ -5207,7 +5238,18 @@ class AppController extends ChangeNotifier {
   Future<void> loadRecommendations() async {
     if (!backendApi.isAuthenticated) {
       recommendations.clear();
+      recommendationDetails.clear();
       recommendationsError = null;
+      recommendationsLoading = false;
+      notifyListeners();
+      return;
+    }
+
+    final activeProfileId = currentProfile?.id.trim();
+    if (activeProfileId == null || activeProfileId.isEmpty) {
+      recommendations.clear();
+      recommendationDetails.clear();
+      recommendationsError = 'Select a profile to load personalized recommendations.';
       recommendationsLoading = false;
       notifyListeners();
       return;
@@ -5219,28 +5261,32 @@ class AppController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await backendApi.getRecommendations();
+      final response = await backendApi.getRecommendations(
+        profileId: activeProfileId,
+      );
 
       final List<MediaItem> loaded = <MediaItem>[];
+      final List<Map<String, dynamic>> details = <Map<String, dynamic>>[];
 
       final data = response['recommendations'];
 
       if (data is List) {
         for (final item in data) {
           if (item is Map) {
-            loaded.add(
-              MediaItem.fromJson(
-                Map<String, dynamic>.from(
-                  item,
-                ),
-              ),
-            );
+            final envelope = Map<String, dynamic>.from(item);
+            final normalizedMedia = normalizeRecommendationMediaPayload(envelope);
+            if (normalizedMedia == null) continue;
+            final media = MediaItem.fromJson(normalizedMedia);
+            if (!isExcludedEntertainmentType(media.type)) {
+              loaded.add(media);
+              details.add(envelope);
+            }
           }
         }
       }
 
-      loaded.removeWhere((item) => isExcludedEntertainmentType(item.type));
       recommendations = loaded;
+      recommendationDetails = details;
     } catch (error) {
       recommendationsError = error.toString();
     } finally {
@@ -7247,6 +7293,49 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Records an actual playback event in profile-scoped Music Memory.
+  /// The player should call this only after playback has meaningfully started;
+  /// song-recognition events use a separate event type and do not count as plays.
+  Future<void> recordMusicListeningEvent({
+    required String title,
+    required String artist,
+    String? album,
+    String? trackId,
+    String? genre,
+    int durationSeconds = 0,
+    String? artworkUrl,
+    String source = 'player',
+    String eventType = 'played',
+    String? profileIdOverride,
+  }) async {
+    final profileId = profileIdOverride?.trim().isNotEmpty == true
+        ? profileIdOverride!.trim()
+        : currentProfile?.id.trim() ?? '';
+    if (!backendApi.isAuthenticated || profileId.isEmpty ||
+        title.trim().isEmpty || artist.trim().isEmpty) {
+      return;
+    }
+    try {
+      await backendApi.recordMusicExperience(
+        profileId: profileId,
+        title: title,
+        artist: artist,
+        album: album,
+        trackId: trackId,
+        genre: genre,
+        source: source,
+        eventType: eventType,
+        durationSeconds: durationSeconds,
+        artworkUrl: artworkUrl,
+      );
+    } catch (_) {
+      // A telemetry write must never interrupt local playback or recognition.
+    }
+    if (eventType != 'completed') {
+      recordMusicActivity('$title — $artist');
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // NEXT EPISODE
   // ---------------------------------------------------------------------------
@@ -7299,6 +7388,7 @@ class AppController extends ChangeNotifier {
     activeProfileIds.clear();
 
     recommendations.clear();
+    recommendationDetails.clear();
     recommendationsLoading = false;
     recommendationsError = null;
 

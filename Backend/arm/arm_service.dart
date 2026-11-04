@@ -25,8 +25,11 @@
 // physical/specific release so that the same song can be discovered first
 // from an album and later from a movie soundtrack, or vice versa.
 
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+
+import 'package:crypto/crypto.dart';
 
 import 'arm_client.dart';
 import 'arm_models.dart';
@@ -211,7 +214,75 @@ class ArmService {
       ),
       detected: true,
       titles: _extractDiscTitles(job),
+      discFingerprint: _discManifestFingerprint(job),
     );
+  }
+
+  /// Generates the same versioned title-manifest fingerprint as the Flutter
+  /// MakeMKV scanner. This is a layout match for remembered episode mappings,
+  /// not a manufacturer-issued disc serial or proof of physical disc identity.
+  String? _discManifestFingerprint(Map<String, dynamic> job) {
+    final raw = job['titles'] ??
+        job['discTitles'] ??
+        job['features'] ??
+        job['playlists'] ??
+        job['titleList'] ??
+        job['title_list'];
+    final values = <dynamic>[];
+    if (raw is List) {
+      values.addAll(raw);
+    } else if (raw is Map) {
+      values.addAll(raw.values);
+    }
+    if (values.isEmpty) return null;
+
+    int durationSeconds(dynamic value) {
+      if (value is num) return value.round().clamp(0, 86400).toInt();
+      final text = value?.toString().trim() ?? '';
+      final clock = RegExp(r'^(\d+):([0-5]\d):([0-5]\d)$').firstMatch(text);
+      if (clock != null) {
+        final hours = int.tryParse(clock.group(1) ?? '') ?? 0;
+        final minutes = int.tryParse(clock.group(2) ?? '') ?? 0;
+        final seconds = int.tryParse(clock.group(3) ?? '') ?? 0;
+        return (hours * 3600 + minutes * 60 + seconds)
+            .clamp(0, 86400)
+            .toInt();
+      }
+      final numeric = double.tryParse(text);
+      return (numeric?.round() ?? 0).clamp(0, 86400).toInt();
+    }
+
+    int integer(dynamic value) => value is num
+        ? value.toInt()
+        : int.tryParse(value?.toString() ?? '') ?? 0;
+
+    final manifest = <Map<String, dynamic>>[];
+    for (var position = 0; position < values.length; position++) {
+      final rawTitle = values[position];
+      if (rawTitle is! Map) continue;
+      final title = Map<String, dynamic>.from(rawTitle);
+      final titleNumber = integer(title['titleNumber'] ?? title['title_number']);
+      final index = integer(title['titleIndex'] ?? title['title_index'] ??
+          title['index'] ?? (titleNumber > 0 ? titleNumber - 1 : position));
+      final duration = durationSeconds(title['durationSeconds'] ??
+          title['duration_seconds'] ?? title['duration'] ?? title['runtime'] ??
+          title['length']);
+      final chapters = integer(title['chapters'] ?? title['chapterCount'] ??
+          title['chapter_count'] ?? title['chaptercount']);
+      final name = (_string(title, ['name', 'title', 'titleName', 'title_name']) ?? '')
+          .trim()
+          .toLowerCase();
+      manifest.add(<String, dynamic>{
+        'index': index,
+        'durationSeconds': duration,
+        'chapters': chapters,
+        'name': name,
+      });
+    }
+    if (manifest.isEmpty) return null;
+    manifest.sort((a, b) => (a['index'] as int).compareTo(b['index'] as int));
+    final digest = sha256.convert(utf8.encode(jsonEncode(manifest)));
+    return 'title-manifest-v1:$digest';
   }
 
   /// Converts a detected disc into an automatic import plan.

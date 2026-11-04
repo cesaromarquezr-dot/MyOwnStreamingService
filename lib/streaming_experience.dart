@@ -36,7 +36,8 @@ class StreamingExperiencePreferences {
   int dataSaverPreviousResolution;
   bool autoplayNext;
   bool subtitlesEnabled;
-  bool preferOriginalLanguageTracks;
+  bool preferOriginalAudio;
+  bool preferOriginalSubtitles;
   double subtitleScale;
   bool audioDescriptions;
   String preferredAudioLanguage;
@@ -54,7 +55,8 @@ class StreamingExperiencePreferences {
     this.dataSaverPreviousResolution = automaticResolution,
     this.autoplayNext = true,
     this.subtitlesEnabled = true,
-    this.preferOriginalLanguageTracks = true,
+    this.preferOriginalAudio = true,
+    this.preferOriginalSubtitles = true,
     this.subtitleScale = 1.0,
     this.audioDescriptions = false,
     this.preferredAudioLanguage = '',
@@ -95,7 +97,7 @@ class StreamingExperiencePreferences {
       'mos_streaming_experience_${profileId.trim().isEmpty ? 'default' : profileId.trim()}';
 
   static String _supportedLanguage(dynamic value) {
-    const supported = <String>{'', 'en', 'es', 'fr', 'de', 'it', 'pt', 'ja', 'ko', 'zh', 'hi', 'ru'};
+    const supported = <String>{'', 'en', 'es', 'fr', 'de', 'it', 'pt', 'ja', 'ko', 'zh', 'hi', 'ru', 'ar', 'tr', 'nl', 'pl', 'el', 'th', 'vi', 'id', 'sv', 'no', 'da', 'fi', 'he', 'uk', 'cs', 'ro', 'hu', 'fa'};
     final normalized = value?.toString().trim().toLowerCase() ?? '';
     return supported.contains(normalized) ? normalized : '';
   }
@@ -133,7 +135,11 @@ class StreamingExperiencePreferences {
         dataSaverPreviousResolution: previousResolution,
         autoplayNext: map['autoplayNext'] != false,
         subtitlesEnabled: map['subtitlesEnabled'] != false,
-        preferOriginalLanguageTracks: map['preferOriginalLanguageTracks'] != false,
+        // Read the former combined preference for existing profiles.
+        preferOriginalAudio: (map['preferOriginalAudio'] ??
+                map['preferOriginalLanguageTracks']) != false,
+        preferOriginalSubtitles: (map['preferOriginalSubtitles'] ??
+                map['preferOriginalLanguageTracks']) != false,
         subtitleScale: scale.clamp(0.75, 2.0).toDouble(),
         audioDescriptions: map['audioDescriptions'] == true,
         preferredAudioLanguage: _supportedLanguage(map['preferredAudioLanguage']),
@@ -162,7 +168,10 @@ class StreamingExperiencePreferences {
         'dataSaverPreviousResolution': dataSaverPreviousResolution,
         'autoplayNext': autoplayNext,
         'subtitlesEnabled': subtitlesEnabled,
-        'preferOriginalLanguageTracks': preferOriginalLanguageTracks,
+        'preferOriginalAudio': preferOriginalAudio,
+        'preferOriginalSubtitles': preferOriginalSubtitles,
+        // Write a compatibility value for older app builds.
+        'preferOriginalLanguageTracks': preferOriginalAudio && preferOriginalSubtitles,
         'subtitleScale': subtitleScale.clamp(0.75, 2.0),
         'audioDescriptions': audioDescriptions,
         'preferredAudioLanguage': _supportedLanguage(preferredAudioLanguage),
@@ -489,13 +498,20 @@ class _StreamingExperienceSettingsScreenState
                           _update(() => settings.subtitlesEnabled = value),
                     ),
                     SwitchListTile(
-                      value: settings.preferOriginalLanguageTracks,
-                      title: const UniversalText(
-                          'Prefer original-language audio and subtitles'),
+                      value: settings.preferOriginalAudio,
+                      title: const UniversalText('Prefer Original Audio'),
                       subtitle: const UniversalText(
-                          'Defaults to a track matching the title’s original language when that track is available. Examples: Korean for Parasite and Squid Game, Spanish for the listed Mexican animated films, and English for James Bond and Marvel titles. You can still choose another track.'),
+                          'Automatically choose the original production-language audio track when it exists. All other tracks, including dubs such as Spanish for Coco, remain available for manual selection. Production origin is separate from cultural setting and inspiration.'),
                       onChanged: (value) => _update(
-                          () => settings.preferOriginalLanguageTracks = value),
+                          () => settings.preferOriginalAudio = value),
+                    ),
+                    SwitchListTile(
+                      value: settings.preferOriginalSubtitles,
+                      title: const UniversalText('Prefer original-language subtitles'),
+                      subtitle: const UniversalText(
+                          'Subtitle selection is independent of audio. Turn this off to use your preferred subtitle language instead.'),
+                      onChanged: (value) => _update(
+                          () => settings.preferOriginalSubtitles = value),
                     ),
                     ListTile(
                       title: const UniversalText('Subtitle text size'),
@@ -546,7 +562,7 @@ class _StreamingExperienceSettingsScreenState
                     ),
                     ListTile(
                       title: const UniversalText('Preferred audio language'),
-                      subtitle: const UniversalText('Used when the chosen media exposes a matching audio track.'),
+                      subtitle: const UniversalText('Optional profile-wide override. Leave Auto / original to use each title’s original production language; other audio tracks remain selectable per title.'),
                       trailing: DropdownButton<String>(
                         value: settings.preferredAudioLanguage,
                         items: const <DropdownMenuItem<String>>[
@@ -562,6 +578,24 @@ class _StreamingExperienceSettingsScreenState
                           DropdownMenuItem(value: 'zh', child: Text('Chinese')),
                           DropdownMenuItem(value: 'hi', child: Text('Hindi')),
                           DropdownMenuItem(value: 'ru', child: Text('Russian')),
+                          DropdownMenuItem(value: 'tr', child: Text('Turkish')),
+                          DropdownMenuItem(value: 'nl', child: Text('Dutch')),
+                          DropdownMenuItem(value: 'pl', child: Text('Polish')),
+                          DropdownMenuItem(value: 'el', child: Text('Greek')),
+                          DropdownMenuItem(value: 'th', child: Text('Thai')),
+                          DropdownMenuItem(value: 'vi', child: Text('Vietnamese')),
+                          DropdownMenuItem(value: 'id', child: Text('Indonesian')),
+                          DropdownMenuItem(value: 'sv', child: Text('Swedish')),
+                          DropdownMenuItem(value: 'no', child: Text('Norwegian')),
+                          DropdownMenuItem(value: 'da', child: Text('Danish')),
+                          DropdownMenuItem(value: 'fi', child: Text('Finnish')),
+                          DropdownMenuItem(value: 'he', child: Text('Hebrew')),
+                          DropdownMenuItem(value: 'uk', child: Text('Ukrainian')),
+                          DropdownMenuItem(value: 'cs', child: Text('Czech')),
+                          DropdownMenuItem(value: 'ro', child: Text('Romanian')),
+                          DropdownMenuItem(value: 'hu', child: Text('Hungarian')),
+                          DropdownMenuItem(value: 'fa', child: Text('Persian')),
+                          DropdownMenuItem(value: 'ar', child: Text('Arabic')),
                         ],
                         onChanged: (value) { if (value != null) _update(() => settings.preferredAudioLanguage = value); },
                       ),
@@ -584,6 +618,24 @@ class _StreamingExperienceSettingsScreenState
                           DropdownMenuItem(value: 'zh', child: Text('Chinese')),
                           DropdownMenuItem(value: 'hi', child: Text('Hindi')),
                           DropdownMenuItem(value: 'ru', child: Text('Russian')),
+                          DropdownMenuItem(value: 'tr', child: Text('Turkish')),
+                          DropdownMenuItem(value: 'nl', child: Text('Dutch')),
+                          DropdownMenuItem(value: 'pl', child: Text('Polish')),
+                          DropdownMenuItem(value: 'el', child: Text('Greek')),
+                          DropdownMenuItem(value: 'th', child: Text('Thai')),
+                          DropdownMenuItem(value: 'vi', child: Text('Vietnamese')),
+                          DropdownMenuItem(value: 'id', child: Text('Indonesian')),
+                          DropdownMenuItem(value: 'sv', child: Text('Swedish')),
+                          DropdownMenuItem(value: 'no', child: Text('Norwegian')),
+                          DropdownMenuItem(value: 'da', child: Text('Danish')),
+                          DropdownMenuItem(value: 'fi', child: Text('Finnish')),
+                          DropdownMenuItem(value: 'he', child: Text('Hebrew')),
+                          DropdownMenuItem(value: 'uk', child: Text('Ukrainian')),
+                          DropdownMenuItem(value: 'cs', child: Text('Czech')),
+                          DropdownMenuItem(value: 'ro', child: Text('Romanian')),
+                          DropdownMenuItem(value: 'hu', child: Text('Hungarian')),
+                          DropdownMenuItem(value: 'fa', child: Text('Persian')),
+                          DropdownMenuItem(value: 'ar', child: Text('Arabic')),
                         ],
                         onChanged: (value) { if (value != null) _update(() => settings.preferredSubtitleLanguage = value); },
                       ),
@@ -1176,9 +1228,10 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
     final value = player?.value;
     final duration = value?.duration ?? Duration.zero;
     final position = value?.position ?? Duration.zero;
-    final preferredOriginalLanguage = _preferences.preferOriginalLanguageTracks
-        ? OriginalLanguageDefaults.resolveForMedia(widget.media)
-        : null;
+    final originalLanguage = OriginalLanguageDefaults.resolveForMedia(widget.media);
+    final preferredOriginalLanguage = _preferences.preferredAudioLanguage.isNotEmpty
+        ? _preferences.preferredAudioLanguage
+        : (_preferences.preferOriginalAudio ? originalLanguage : null);
     final maxSeconds =
         duration.inSeconds > 0 ? duration.inSeconds.toDouble() : 1.0;
     final currentSeconds = _sliderPreviewSeconds ??
@@ -1344,7 +1397,12 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Preferred original language: ${OriginalLanguageDefaults.displayName(preferredOriginalLanguage)}. The playback source must support track selection to apply it to an adaptive stream.',
+                            OriginalLanguageDefaults.matchingTrack(
+                                      widget.media.audioTracks,
+                                      targetLanguage: preferredOriginalLanguage,
+                                    ) != null
+                                ? 'Preferred audio: ${OriginalLanguageDefaults.displayName(preferredOriginalLanguage)} · ${OriginalLanguageDefaults.matchingTrack(widget.media.audioTracks, targetLanguage: preferredOriginalLanguage)}. The current adaptive player still needs track-selection support to apply this track.'
+                                : 'Preferred audio: ${OriginalLanguageDefaults.displayName(preferredOriginalLanguage)}. No matching track is identified in the imported track metadata; the player uses the source default.',
                             style: const TextStyle(
                                 color: Colors.white54, fontSize: 12),
                           ),

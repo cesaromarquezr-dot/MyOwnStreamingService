@@ -15,6 +15,7 @@
 //   Account/member authorization belongs to the backend account/session layer.
 
 import 'profile_governance.dart';
+import 'recommendation_preferences.dart';
 
 class Profile {
   final String id;
@@ -25,6 +26,17 @@ class Profile {
 
   /// Backend-authoritative content and profile administration policy.
   ProfileGovernance governance;
+
+  /// Per-profile discovery and cross-profile privacy controls.
+  RecommendationPreferences recommendationPreferences;
+
+  /// Per-title recommendation feedback, keyed by media ID. Values are
+  /// constrained by the recommendations route to supported feedback actions.
+  final Map<String, String> recommendationFeedback;
+
+  /// Profile-scoped music, episode identification, and media-preservation data.
+  /// This is a bounded JSON document persisted in profiles.experience_data.
+  final Map<String, dynamic> experienceData;
 
   // Media owned by this profile.
   //
@@ -68,6 +80,9 @@ class Profile {
     this.username,
     this.avatarUrl,
     ProfileGovernance? governance,
+    RecommendationPreferences? recommendationPreferences,
+    Map<String, String>? recommendationFeedback,
+    Map<String, dynamic>? experienceData,
     List<String>? ownedMediaIds,
     List<String>? watchedMediaIds,
     List<String>? likedMediaIds,
@@ -86,7 +101,15 @@ class Profile {
         watchHistory = _normalizeStringList(watchHistory),
         watchHistoryTimestamps =
             _normalizeDateTimeMap(watchHistoryTimestamps),
-        governance = governance ?? const ProfileGovernance();
+        governance = governance ?? const ProfileGovernance(),
+        recommendationPreferences = recommendationPreferences ??
+            const RecommendationPreferences(),
+        recommendationFeedback = Map<String, String>.from(
+          recommendationFeedback ?? const <String, String>{},
+        ),
+        experienceData = Map<String, dynamic>.from(
+          experienceData ?? const <String, dynamic>{},
+        );
 
   // ------------------------------------------------------------
   // STATE / IDENTITY
@@ -543,6 +566,9 @@ class Profile {
     List<String>? watchHistory,
     Map<String, DateTime>? watchHistoryTimestamps,
     ProfileGovernance? governance,
+    RecommendationPreferences? recommendationPreferences,
+    Map<String, String>? recommendationFeedback,
+    Map<String, dynamic>? experienceData,
     bool clearAvatarUrl = false,
   }) {
     return Profile(
@@ -570,6 +596,12 @@ class Profile {
             this.watchHistoryTimestamps,
           ),
       governance: governance ?? this.governance,
+      recommendationPreferences:
+          recommendationPreferences ?? this.recommendationPreferences,
+      recommendationFeedback: recommendationFeedback ??
+          Map<String, String>.from(this.recommendationFeedback),
+      experienceData: experienceData ??
+          Map<String, dynamic>.from(this.experienceData),
     );
   }
 
@@ -593,6 +625,9 @@ class Profile {
       'watchProgress': Map<String, double>.from(watchProgress),
       'watchHistory': List<String>.from(watchHistory),
       'governance': governance.toJson(),
+      'recommendationPreferences': recommendationPreferences.toJson(),
+      'recommendationFeedback': Map<String, String>.from(recommendationFeedback),
+      'experienceData': Map<String, dynamic>.from(experienceData),
       'watchHistoryTimestamps': watchHistoryTimestamps.map(
         (key, value) => MapEntry(
           key,
@@ -639,12 +674,26 @@ class Profile {
             ? Map<String, dynamic>.from(json['governance'])
             : null,
       ),
+      recommendationPreferences: RecommendationPreferences.fromJson(
+        json['recommendationPreferences'] ?? json['recommendation_preferences'],
+      ),
+      recommendationFeedback: _stringMap(
+        json['recommendationFeedback'] ?? json['recommendation_feedback'],
+      ),
+      experienceData: _dynamicMap(
+        json['experienceData'] ?? json['experience_data'],
+      ),
     );
   }
 
   // ------------------------------------------------------------
   // JSON HELPERS
   // ------------------------------------------------------------
+
+  static Map<String, dynamic> _dynamicMap(dynamic value) {
+    if (value is! Map) return <String, dynamic>{};
+    return value.map((key, item) => MapEntry(key.toString(), item));
+  }
 
   static List<String> _stringList(
     dynamic value,
@@ -656,6 +705,14 @@ class Profile {
     return _normalizeStringList(
       value.map((item) => item.toString()).toList(),
     );
+  }
+
+  static Map<String, String> _stringMap(dynamic value) {
+    if (value is! Map) return <String, String>{};
+    return value.map((key, item) => MapEntry(
+      key.toString(),
+      item.toString(),
+    ));
   }
 
   static Map<String, double> _doubleMap(

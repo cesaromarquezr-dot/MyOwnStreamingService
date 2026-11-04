@@ -31,6 +31,8 @@ enum RecommendationReasonType {
   recentInterest,
   internationalAdaptation,
   crossFormat,
+  studio,
+  culturalContext,
 }
 
 /// Where the user can watch a title.
@@ -156,6 +158,11 @@ class RecommendationMedia {
   final List<String> directors;
   final List<String> writers;
   final List<String> music;
+  final List<String> studios;
+  final List<String> companies;
+  final List<String> tones;
+  final List<String> culturalSettings;
+  final List<String> culturalInspirations;
   final List<String> references;
 
   /// Optional provider availability.
@@ -188,6 +195,11 @@ class RecommendationMedia {
     this.directors = const [],
     this.writers = const [],
     this.music = const [],
+    this.studios = const [],
+    this.companies = const [],
+    this.tones = const [],
+    this.culturalSettings = const [],
+    this.culturalInspirations = const [],
     this.references = const [],
     this.watchOptions = const [],
     this.purchaseOptions = const [],
@@ -220,6 +232,11 @@ class RecommendationMedia {
       'directors': List<String>.unmodifiable(directors),
       'writers': List<String>.unmodifiable(writers),
       'music': List<String>.unmodifiable(music),
+      'studios': List<String>.unmodifiable(studios),
+      'companies': List<String>.unmodifiable(companies),
+      'tones': List<String>.unmodifiable(tones),
+      'culturalSettings': List<String>.unmodifiable(culturalSettings),
+      'culturalInspirations': List<String>.unmodifiable(culturalInspirations),
       'references': List<String>.unmodifiable(references),
       'watchOptions': watchOptions.map((item) => item.toJson()).toList(),
       'purchaseOptions':
@@ -239,11 +256,15 @@ class RecommendationHistoryItem {
   ///
   /// 1.0 means the user completed it.
   final double completion;
+  /// Set only when this event was explicitly shared by another household
+  /// profile. A missing value means this is the active profile's own activity.
+  final String? sourceProfileName;
 
   const RecommendationHistoryItem({
     required this.mediaId,
     this.watchedAt,
     this.completion = 1.0,
+    this.sourceProfileName,
   });
 }
 
@@ -254,12 +275,36 @@ class RecommendationProfile {
   final List<String> dislikedMediaIds;
 
   final List<RecommendationHistoryItem> history;
+  final bool includeOwnedLibraryItems;
+  final bool includeExternalItems;
+  final bool includeWatchedItems;
+  final bool includeRewatches;
+  final bool excludeDisliked;
+  final int familiarPercent;
+  final List<String> prioritizedPerformers;
+  final List<String> prioritizedStudios;
+  final List<String> prioritizedThemes;
+  final List<String> excludedGenres;
+  final List<String> excludedTones;
+  final Map<String, String> feedback;
 
   const RecommendationProfile({
     this.ownedMediaIds = const [],
     this.likedMediaIds = const [],
     this.dislikedMediaIds = const [],
     this.history = const [],
+    this.includeOwnedLibraryItems = true,
+    this.includeExternalItems = true,
+    this.includeWatchedItems = false,
+    this.includeRewatches = false,
+    this.excludeDisliked = true,
+    this.familiarPercent = 65,
+    this.prioritizedPerformers = const [],
+    this.prioritizedStudios = const [],
+    this.prioritizedThemes = const [],
+    this.excludedGenres = const [],
+    this.excludedTones = const [],
+    this.feedback = const {},
   });
 }
 
@@ -328,12 +373,18 @@ class RecommendationResult {
   final double matchPercentage;
 
   final List<RecommendationReason> reasons;
+  final bool isInLibrary;
+  final bool isWatched;
+  final String discoveryType;
 
   const RecommendationResult({
     required this.media,
     required this.score,
     required this.matchPercentage,
     required this.reasons,
+    this.isInLibrary = false,
+    this.isWatched = false,
+    this.discoveryType = 'familiar',
   });
 
   Map<String, dynamic> toJson() {
@@ -342,6 +393,9 @@ class RecommendationResult {
       'score': score,
       'matchPercentage': matchPercentage,
       'reasons': reasons.map((reason) => reason.toJson()).toList(),
+      'isInLibrary': isInLibrary,
+      'isWatched': isWatched,
+      'discoveryType': discoveryType,
     };
   }
 }
@@ -378,11 +432,65 @@ class RecommendationsService {
     );
   }
 
+  /// Compares two catalog titles using available, normalized metadata.
+  /// The returned percentage is a transparent catalog-match estimate, not a
+  /// probability that two viewers will like the same thing.
+  Map<String, dynamic> compareTitles({
+    required RecommendationMedia source,
+    required RecommendationMedia target,
+  }) {
+    final result = _compare(candidate: target, source: source);
+    final reasons = _deduplicateReasons(result.reasons);
+    final peopleSignals = <String>[
+      ..._intersection(source.actors, target.actors),
+      ..._intersection(source.characters, target.characters),
+      ..._intersection(source.directors, target.directors),
+      ..._intersection(source.writers, target.writers),
+    ];
+    final storySignals = <String>[
+      ..._intersection(source.themes, target.themes),
+      ..._intersection(source.tags, target.tags),
+      ..._intersection(source.references, target.references),
+    ];
+    final productionSignals = <String>[
+      ..._intersection(source.studios, target.studios),
+      ..._intersection(source.companies, target.companies),
+    ];
+    final genreSignals = <String>[
+      ..._intersection(source.genres, target.genres),
+      ..._intersection(source.subgenres, target.subgenres),
+    ];
+    final musicSignals = _intersection(source.music, target.music);
+    final toneSignals = _intersection(source.tones, target.tones);
+    final franchiseSignals = _intersection(source.franchises, target.franchises);
+    return <String, dynamic>{
+      'sourceId': source.id,
+      'targetId': target.id,
+      'matchEstimate': _percentage(result.score),
+      'confidenceLabel': reasons.isEmpty ? 'insufficient_metadata' : 'catalog_metadata_match',
+      'disclaimer': 'This estimate compares available catalog metadata. It is not a probability of personal preference.',
+      'breakdown': <String, dynamic>{
+        'peopleAndCharacters': peopleSignals,
+        'storyThemesAndPlotReferences': storySignals,
+        'productionStudios': productionSignals,
+        'culturalSettingsAndInspirations': <String>{
+          ..._intersection(source.culturalSettings, target.culturalSettings),
+          ..._intersection(source.culturalInspirations, target.culturalInspirations),
+        }.toList(growable: false),
+        'genresAndSubgenres': genreSignals,
+        'musicAndSoundtrack': musicSignals,
+        'tone': toneSignals,
+        'franchiseAndUniverse': franchiseSignals,
+      },
+      'reasons': reasons.map((reason) => reason.toJson()).toList(growable: false),
+    };
+  }
+
   /// Full recommendation method.
   ///
   /// It:
   ///
-  /// - removes owned media
+  /// - includes owned-unwatched rediscovery when enabled
   /// - removes disliked media
   /// - removes duplicate media IDs
   /// - compares candidates against liked media
@@ -420,8 +528,17 @@ class RecommendationsService {
 
     final ownedIds = _normalizedSet(profile.ownedMediaIds);
     final dislikedIds = _normalizedSet(profile.dislikedMediaIds);
+    final excludedGenres = _normalizedSet(profile.excludedGenres);
+    final excludedTones = _normalizedSet(profile.excludedTones);
+    final blockedFeedback = profile.feedback.entries
+        .where((entry) => const {
+          'notInterested', 'stopShowing', 'alreadyWatched',
+        }.contains(entry.value))
+        .map((entry) => _normalize(entry.key))
+        .toSet();
 
     final watchedIds = profile.history
+        .where((item) => item.sourceProfileName == null)
         .map((item) => _normalize(item.mediaId))
         .where((id) => id.isNotEmpty)
         .toSet();
@@ -473,16 +590,45 @@ class RecommendationsService {
         continue;
       }
 
-      if (ownedIds.contains(candidateId)) {
+      final isOwned = ownedIds.contains(candidateId);
+      final isWatched = watchedIds.contains(candidateId);
+      if (isOwned && !profile.includeOwnedLibraryItems) {
         continue;
       }
 
-      if (dislikedIds.contains(candidateId)) {
+      if (!isOwned && !profile.includeExternalItems) continue;
+      if (isWatched) {
+        final ownHistory = profile.history.where((item) =>
+            item.sourceProfileName == null &&
+            _normalize(item.mediaId) == candidateId);
+        final hasCompletedWatch = ownHistory.any(
+          (item) => _normalizedCompletion(item.completion) >= 0.90,
+        );
+        final hasPartialWatch = ownHistory.any(
+          (item) => _normalizedCompletion(item.completion) < 0.90,
+        );
+        if (hasCompletedWatch && !profile.includeRewatches) continue;
+        if (hasPartialWatch && !profile.includeWatchedItems) continue;
+        if (!hasCompletedWatch && !hasPartialWatch &&
+            !profile.includeWatchedItems && !profile.includeRewatches) {
+          continue;
+        }
+      }
+
+      if (blockedFeedback.contains(candidateId) ||
+          (profile.excludeDisliked && dislikedIds.contains(candidateId))) {
+        continue;
+      }
+
+      if (_normalizedSet(candidate.genres).intersection(excludedGenres).isNotEmpty ||
+          _normalizedSet(candidate.subgenres).intersection(excludedGenres).isNotEmpty ||
+          _normalizedSet(candidate.tones).intersection(excludedTones).isNotEmpty) {
         continue;
       }
 
       final result = _scoreAgainstUser(
         candidate: candidate,
+        profile: profile,
         likedMedia: likedMedia,
         watchedMedia: watchedMedia,
         ownedMedia: ownedMedia,
@@ -494,22 +640,27 @@ class RecommendationsService {
         continue;
       }
 
-      results.add(result);
+      results.add(RecommendationResult(
+        media: result.media,
+        score: result.score,
+        matchPercentage: result.matchPercentage,
+        reasons: result.reasons,
+        isInLibrary: isOwned,
+        isWatched: isWatched,
+        discoveryType: _isUnexpected(result.reasons) ? 'unexpected' : 'familiar',
+      ));
     }
 
     results.sort(_compareRecommendationResults);
 
     final diversified = _applyDiversity(results);
-
-    if (diversified.length <= targetLimit) {
-      return diversified;
-    }
-
-    return diversified.take(targetLimit).toList(growable: false);
+    final mixed = _applyDiscoveryMix(diversified, profile.familiarPercent);
+    return mixed.take(targetLimit).toList(growable: false);
   }
 
   RecommendationResult? _scoreAgainstUser({
     required RecommendationMedia candidate,
+    required RecommendationProfile profile,
     required List<RecommendationMedia> likedMedia,
     required List<RecommendationMedia> watchedMedia,
     required List<RecommendationMedia> ownedMedia,
@@ -566,6 +717,15 @@ class RecommendationsService {
           _recencyMultiplier(historyItem.watchedAt);
 
       reasons.addAll(comparison.reasons);
+      if (historyItem.sourceProfileName != null &&
+          historyItem.sourceProfileName!.trim().isNotEmpty) {
+        reasons.add(RecommendationReason(
+          type: RecommendationReasonType.preference,
+          title: 'Watched by ${historyItem.sourceProfileName}',
+          description: '${historyItem.sourceProfileName} watched "${watched.title}"; this title has ${_percentage(comparison.score).toStringAsFixed(0)}% catalog metadata similarity to it.',
+          relatedMediaIds: <String>[watched.id],
+        ));
+      }
     }
 
     var bestOwnedMatchScore = 0.0;
@@ -625,6 +785,40 @@ class RecommendationsService {
 
     if (watchedIds.contains(candidateId)) {
       score -= weights.alreadyWatchedPenalty;
+    }
+
+    final preferredPerformers = _normalizedSet(profile.prioritizedPerformers);
+    final candidatePerformers = _normalizedSet(<String>[...candidate.actors, ...candidate.music]);
+    final favoredPerformers = candidatePerformers.intersection(preferredPerformers);
+    if (favoredPerformers.isNotEmpty) {
+      score += 24 * favoredPerformers.length;
+      reasons.add(RecommendationReason(
+        type: RecommendationReasonType.actor,
+        title: 'A performer you follow',
+        description: 'Features ${favoredPerformers.take(2).join(', ')}, which you prioritized.',
+      ));
+    }
+    final favoredStudios = _normalizedSet(candidate.studios)
+        .union(_normalizedSet(candidate.companies))
+        .intersection(_normalizedSet(profile.prioritizedStudios));
+    if (favoredStudios.isNotEmpty) {
+      score += 22 * favoredStudios.length;
+      reasons.add(RecommendationReason(
+        type: RecommendationReasonType.studio,
+        title: 'From a preferred studio',
+        description: 'Produced by ${favoredStudios.take(2).join(', ')}.',
+      ));
+    }
+    final favoredThemes = _normalizedSet(candidate.themes)
+        .union(_normalizedSet(candidate.tags))
+        .intersection(_normalizedSet(profile.prioritizedThemes));
+    if (favoredThemes.isNotEmpty) {
+      score += 16 * favoredThemes.length;
+      reasons.add(RecommendationReason(
+        type: RecommendationReasonType.theme,
+        title: 'A story element you preferred',
+        description: 'Connects through ${favoredThemes.take(2).join(', ')}.',
+      ));
     }
 
     if (candidate.seriesId != null &&
@@ -904,6 +1098,32 @@ class RecommendationsService {
       );
     }
 
+    final sharedStudios = <String>{
+      ..._intersection(candidate.studios, source.studios),
+      ..._intersection(candidate.companies, source.companies),
+    }.toList(growable: false);
+    final sharedCulturalSettings = _intersection(candidate.culturalSettings, source.culturalSettings);
+    final sharedCulturalInspirations = _intersection(candidate.culturalInspirations, source.culturalInspirations);
+    if (sharedCulturalSettings.isNotEmpty || sharedCulturalInspirations.isNotEmpty) {
+      score += 14;
+      final culturalLinks = <String>[...sharedCulturalSettings, ...sharedCulturalInspirations];
+      reasons.add(RecommendationReason(
+        type: RecommendationReasonType.culturalContext,
+        title: 'Shared cultural context',
+        description: 'Both titles connect through indexed cultural settings or inspirations: ${culturalLinks.take(3).join(', ')}. This is separate from production country.',
+        relatedMediaIds: <String>[source.id],
+      ));
+    }
+    if (sharedStudios.isNotEmpty) {
+      score += 18;
+      reasons.add(RecommendationReason(
+        type: RecommendationReasonType.studio,
+        title: 'Same production studio',
+        description: 'Both titles are connected to ${sharedStudios.take(2).join(', ')}.',
+        relatedMediaIds: <String>[source.id],
+      ));
+    }
+
     final sharedSubgenres = _intersection(
       candidate.subgenres,
       source.subgenres,
@@ -960,6 +1180,17 @@ class RecommendationsService {
           relatedMediaIds: [source.id],
         ),
       );
+    }
+
+    final sharedTones = _intersection(candidate.tones, source.tones);
+    if (sharedTones.isNotEmpty) {
+      score += 6 * sharedTones.length;
+      reasons.add(RecommendationReason(
+        type: RecommendationReasonType.tag,
+        title: 'Similar tone',
+        description: 'Both titles have the indexed tone ${sharedTones.take(2).join(' and ')}.',
+        relatedMediaIds: <String>[source.id],
+      ));
     }
 
     final sharedThemes = _intersection(
@@ -1273,6 +1504,62 @@ class RecommendationsService {
       }
     }
 
+    return output;
+  }
+
+  bool _isUnexpected(List<RecommendationReason> reasons) {
+    final types = reasons.map((reason) => reason.type).toSet();
+    final strongFamiliarSignals = types.intersection(const {
+      RecommendationReasonType.franchise,
+      RecommendationReasonType.character,
+      RecommendationReasonType.actor,
+      RecommendationReasonType.multipleActors,
+      RecommendationReasonType.director,
+      RecommendationReasonType.writer,
+      RecommendationReasonType.studio,
+    });
+    final lateralSignals = types.intersection(const {
+      RecommendationReasonType.theme,
+      RecommendationReasonType.tag,
+      RecommendationReasonType.reference,
+      RecommendationReasonType.crossFormat,
+      RecommendationReasonType.internationalAdaptation,
+      RecommendationReasonType.hybridGenre,
+      RecommendationReasonType.culturalContext,
+    });
+    return strongFamiliarSignals.isEmpty && lateralSignals.isNotEmpty;
+  }
+
+  List<RecommendationResult> _applyDiscoveryMix(
+    List<RecommendationResult> ranked,
+    int familiarPercent,
+  ) {
+    if (ranked.length < 2) return ranked;
+    final familiar = ranked.where((item) => item.discoveryType != 'unexpected').toList();
+    final unexpected = ranked.where((item) => item.discoveryType == 'unexpected').toList();
+    if (familiar.isEmpty || unexpected.isEmpty) return ranked;
+
+    final desiredFamiliar = familiarPercent.clamp(0, 100).toInt();
+    final desiredUnexpected = 100 - desiredFamiliar;
+    final output = <RecommendationResult>[];
+    var familiarIndex = 0;
+    var unexpectedIndex = 0;
+    while (output.length < ranked.length &&
+        (familiarIndex < familiar.length || unexpectedIndex < unexpected.length)) {
+      final canFamiliar = familiarIndex < familiar.length;
+      final canUnexpected = unexpectedIndex < unexpected.length;
+      final chooseFamiliar = canFamiliar && (!canUnexpected ||
+          desiredFamiliar >= 100 ||
+          desiredUnexpected == 0 ||
+          (desiredFamiliar > 0 && desiredUnexpected > 0 &&
+              (familiarIndex + 1) / desiredFamiliar <=
+                  (unexpectedIndex + 1) / desiredUnexpected));
+      if (chooseFamiliar) {
+        output.add(familiar[familiarIndex++]);
+      } else {
+        output.add(unexpected[unexpectedIndex++]);
+      }
+    }
     return output;
   }
 

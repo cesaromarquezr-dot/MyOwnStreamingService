@@ -14,12 +14,14 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
+import 'dart:typed_data';
 
 import '../database/database.dart';
 import '../middleware/authentication.dart';
 import '../models/account.dart';
 import '../models/media.dart';
 import '../models/profile.dart';
+import '../models/recommendation_preferences.dart';
 import '../services/recommendations_service.dart'
     as recommendations;
 
@@ -55,19 +57,13 @@ class RecommendationsRoutes {
       return;
     }
 
-    if (request.method != 'GET') {
-      await _sendJson(
-        request.response,
-        HttpStatus.methodNotAllowed,
-        <String, dynamic>{
-          'success': false,
-          'error': 'Method not allowed.',
-        },
-      );
-      return;
-    }
-
-    if (request.uri.path != _recommendationsPath) {
+    const supportedPaths = <String>{
+      _recommendationsPath,
+      '$_recommendationsPath/preferences',
+      '$_recommendationsPath/feedback',
+      '$_recommendationsPath/similarity',
+    };
+    if (!supportedPaths.contains(request.uri.path)) {
       await _sendJson(
         request.response,
         HttpStatus.notFound,
@@ -76,6 +72,17 @@ class RecommendationsRoutes {
           'error': 'Recommendation route not found.',
         },
       );
+      return;
+    }
+
+    final supportedMethod = switch (request.uri.path) {
+      '$_recommendationsPath/preferences' => request.method == 'GET' || request.method == 'PUT',
+      '$_recommendationsPath/feedback' => request.method == 'POST',
+      _ => request.method == 'GET',
+    };
+    if (!supportedMethod) {
+      await _sendJson(request.response, HttpStatus.methodNotAllowed,
+          <String, dynamic>{'success': false, 'error': 'Method not allowed.'});
       return;
     }
 
@@ -95,10 +102,23 @@ class RecommendationsRoutes {
     }
 
     try {
-      await _getRecommendations(
-        request,
-        account,
-      );
+      switch (request.uri.path) {
+        case '$_recommendationsPath/preferences':
+          if (request.method == 'GET') {
+            await _getPreferences(request, account);
+          } else {
+            await _updatePreferences(request, account);
+          }
+          break;
+        case '$_recommendationsPath/feedback':
+          await _saveFeedback(request, account);
+          break;
+        case '$_recommendationsPath/similarity':
+          await _getSimilarity(request, account);
+          break;
+        default:
+          await _getRecommendations(request, account);
+      }
     } catch (error, stackTrace) {
       developer.log(
         'Unable to generate recommendations.',
@@ -195,11 +215,25 @@ class RecommendationsRoutes {
       dislikedMediaIds: List<String>.from(
         profile.dislikedMediaIds,
       ),
-      history: _buildHistory(profile),
+      history: _buildHistory(profile, account: account),
+      includeOwnedLibraryItems: profile.recommendationPreferences.includeLibraryItems,
+      includeExternalItems: profile.recommendationPreferences.includeExternalItems,
+      includeWatchedItems: profile.recommendationPreferences.includeWatchedItems,
+      includeRewatches: profile.recommendationPreferences.includeRewatches,
+      excludeDisliked: profile.recommendationPreferences.excludeDisliked,
+      familiarPercent: profile.recommendationPreferences.familiarPercent,
+      prioritizedPerformers: profile.recommendationPreferences.prioritizedPerformers,
+      prioritizedStudios: profile.recommendationPreferences.prioritizedStudios,
+      prioritizedThemes: profile.recommendationPreferences.prioritizedThemes,
+      excludedTones: profile.recommendationPreferences.excludedTones,
+      excludedGenres: profile.recommendationPreferences.excludedGenres,
+      feedback: profile.recommendationFeedback,
     );
 
     final catalog = database
         .getAllMedia()
+        .where((media) => media.accessibleProfileIds.isEmpty ||
+            media.accessibleProfileIds.contains(profile.id))
         .map(_toRecommendationMedia)
         .toList(growable: false);
 
@@ -216,6 +250,7 @@ class RecommendationsRoutes {
       <String, dynamic>{
         'success': true,
         'profileId': profile.id,
+        'preferences': profile.recommendationPreferences.toJson(),
         'recommendations': recommendationResults
             .map(
               (recommendation) =>
@@ -224,6 +259,181 @@ class RecommendationsRoutes {
             .toList(growable: false),
       },
     );
+  }
+
+  Future<void> _getPreferences(HttpRequest request, Account account) async {
+    final profileId = request.uri.queryParameters['profileId']?.trim() ?? '';
+    if (profileId.isEmpty || profileId.length > _maxProfileIdLength) {
+      await _sendJson(request.response, HttpStatus.badRequest,
+          <String, dynamic>{'success': false, 'error': 'A valid profileId is required.'});
+      return;
+    }
+    final profile = account.getProfileById(profileId);
+    if (profile == null) {
+      await _sendJson(request.response, HttpStatus.forbidden,
+          <String, dynamic>{'success': false, 'error': 'Profile does not belong to this account.'});
+      return;
+    }
+    await _sendJson(request.response, HttpStatus.ok, <String, dynamic>{
+      'success': true,
+      'profileId': profile.id,
+      'preferences': profile.recommendationPreferences.toJson(),
+    });
+  }
+
+  Future<void> _updatePreferences(HttpRequest request, Account account) async {
+    final body = await _readJsonBody(request);
+    final profileId = body?['profileId']?.toString().trim() ?? '';
+    if (profileId.isEmpty || profileId.length > _maxProfileIdLength || body?['preferences'] is! Map) {
+      await _sendJson(request.response, HttpStatus.badRequest,
+          <String, dynamic>{'success': false, 'error': 'profileId and a preferences object are required.'});
+      return;
+    }
+    final profile = account.getProfileById(profileId);
+    if (profile == null) {
+      await _sendJson(request.response, HttpStatus.forbidden,
+          <String, dynamic>{'success': false, 'error': 'Profile does not belong to this account.'});
+      return;
+    }
+    profile.recommendationPreferences = RecommendationPreferences.fromJson(body!['preferences']);
+    await database.persistAccountAndWait(account);
+    await _sendJson(request.response, HttpStatus.ok, <String, dynamic>{
+      'success': true,
+      'profileId': profile.id,
+      'preferences': profile.recommendationPreferences.toJson(),
+    });
+  }
+
+  Future<void> _saveFeedback(HttpRequest request, Account account) async {
+    final body = await _readJsonBody(request);
+    final profileId = body?['profileId']?.toString().trim() ?? '';
+    final mediaId = body?['mediaId']?.toString().trim() ?? '';
+    final action = body?['action']?.toString().trim() ?? '';
+    const acceptedActions = <String>{
+      'moreLikeThis', 'notInterested', 'alreadyWatched', 'notPreferredGenre',
+      'likeActorNotGenre', 'likeStoryNotTone', 'stopShowing',
+    };
+    if (profileId.isEmpty || mediaId.isEmpty || !acceptedActions.contains(action)) {
+      await _sendJson(request.response, HttpStatus.badRequest,
+          <String, dynamic>{'success': false, 'error': 'profileId, mediaId and a supported action are required.'});
+      return;
+    }
+    final profile = account.getProfileById(profileId);
+    if (profile == null) {
+      await _sendJson(request.response, HttpStatus.forbidden,
+          <String, dynamic>{'success': false, 'error': 'Profile does not belong to this account.'});
+      return;
+    }
+    profile.recommendationFeedback[mediaId] = action;
+    final media = database.getMediaById(mediaId);
+    if (media != null && media.accessibleProfileIds.isNotEmpty &&
+        !media.accessibleProfileIds.contains(profile.id)) {
+      await _sendJson(request.response, HttpStatus.notFound,
+          <String, dynamic>{'success': false, 'error': 'Catalog title not found.'});
+      return;
+    }
+    final preferences = profile.recommendationPreferences;
+    List<String> mergeValues(List<String> current, Iterable<String> additions) =>
+        <String>{...current, ...additions.map((value) => value.trim()).where((value) => value.isNotEmpty)}.toList();
+
+    if (action == 'moreLikeThis') profile.likeMedia(mediaId);
+    if (action == 'alreadyWatched') profile.markAsWatched(mediaId);
+    if (media != null && action == 'notPreferredGenre') {
+      profile.recommendationPreferences = preferences.copyWith(
+        excludedGenres: mergeValues(preferences.excludedGenres, media.genres),
+      );
+    }
+    if (media != null && action == 'likeActorNotGenre') {
+      profile.recommendationPreferences = preferences.copyWith(
+        prioritizedPerformers: mergeValues(
+          preferences.prioritizedPerformers,
+          media.actors,
+        ),
+        excludedGenres: mergeValues(preferences.excludedGenres, media.genres),
+      );
+    }
+    if (media != null && action == 'likeStoryNotTone') {
+      profile.recommendationPreferences = preferences.copyWith(
+        prioritizedThemes: mergeValues(
+          preferences.prioritizedThemes,
+          media.themes,
+        ),
+        excludedTones: mergeValues(
+          preferences.excludedTones,
+          media.tones,
+        ),
+      );
+    }
+    if (action == 'notInterested' || action == 'stopShowing') {
+      profile.dislikedMediaIds.remove(mediaId);
+      // Explicit recommendation suppression is separate from the user's
+      // global dislike list and is retained in recommendationFeedback.
+    }
+    await database.persistAccountAndWait(account);
+    await _sendJson(request.response, HttpStatus.ok, <String, dynamic>{
+      'success': true,
+      'profileId': profile.id,
+      'mediaId': mediaId,
+      'action': action,
+    });
+  }
+
+  Future<void> _getSimilarity(HttpRequest request, Account account) async {
+    final query = request.uri.queryParameters;
+    final profileId = query['profileId']?.trim() ?? '';
+    final sourceId = query['sourceId']?.trim() ?? '';
+    final targetId = query['targetId']?.trim() ?? '';
+    if (profileId.isEmpty || sourceId.isEmpty || targetId.isEmpty) {
+      await _sendJson(request.response, HttpStatus.badRequest,
+          <String, dynamic>{'success': false, 'error': 'profileId, sourceId and targetId are required.'});
+      return;
+    }
+    if (account.getProfileById(profileId) == null) {
+      await _sendJson(request.response, HttpStatus.forbidden,
+          <String, dynamic>{'success': false, 'error': 'Profile does not belong to this account.'});
+      return;
+    }
+    final source = database.getMediaById(sourceId);
+    final target = database.getMediaById(targetId);
+    if (source == null || target == null ||
+        (source.accessibleProfileIds.isNotEmpty &&
+            !source.accessibleProfileIds.contains(profileId)) ||
+        (target.accessibleProfileIds.isNotEmpty &&
+            !target.accessibleProfileIds.contains(profileId))) {
+      await _sendJson(request.response, HttpStatus.notFound,
+          <String, dynamic>{'success': false, 'error': 'One or both catalog titles were not found.'});
+      return;
+    }
+    await _sendJson(request.response, HttpStatus.ok, <String, dynamic>{
+      'success': true,
+      'comparison': recommendationsService.compareTitles(
+        source: _toRecommendationMedia(source),
+        target: _toRecommendationMedia(target),
+      ),
+    });
+  }
+
+  Future<Map<String, dynamic>?> _readJsonBody(HttpRequest request) async {
+    const maxBodyBytes = 65536;
+    final builder = BytesBuilder(copy: false);
+    var totalBytes = 0;
+    var tooLarge = false;
+    await for (final chunk in request) {
+      totalBytes += chunk.length;
+      if (totalBytes > maxBodyBytes) {
+        tooLarge = true;
+      } else if (!tooLarge) {
+        builder.add(chunk);
+      }
+    }
+    if (tooLarge) return null;
+    try {
+      final content = utf8.decode(builder.takeBytes());
+      final decoded = jsonDecode(content);
+      return decoded is Map ? Map<String, dynamic>.from(decoded) : null;
+    } on FormatException {
+      return null;
+    }
   }
 
   (int, String?) _parseLimit(String? value) {
@@ -273,10 +483,10 @@ class RecommendationsRoutes {
     );
   }
 
-  List<
-      recommendations.RecommendationHistoryItem> _buildHistory(
-    Profile profile,
-  ) {
+  List<recommendations.RecommendationHistoryItem> _buildHistory(
+    Profile profile, {
+    required Account account,
+  }) {
     final history =
         <recommendations.RecommendationHistoryItem>[];
 
@@ -294,15 +504,16 @@ class RecommendationsRoutes {
         normalizedId,
       );
 
-      final completion = _normalizeCompletion(
-        progress,
-      );
+      final completion = profile.watchedMediaIds.contains(normalizedId)
+          ? 1.0
+          : _normalizeCompletion(progress);
 
       history.add(
         recommendations.RecommendationHistoryItem(
           mediaId: normalizedId,
-          watchedAt: null,
+          watchedAt: profile.getLastWatchedAt(normalizedId),
           completion: completion,
+          sourceProfileName: null,
         ),
       );
     }
@@ -313,6 +524,40 @@ class RecommendationsRoutes {
 
     for (final mediaId in profile.watchedMediaIds) {
       addHistoryItem(mediaId);
+    }
+
+    // Activity is private by default. Only other profiles that explicitly
+    // enabled sharing may contribute signals, and the current profile must
+    // separately opt in to using those shared signals.
+    if (profile.recommendationPreferences.useOtherProfileActivity) {
+      final ownHistoryIds = <String>{
+        ...profile.watchHistory,
+        ...profile.watchedMediaIds,
+      }.map((id) => id.trim()).where((id) => id.isNotEmpty).toSet();
+      final sharedIdsSeen = <String>{};
+      for (final otherProfile in account.profiles) {
+        if (otherProfile.id == profile.id ||
+            !otherProfile.recommendationPreferences.shareHistoryWithOtherProfiles) {
+          continue;
+        }
+        final sharedIds = <String>{
+          ...otherProfile.watchHistory,
+          ...otherProfile.watchedMediaIds,
+        };
+        for (final mediaId in sharedIds) {
+          final normalizedId = mediaId.trim();
+          if (normalizedId.isEmpty || ownHistoryIds.contains(normalizedId) ||
+              !sharedIdsSeen.add(normalizedId)) continue;
+          history.add(recommendations.RecommendationHistoryItem(
+            mediaId: normalizedId,
+            watchedAt: otherProfile.getLastWatchedAt(normalizedId),
+            completion: otherProfile.watchedMediaIds.contains(normalizedId)
+                ? 1.0
+                : _normalizeCompletion(otherProfile.getWatchProgress(normalizedId)),
+            sourceProfileName: otherProfile.name,
+          ));
+        }
+      }
     }
 
     return history;
@@ -455,10 +700,15 @@ class RecommendationsRoutes {
         media.themes,
       ),
       themes: List<String>.from(media.themes),
+      tones: List<String>.from(media.tones),
+      culturalSettings: List<String>.from(media.culturalSettings),
+      culturalInspirations: List<String>.from(media.culturalInspirations),
       tags: List<String>.from(media.tags),
       directors: List<String>.from(media.directors),
       writers: List<String>.from(media.writers),
       music: List<String>.from(media.music),
+      studios: List<String>.from(media.studios),
+      companies: List<String>.from(media.companies),
       references: List<String>.from(media.references),
       watchOptions: media.watchOptions
           .map(
@@ -498,7 +748,7 @@ class RecommendationsRoutes {
       )
       ..set(
         'Access-Control-Allow-Methods',
-        'GET, OPTIONS',
+        'GET, PUT, POST, OPTIONS',
       )
       ..set(
         'Access-Control-Expose-Headers',

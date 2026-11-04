@@ -107,6 +107,7 @@ extension BackendApiServerMethods on BackendApi {
   /// Scans a disc in the selected ARM drive.
   Future<Map<String, dynamic>> scanArmDisc({
     required String driveId,
+    String? profileId,
   }) async {
     _requireAuthentication();
 
@@ -115,6 +116,7 @@ extension BackendApiServerMethods on BackendApi {
       headers: _headers,
       body: jsonEncode({
         'driveId': driveId,
+        if (profileId != null && profileId.trim().isNotEmpty) 'profileId': profileId.trim(),
       }),
     );
 
