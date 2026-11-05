@@ -203,8 +203,19 @@ class MediaItem {
   final String addedSource;
   final List<Map<String, dynamic>> seasons;
 
-  // Disc/archive metadata populated by the ARM import workflow.
+  // Disc/archive source metadata populated by the ARM import workflow.
+  // This is a real imported source, not a cosmetic package choice.
   final String? discType;
+
+  /// Case/sleeve style used to present a seeded example in Store/Kiosk/Theater.
+  /// Unlike [discType], this never claims that the user owns or imported a disc.
+  final String? casePresentationFormat;
+
+  /// Preferred format for visual case rendering, with real disc metadata as fallback.
+  String? get displayCaseFormat =>
+      casePresentationFormat?.trim().isNotEmpty == true
+          ? casePresentationFormat
+          : discType;
   final String? discRegion;
   final String? discCollectionId;
   final String? discCollectionTitle;
@@ -214,6 +225,15 @@ class MediaItem {
 
   /// Optional parent movie/show for an imported bonus feature.
   final String? parentMediaId;
+
+  // ARM identifiers connect each playable catalog item to the existing
+  // Physical Release -> Physical Disc -> Disc Content records on the backend.
+  final String? physicalReleaseId;
+  final String? physicalDiscId;
+  final String? discContentId;
+  final int? discContentPosition;
+  final bool isBonusContent;
+
   final String? discMarketCountry;
   final String? originalTitle;
   /// ISO-639 language code for the language originally recorded for the work.
@@ -322,6 +342,7 @@ class MediaItem {
     this.addedSource = 'unknown',
     List<Map<String, dynamic>>? seasons,
     this.discType,
+    this.casePresentationFormat,
     this.discRegion,
     this.discCollectionId,
     this.discCollectionTitle,
@@ -329,6 +350,11 @@ class MediaItem {
     this.discTitleId,
     this.discTitle,
     this.parentMediaId,
+    this.physicalReleaseId,
+    this.physicalDiscId,
+    this.discContentId,
+    this.discContentPosition,
+    this.isBonusContent = false,
     this.discMarketCountry,
     this.originalTitle,
     this.originalLanguage,
@@ -660,7 +686,22 @@ class MediaItem {
       id: data['id']?.toString() ?? '',
       title: data['title']?.toString() ?? '',
       type: data['type']?.toString() ?? 'movie',
-      imageUrl: (data['imageUrl'] ?? data['posterUrl'])?.toString(),
+      imageUrl: _firstNonEmptyString(<dynamic>[
+        data['imageUrl'],
+        data['image_url'],
+        data['posterUrl'],
+        data['poster_url'],
+        data['posterPath'],
+        data['poster_path'],
+        data['coverArtUrl'],
+        data['cover_art_url'],
+        data['artworkUrl'],
+        data['artwork_url'],
+        data['coverUrl'],
+        data['cover_url'],
+        data['albumArtUrl'],
+        data['album_art_url'],
+      ]),
       description: data['description']?.toString(),
       titleLogoUrl:
           (data['titleLogoUrl'] ?? data['title_logo_url'] ?? data['logoUrl'])
@@ -787,10 +828,28 @@ class MediaItem {
       addedByProfileId: data['addedByProfileId']?.toString(),
       addedByProfileName: data['addedByProfileName']?.toString(),
       addedSource: data['addedSource']?.toString() ?? 'unknown',
-      discType: data['discType']?.toString(),
+      discType: _firstNonEmptyString(<dynamic>[
+        data['discType'],
+        data['disc_type'],
+        data['sourceDiscType'],
+        data['source_disc_type'],
+        data['physicalFormat'],
+        data['physical_format'],
+        data['sourceFormat'],
+        data['source_format'],
+        data['mediaFormat'],
+        data['media_format'],
+      ]),
+      casePresentationFormat: _firstNonEmptyString(<dynamic>[
+        data['casePresentationFormat'],
+        data['case_presentation_format'],
+      ]),
       discRegion: data['discRegion']?.toString(),
-      discCollectionId: data['discCollectionId']?.toString(),
-      discCollectionTitle: data['discCollectionTitle']?.toString(),
+      discCollectionId:
+          (data['discCollectionId'] ?? data['disc_collection_id'])?.toString(),
+      discCollectionTitle: (data['discCollectionTitle'] ??
+              data['disc_collection_title'])
+          ?.toString(),
       discNumber: data['discNumber'] is num
           ? (data['discNumber'] as num).toInt()
           : int.tryParse(data['discNumber']?.toString() ?? ''),
@@ -798,6 +857,28 @@ class MediaItem {
       discTitle: data['discTitle']?.toString(),
       parentMediaId:
           (data['parentMediaId'] ?? data['parent_media_id'])?.toString(),
+      physicalReleaseId:
+          (data['physicalReleaseId'] ?? data['physical_release_id'])?.toString(),
+      physicalDiscId:
+          (data['physicalDiscId'] ?? data['physical_disc_id'])?.toString(),
+      discContentId:
+          (data['discContentId'] ??
+                  data['disc_content_id'] ??
+                  data['contentId'] ??
+                  data['content_id'])
+              ?.toString(),
+      discContentPosition: _intValue(
+        data['discContentPosition'] ??
+            data['disc_content_position'] ??
+            (data['discContent'] is Map
+                ? (data['discContent'] as Map)['position']
+                : data['disc_content'] is Map
+                    ? (data['disc_content'] as Map)['position']
+                    : null),
+      ),
+      isBonusContent: _boolValue(
+        data['isBonusContent'] ?? data['is_bonus_content'],
+      ),
       discMarketCountry: data['discMarketCountry']?.toString(),
       originalTitle: data['originalTitle']?.toString(),
       originalLanguage: data['originalLanguage']?.toString(),
@@ -1269,6 +1350,14 @@ class MediaItem {
         .toList();
   }
 
+  static String? _firstNonEmptyString(List<dynamic> values) {
+    for (final value in values) {
+      final candidate = value?.toString().trim() ?? '';
+      if (candidate.isNotEmpty) return candidate;
+    }
+    return null;
+  }
+
   static Map<String, dynamic> _creditMap(dynamic value) {
     if (value is Map) return Map<String, dynamic>.from(value);
     return <String, dynamic>{};
@@ -1528,6 +1617,7 @@ class MediaItem {
       'addedByProfileName': addedByProfileName,
       'addedSource': addedSource,
       'discType': discType,
+      'casePresentationFormat': casePresentationFormat,
       'discRegion': discRegion,
       'discCollectionId': discCollectionId,
       'discCollectionTitle': discCollectionTitle,
@@ -1535,6 +1625,11 @@ class MediaItem {
       'discTitleId': discTitleId,
       'discTitle': discTitle,
       'parentMediaId': parentMediaId,
+      'physicalReleaseId': physicalReleaseId,
+      'physicalDiscId': physicalDiscId,
+      'discContentId': discContentId,
+      'discContentPosition': discContentPosition,
+      'isBonusContent': isBonusContent,
       'discMarketCountry': discMarketCountry,
       'originalTitle': originalTitle,
       'originalLanguage': originalLanguage,
@@ -4302,6 +4397,10 @@ class AppController extends ChangeNotifier {
         ...existing.toJson(),
         'playbackUrl': null,
         'addedSource': 'demo-preview',
+        // Demo seed package choices are visual presentation only. Keep real
+        // ARM/imported disc metadata separate and do not claim ownership.
+        'casePresentationFormat':
+            item.casePresentationFormat ?? existing.casePresentationFormat,
         'tags': tags.toList(growable: false),
         'releaseYear': existing.releaseYear ?? item.releaseYear,
         'seriesStartYear': existing.seriesStartYear ?? item.seriesStartYear,
@@ -4357,6 +4456,7 @@ class AppController extends ChangeNotifier {
       description:
           'A fictional sci-fi action movie used to preview the Home carousel, movie details, and Smart Search. This is demo metadata only; no video file is attached and playback is unavailable.',
       releaseYear: 2024,
+      casePresentationFormat: 'DVD',
       rating: 7.8,
       genres: const ['Science Fiction', 'Action', 'Adventure'],
       tags: const ['demo-preview', 'not-playable', 'preview-only'],
@@ -4370,6 +4470,7 @@ class AppController extends ChangeNotifier {
       description:
           'A fictional sci-fi mystery series used to preview show details, seasons, and episode layouts. No video files are attached.',
       releaseYear: 2026,
+      casePresentationFormat: 'DVD',
       rating: 8.1,
       genres: const ['Science Fiction', 'Mystery'],
       tags: const ['demo-preview', 'not-playable', 'preview-only'],
@@ -4411,6 +4512,7 @@ class AppController extends ChangeNotifier {
       description:
           'A fictional album used to preview album artwork, metadata, and details layouts. No audio files are attached.',
       releaseYear: 2025,
+      casePresentationFormat: 'Audio CD',
       genres: const ['Electronic', 'Ambient'],
       tags: const ['demo-preview', 'not-playable', 'preview-only'],
       addedSource: 'demo-preview',
@@ -4472,6 +4574,10 @@ class AppController extends ChangeNotifier {
             ? 'International catalog preview from ${example.universe}. The display title is intentionally preserved exactly as curated. This is metadata only and has no playable stream.'
             : 'Catalog example only. This is not an owned video file and has no playable stream. Use it to preview title metadata, $mediaKindLabel details, and actor/crew profiles. TMDB can enrich these sample credits when configured.',
         releaseYear: example.year,
+        // A representative case/sleeve style for this local preview seed.
+        // The actual discType stays null until media is imported from a disc.
+        casePresentationFormat:
+            CinematicSeedExamples.casePresentationFormatFor(example),
         seriesStartYear: example.isTv ? example.year : null,
         originalTitle: isInternational ? example.title : null,
         countryOfOrigin: example.countryOfOrigin ??
@@ -4573,6 +4679,7 @@ class AppController extends ChangeNotifier {
         description:
             'Music catalog example for $artist. No audio files are attached and playback is unavailable until you import your own audio. Use this item to preview artist/performer credit links.',
         releaseYear: album['year']! as int,
+        casePresentationFormat: 'Audio CD',
         music: <String>[artist],
         genres: (album['genres']! as List).cast<String>(),
         tags: const [

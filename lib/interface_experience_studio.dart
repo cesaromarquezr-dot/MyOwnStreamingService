@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'details.dart';
 import 'interface_experience.dart';
+import 'virtual_store_experience_screen.dart';
+import 'widgets/media_case_3d_view.dart';
 
 class _ExperienceDesignOption {
   const _ExperienceDesignOption({required this.id, required this.name});
@@ -46,6 +48,12 @@ class _InterfaceExperienceStudioScreenState
     setState(() {
       _config = config;
       _loading = false;
+    });
+    _tabs.animateTo(switch (parseInterfaceExperienceMode(config.activeExperience)) {
+      InterfaceExperienceMode.classic => 0,
+      InterfaceExperienceMode.blockbuster => 1,
+      InterfaceExperienceMode.redbox => 2,
+      InterfaceExperienceMode.theater => 4,
     });
   }
 
@@ -151,6 +159,7 @@ class _InterfaceExperienceStudioScreenState
                   DropdownMenuItem(
                       value: 'franchise', child: Text('Franchise / universe')),
                   DropdownMenuItem(value: 'studio', child: Text('Studio')),
+                  DropdownMenuItem(value: 'type', child: Text('Media type')),
                   DropdownMenuItem(value: 'tag', child: Text('Tag')),
                   DropdownMenuItem(
                       value: 'recent', child: Text('Recently added')),
@@ -171,7 +180,9 @@ class _InterfaceExperienceStudioScreenState
                         ? 'Country (e.g. Mexico, US, Canada, Spain)'
                         : type == 'decade'
                             ? 'Decade (e.g. 1990)'
-                            : 'Match value',
+                            : type == 'type'
+                                ? 'Media type: movie, tv or music'
+                                : 'Match value',
                   ),
                 ),
               if (type == 'manual')
@@ -243,7 +254,38 @@ class _InterfaceExperienceStudioScreenState
     final name = await _textDialog(
         title: 'Create a virtual store', hint: "e.g. Cesar's Horror Emporium");
     if (!mounted || name == null || name.isEmpty) return;
-    final store = VirtualStoreDesign(name: name);
+    final store = VirtualStoreDesign(
+      name: name,
+      aisles: [
+        StoreAisle(
+          name: 'All Owned Media',
+          description: 'Everything available to the active profile',
+          filterType: 'all',
+          color: 0xFF8B7CFF,
+        ),
+        StoreAisle(
+          name: 'Movies',
+          description: 'Your owned movie collection',
+          filterType: 'type',
+          filterValue: 'movie',
+          color: 0xFFB71C1C,
+        ),
+        StoreAisle(
+          name: 'TV Shows & Specials',
+          description: 'Your series, episodes and TV specials',
+          filterType: 'type',
+          filterValue: 'tv',
+          color: 0xFF1565C0,
+        ),
+        StoreAisle(
+          name: 'Music Collection',
+          description: 'Your owned albums and songs',
+          filterType: 'type',
+          filterValue: 'music',
+          color: 0xFF00897B,
+        ),
+      ],
+    );
     setState(() {
       config.stores.add(store);
       config.activeStoreId = store.id;
@@ -256,7 +298,35 @@ class _InterfaceExperienceStudioScreenState
     final name = await _textDialog(
         title: 'Create a kiosk design', hint: 'e.g. Family Movie Kiosk');
     if (!mounted || name == null || name.isEmpty) return;
-    final kiosk = KioskDesign(name: name);
+    final kiosk = KioskDesign(
+      name: name,
+      categories: [
+        KioskCategoryDesign(
+          title: 'All Owned Media',
+          description: 'Everything available to this profile',
+          filterType: 'all',
+          featured: true,
+        ),
+        KioskCategoryDesign(
+          title: 'Movies',
+          description: 'Your owned movies',
+          filterType: 'type',
+          filterValue: 'movie',
+        ),
+        KioskCategoryDesign(
+          title: 'TV Shows & Specials',
+          description: 'Your owned series and standalone specials',
+          filterType: 'type',
+          filterValue: 'tv',
+        ),
+        KioskCategoryDesign(
+          title: 'Music & Albums',
+          description: 'Your owned music collection',
+          filterType: 'type',
+          filterValue: 'music',
+        ),
+      ],
+    );
     setState(() {
       config.kiosks.add(kiosk);
       config.activeKioskId = kiosk.id;
@@ -531,17 +601,87 @@ class _InterfaceExperienceStudioScreenState
 
   Future<void> _addDecoration({required bool store}) async {
     final label = await _textDialog(
-        title: 'Decoration or layout item',
-        hint: 'e.g. Neon Marvel sign, popcorn machine, poster stand');
+      title: store ? 'Name the in-store display' : 'Name the kiosk decoration',
+      hint: store ? 'e.g. New releases, Marvel wall poster, Music aisle' : 'e.g. Featured display',
+    );
     if (!mounted || label == null || label.isEmpty) return;
-    final item = {
+
+    String type = 'decoration';
+    String placement = 'Front entrance';
+    if (store) {
+      final chosenType = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => SimpleDialog(
+          title: const Text('What are you adding?'),
+          children: [
+            for (final option in const <(String, String)>[
+              ('poster', 'Framed wall poster'),
+              ('hangingBanner', 'Hanging aisle banner'),
+              ('standee', 'Life-size poster standee'),
+              ('neonSign', 'Neon wall sign'),
+              ('decoration', 'Store decoration'),
+            ])
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(dialogContext, option.$1),
+                child: Text(option.$2),
+              ),
+          ],
+        ),
+      );
+      if (!mounted || chosenType == null) return;
+      type = chosenType;
+      final chosenPlacement = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => SimpleDialog(
+          title: const Text('Where should it be placed?'),
+          children: [
+            for (final option in const [
+              'Front entrance',
+              'Left wall',
+              'Right wall',
+              'Back wall',
+              'Overhead aisle',
+              'Center island',
+            ])
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(dialogContext, option),
+                child: Text(option),
+              ),
+          ],
+        ),
+      );
+      if (!mounted || chosenPlacement == null) return;
+      placement = chosenPlacement;
+    }
+    String? posterMediaId;
+    if (store && (type == 'poster' || type == 'standee')) {
+      final selection = <String>[];
+      await _pickMedia(
+        destination: selection,
+        title: 'Select owned-media artwork for this display',
+      );
+      if (!mounted) return;
+      if (selection.isNotEmpty) posterMediaId = selection.first;
+    }
+    final positions = <String, (double, double)>{
+      'Front entrance': (.5, .15),
+      'Left wall': (.15, .5),
+      'Right wall': (.85, .5),
+      'Back wall': (.5, .85),
+      'Overhead aisle': (.5, .35),
+      'Center island': (.5, .65),
+    };
+    final position = positions[placement] ?? (.5, .5);
+    final item = <String, dynamic>{
       'id': DateTime.now().microsecondsSinceEpoch.toString(),
-      'type': 'decoration',
+      'type': type,
       'label': label,
-      'x': 0.5,
-      'y': 0.5,
-      'width': 0.18,
-      'height': 0.12,
+      'placement': placement,
+      if (posterMediaId != null) 'mediaId': posterMediaId,
+      'x': position.$1,
+      'y': position.$2,
+      'width': type == 'hangingBanner' ? 0.28 : 0.18,
+      'height': type == 'hangingBanner' ? 0.10 : 0.16,
     };
     setState(() {
       if (store) {
@@ -550,13 +690,69 @@ class _InterfaceExperienceStudioScreenState
         config.activeKiosk?.decorations.add(item);
       }
     });
-    await _save('Decoration');
+    await _save(store ? 'Store display' : 'Kiosk decoration');
+  }
+
+  Future<void> _addStoreCuratedCollection(VirtualStoreDesign store) async {
+    final title = await _textDialog(
+      title: 'New digital collection',
+      hint: 'e.g. Family Movie Night',
+    );
+    if (!mounted || title == null || title.isEmpty) return;
+    final description = await _textDialog(
+      title: 'Collection description',
+      hint: 'A group of titles you curated; this is not a physical box set.',
+      maxLines: 2,
+    ) ?? '';
+    if (!mounted) return;
+    final mediaIds = <String>[];
+    await _pickMedia(
+      destination: mediaIds,
+      title: 'Choose titles for $title',
+    );
+    if (!mounted || mediaIds.isEmpty) return;
+    final selectedMedia = AppController.instance.library.where((item) => mediaIds.contains(item.id));
+    var artworkUrl = '';
+    for (final item in selectedMedia) {
+      if (item.imageUrl?.trim().isNotEmpty == true) {
+        artworkUrl = item.imageUrl!;
+        break;
+      }
+    }
+    setState(() {
+      store.curatedCollections.add(StoreCuratedCollection(
+        title: title,
+        description: description,
+        mediaIds: mediaIds,
+        artworkUrl: artworkUrl,
+      ));
+    });
+    await _save('Digital collection');
+  }
+
+  Future<void> _editStoreCuratedCollection(
+    VirtualStoreDesign store,
+    StoreCuratedCollection collection,
+  ) async {
+    await _pickMedia(
+      destination: collection.mediaIds,
+      title: 'Choose titles for ${collection.title}',
+    );
+    if (!mounted) return;
+    final selectedMedia = AppController.instance.library.where((item) => collection.mediaIds.contains(item.id));
+    if (selectedMedia.isNotEmpty && collection.artworkUrl.isEmpty) {
+      collection.artworkUrl = selectedMedia.first.imageUrl ?? '';
+    }
+    setState(() {});
+    await _save('Digital collection contents');
   }
 
   Future<void> _pickMedia(
       {required List<String> destination, required String title}) async {
-    final library = AppController.instance.library
-        .where((item) => AppController.instance.isOwned(item.id))
+    final controller = AppController.instance;
+    final profile = controller.currentProfile;
+    final library = controller.library
+        .where((item) => item.isAccessibleTo(profile) && controller.isOwned(item.id))
         .toList();
     if (library.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -666,6 +862,35 @@ class _InterfaceExperienceStudioScreenState
             item.companies
                 .any((company) => company.toLowerCase().contains(target)));
         break;
+      case 'type':
+        if (target == 'music' || target == 'audio') {
+          items = library.where((item) {
+            final mediaType = item.type.toLowerCase().replaceAll('_', ' ');
+            return mediaType.contains('music') ||
+                mediaType.contains('song') ||
+                mediaType.contains('track') ||
+                mediaType.contains('album') ||
+                mediaType.contains('audio');
+          });
+        } else if (target == 'tv' || target == 'television' || target == 'specials') {
+          items = library.where((item) {
+            final mediaType = item.type.toLowerCase().replaceAll('_', ' ');
+            return mediaType.contains('tv') ||
+                mediaType.contains('show') ||
+                mediaType.contains('series') ||
+                mediaType.contains('episode') ||
+                mediaType.contains('special');
+          });
+        } else if (target == 'movie' || target == 'movies' || target == 'film') {
+          items = library.where((item) {
+            final mediaType = item.type.toLowerCase();
+            return mediaType.contains('movie') || mediaType.contains('film');
+          });
+        } else {
+          items = library.where((item) =>
+              item.type.toLowerCase().replaceAll('_', ' ') == target);
+        }
+        break;
       case 'tag':
         items = library.where(
             (item) => item.tags.any((tag) => tag.toLowerCase() == target));
@@ -770,37 +995,6 @@ class _InterfaceExperienceStudioScreenState
     await _save('Case artwork');
   }
 
-  Future<void> _checkoutBasket() async {
-    if (config.rentalBasket.isEmpty) return;
-    final now = DateTime.now().toUtc().toIso8601String();
-    final ids = List<String>.from(config.rentalBasket);
-    setState(() {
-      config.currentRentals
-          .addAll(ids.where((id) => !config.currentRentals.contains(id)));
-      config.rentalHistory.add({
-        'id': DateTime.now().microsecondsSinceEpoch.toString(),
-        'action': 'checkout',
-        'mediaIds': ids,
-        'timestamp': now,
-      });
-      config.rentalBasket.clear();
-    });
-    await _save('Rental checkout');
-  }
-
-  Future<void> _returnRental(String mediaId) async {
-    setState(() {
-      config.currentRentals.remove(mediaId);
-      config.rentalHistory.add({
-        'id': DateTime.now().microsecondsSinceEpoch.toString(),
-        'action': 'return',
-        'mediaIds': [mediaId],
-        'timestamp': DateTime.now().toUtc().toIso8601String(),
-      });
-    });
-    await _save('Rental return');
-  }
-
   Future<void> _launchExperience(InterfaceExperienceMode mode) async {
     setState(() => config.activeExperience = mode.name);
     await _save('Interface selection');
@@ -850,7 +1044,7 @@ class _InterfaceExperienceStudioScreenState
                 text: 'Collections & Cases'),
             Tab(
                 icon: Icon(Icons.movie_filter_rounded),
-                text: 'Rentals & Theater'),
+                text: 'Owned Library & Theater'),
           ],
         ),
       ),
@@ -861,7 +1055,7 @@ class _InterfaceExperienceStudioScreenState
           _buildStoreTab(activeStore),
           _buildKioskTab(activeKiosk),
           _buildCollectionsTab(),
-          _buildRentalAndTheaterTab(),
+          _buildOwnershipAndTheaterTab(),
         ],
       ),
     );
@@ -896,6 +1090,12 @@ class _InterfaceExperienceStudioScreenState
                   : const Icon(Icons.chevron_right_rounded),
               onTap: () async {
                 setState(() => config.activeExperience = mode.name);
+                _tabs.animateTo(switch (mode) {
+                  InterfaceExperienceMode.classic => 0,
+                  InterfaceExperienceMode.blockbuster => 1,
+                  InterfaceExperienceMode.redbox => 2,
+                  InterfaceExperienceMode.theater => 4,
+                });
                 await _save('Interface preference');
               },
             ),
@@ -1006,6 +1206,85 @@ class _InterfaceExperienceStudioScreenState
             (value) => store.shelfColor = value),
         _colorPicker('Sign / accent color', store.accentColor,
             (value) => store.accentColor = value),
+        _sectionHeading('Store navigation & movement'),
+        DropdownButtonFormField<String>(
+          initialValue: store.navigationMode,
+          decoration: const InputDecoration(labelText: 'Navigation view'),
+          items: const [
+            DropdownMenuItem(value: 'firstPerson', child: Text('First-person · camera view')),
+            DropdownMenuItem(value: 'thirdPerson', child: Text('Third-person · visible walker')),
+            DropdownMenuItem(value: 'easyBrowse', child: Text('Easy Browse · no walking character')),
+          ],
+          onChanged: (value) async {
+            if (value == null) return;
+            setState(() => store.navigationMode = value);
+            await _save('Store navigation view');
+          },
+        ),
+        DropdownButtonFormField<String>(
+          initialValue: store.animationLevel,
+          decoration: const InputDecoration(labelText: 'Animation intensity'),
+          items: const [
+            DropdownMenuItem(value: 'full', child: Text('Full animations')),
+            DropdownMenuItem(value: 'reduced', child: Text('Reduced animations')),
+            DropdownMenuItem(value: 'minimal', child: Text('Minimal motion')),
+          ],
+          onChanged: (value) async {
+            if (value == null) return;
+            setState(() => store.animationLevel = value);
+            await _save('Store animation setting');
+          },
+        ),
+        DropdownButtonFormField<int>(
+          initialValue: store.movementSpeed.clamp(1, 5).toInt(),
+          decoration: const InputDecoration(labelText: 'Walking speed'),
+          items: const [
+            DropdownMenuItem(value: 1, child: Text('1 · Slow and relaxed')),
+            DropdownMenuItem(value: 2, child: Text('2 · Leisurely')),
+            DropdownMenuItem(value: 3, child: Text('3 · Normal')),
+            DropdownMenuItem(value: 4, child: Text('4 · Fast')),
+            DropdownMenuItem(value: 5, child: Text('5 · Very fast')),
+          ],
+          onChanged: (value) async {
+            if (value == null) return;
+            setState(() => store.movementSpeed = value);
+            await _save('Store walking speed');
+          },
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: store.showWallPosters,
+          onChanged: (value) async {
+            setState(() => store.showWallPosters = value);
+            await _save('Store wall posters');
+          },
+          title: const Text('Show wall posters and standees'),
+          subtitle: const Text('Frame owned-media artwork on the walls around the store.'),
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: store.showHangingBanners,
+          onChanged: (value) async {
+            setState(() => store.showHangingBanners = value);
+            await _save('Store hanging banners');
+          },
+          title: const Text('Show hanging aisle banners'),
+          subtitle: const Text('Display category signs above aisles, not as a rotating hero banner.'),
+        ),
+        DropdownButtonFormField<String>(
+          initialValue: store.collectionGalleryPlacement,
+          decoration: const InputDecoration(labelText: 'Physical collection gallery location'),
+          items: const [
+            DropdownMenuItem(value: 'Center island', child: Text('Center island')),
+            DropdownMenuItem(value: 'Back wall', child: Text('Back wall')),
+            DropdownMenuItem(value: 'Front display', child: Text('Front display')),
+          ],
+          onChanged: (value) async {
+            if (value == null) return;
+            setState(() => store.collectionGalleryPlacement = value);
+            await _save('Collection gallery placement');
+          },
+        ),
         _sectionHeading('Your aisles and shelves'),
         const Text(
             'Create any aisle you like: Marvel, Mexican Cinema, USA, Canada, Spain, decades, genres, directors, or your own favorites. Rules populate shelves from indexed metadata; manual picks remain available too.'),
@@ -1098,7 +1377,7 @@ class _InterfaceExperienceStudioScreenState
                             .length;
                         return ListTile(
                           key: ValueKey(shelf.id),
-                          leading: const Icon(Icons.shelves),
+                          leading: const Icon(Icons.video_library_rounded),
                           title: Text(shelf.title),
                           subtitle: Text(
                               '$matched titles · ${shelf.filterType}: ${shelf.filterValue}'),
@@ -1136,9 +1415,43 @@ class _InterfaceExperienceStudioScreenState
             onPressed: _addAisle,
             icon: const Icon(Icons.add_road_rounded),
             label: const Text('Add aisle')),
+        _sectionHeading('Curated digital collections'),
+        const Text(
+          'Digital collections group titles without pretending to be physical box sets. Physical editions are detected separately from your owned-media release metadata.',
+        ),
+        for (final collection in store.curatedCollections)
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.collections_bookmark_outlined),
+              title: Text(collection.title),
+              subtitle: Text('${collection.mediaIds.length} titles · Digital collection'),
+              trailing: Wrap(
+                children: [
+                  IconButton(
+                    tooltip: 'Edit collection contents',
+                    onPressed: () => _editStoreCuratedCollection(store, collection),
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
+                  IconButton(
+                    tooltip: 'Remove digital collection',
+                    onPressed: () async {
+                      setState(() => store.curatedCollections.removeWhere((item) => item.id == collection.id));
+                      await _save('Digital collection removed');
+                    },
+                    icon: const Icon(Icons.delete_outline),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        OutlinedButton.icon(
+          onPressed: () => _addStoreCuratedCollection(store),
+          icon: const Icon(Icons.create_new_folder_outlined),
+          label: const Text('Create digital collection'),
+        ),
         _sectionHeading('Floor layout & decorations'),
         const Text(
-            'Drag shelves, signs and decorations around the floor plan. Use the lower-right handle to resize an element.'),
+            'Arrange wall posters, overhead banners, standees, shelves and decorations around the floor plan. Use the lower-right handle to resize an element.'),
         StoreFloorPlanEditor(
           elements: store.layoutElements,
           accentColor: store.accentColor,
@@ -1173,7 +1486,7 @@ class _InterfaceExperienceStudioScreenState
         OutlinedButton.icon(
             onPressed: () => _addDecoration(store: true),
             icon: const Icon(Icons.add),
-            label: const Text('Add sign, poster, standee or decoration')),
+            label: const Text('Add wall poster, hanging banner, standee or sign')),
         _sectionHeading('Seasonal stores'),
         SwitchListTile(
             value: config.seasonalAutomationEnabled,
@@ -1605,110 +1918,104 @@ class _InterfaceExperienceStudioScreenState
     );
   }
 
-  Widget _buildRentalAndTheaterTab() {
-    final library = AppController.instance.library
-        .where((item) => AppController.instance.isOwned(item.id))
-        .toList();
-    MediaItem? find(String id) {
-      for (final item in library) {
-        if (item.id == id) return item;
-      }
-      return null;
+  Widget _buildOwnershipAndTheaterTab() {
+    final controller = AppController.instance;
+    final owned = controller.library
+        .where((item) => controller.isOwned(item.id))
+        .toList(growable: false);
+    bool isMusic(String raw) {
+      final type = raw.toLowerCase().replaceAll('_', ' ').trim();
+      return type.contains('music') ||
+          type.contains('song') ||
+          type.contains('track') ||
+          type.contains('album');
     }
+
+    final movieCount = owned.where((item) {
+      final type = item.type.toLowerCase();
+      return !isMusic(item.type) &&
+          (type.contains('movie') ||
+              type.contains('film') ||
+              type.contains('special'));
+    }).length;
+    final televisionCount = owned.where((item) {
+      final type = item.type.toLowerCase();
+      return !isMusic(item.type) &&
+          (type.contains('tv') ||
+              type.contains('show') ||
+              type.contains('series') ||
+              type.contains('episode') ||
+              type.contains('special'));
+    }).length;
+    final musicCount = owned.where((item) => isMusic(item.type)).length;
+    final discCollections = owned
+        .map((item) => item.physicalReleaseId?.trim().isNotEmpty == true
+            ? item.physicalReleaseId!.trim()
+            : (item.discCollectionId?.trim() ?? ''))
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .length;
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const Text('Virtual rental experience',
+        const Text('Your owned library',
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 6),
         const Text(
-            'This is a fun library presentation layer—not DRM and not a real restriction on your files.'),
+            'The Virtual Store, Redbox-style Kiosk and Theater are presentation modes for media you already own. They do not rent, sell or charge for playback.'),
+        const SizedBox(height: 14),
         Card(
-            child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(config.membershipName,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 18)),
-                      Text('Membership card · ${config.membershipNumber}'),
-                      const SizedBox(height: 8),
-                      OutlinedButton.icon(
-                          onPressed: () async {
-                            final name = await _textDialog(
-                                title: 'Membership name',
-                                initial: config.membershipName);
-                            final number = await _textDialog(
-                                title: 'Membership number',
-                                initial: config.membershipNumber);
-                            if (!mounted) return;
-                            setState(() {
-                              if (name != null && name.isNotEmpty) {
-                                config.membershipName = name;
-                              }
-                              if (number != null && number.isNotEmpty) {
-                                config.membershipNumber = number;
-                              }
-                            });
-                            await _save('Membership card');
-                          },
-                          icon: const Icon(Icons.badge_outlined),
-                          label: const Text('Customize membership card')),
-                    ]))),
-        _sectionHeading('My rental basket'),
-        for (final id in config.rentalBasket)
-          ListTile(
-              title: Text(find(id)?.title ?? 'Unavailable library title'),
-              trailing: IconButton(
-                  icon: const Icon(Icons.remove_circle_outline),
-                  onPressed: () async {
-                    setState(() => config.rentalBasket.remove(id));
-                    await _save('Rental basket');
-                  })),
-        OutlinedButton.icon(
-            onPressed: () async {
-              final destination = List<String>.from(config.rentalBasket);
-              await _pickMedia(
-                  destination: destination,
-                  title: 'Add titles to rental basket');
-              setState(() {
-                config.rentalBasket
-                  ..clear()
-                  ..addAll(destination);
-              });
-              await _save('Rental basket');
-            },
-            icon: const Icon(Icons.add_shopping_cart),
-            label: const Text('Add titles to basket')),
-        FilledButton.icon(
-            onPressed: config.rentalBasket.isEmpty ? null : _checkoutBasket,
-            icon: const Icon(Icons.point_of_sale),
-            label: const Text('Checkout basket')),
-        _sectionHeading('My rentals & return box'),
-        for (final id in config.currentRentals)
-          ListTile(
-              title: Text(find(id)?.title ?? 'Unavailable library title'),
-              subtitle: const Text(
-                  'Currently checked out in the virtual rental experience'),
-              trailing: TextButton(
-                  onPressed: () => _returnRental(id),
-                  child: const Text('Return'))),
-        if (config.currentRentals.isEmpty)
-          const Text('No active virtual rentals.'),
-        _sectionHeading('Rental history'),
-        for (final row in config.rentalHistory.reversed.take(10))
-          ListTile(
-              leading: Icon(row['action'] == 'return'
-                  ? Icons.assignment_return
-                  : Icons.shopping_bag),
-              title: Text(row['action'] == 'return'
-                  ? 'Returned title'
-                  : 'Checked out titles'),
-              subtitle: Text(row['timestamp']?.toString() ?? '')),
-        _sectionHeading('Movie theater experience'),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(children: [
+                  Icon(Icons.verified_rounded, color: Colors.green),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Owned media · ready to play',
+                        style: TextStyle(fontWeight: FontWeight.w900)),
+                  ),
+                ]),
+                const SizedBox(height: 8),
+                const Text(
+                    'Every shelf and kiosk category is filled from the current profile’s accessible library. Selecting a title opens its normal details and playback flow.'),
+                const SizedBox(height: 14),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  Chip(label: Text('${owned.length} owned titles')),
+                  Chip(label: Text('$movieCount movies / specials')),
+                  Chip(label: Text('$televisionCount TV items')),
+                  Chip(label: Text('$musicCount music items')),
+                  Chip(label: Text('$discCollections disc collections')),
+                ]),
+              ],
+            ),
+          ),
+        ),
+        _sectionHeading('Virtual Store & Kiosk rules'),
+        const ListTile(
+          leading: Icon(Icons.storefront_rounded),
+          title: Text('Browse the collection, not a rental catalog'),
+          subtitle: Text(
+              'Aisles, featured shelves, box sets and seasonal displays only show titles the active profile can access.'),
+        ),
+        const ListTile(
+          leading: Icon(Icons.touch_app_rounded),
+          title: Text('Select to view or play'),
+          subtitle: Text(
+              'There is no rent button, return box, checkout basket, purchase price or playback paywall.'),
+        ),
+        const ListTile(
+          leading: Icon(Icons.tv_rounded),
+          title: Text('Remote-friendly kiosk'),
+          subtitle: Text(
+              'Directional navigation is for browsing on a TV or remote. Selecting a title uses your existing media details and player.'),
+        ),
+        _sectionHeading('Private home theater'),
         const Text(
-            'Optional cinema lobby, ticket-style presentation and countdown before playback. Trailers and ambience remain opt-in.'),
+            'Create a cinema-style introduction to playback. Showtimes, seat reservations and paid tickets are intentionally not part of this private theater.'),
         SwitchListTile(
             value: config.theaterCountdown,
             onChanged: (value) async {
@@ -1722,7 +2029,7 @@ class _InterfaceExperienceStudioScreenState
               setState(() => config.theaterTrailers = value);
               await _save('Theater trailers');
             },
-            title: const Text('Play trailers before the feature')),
+            title: const Text('Play available trailers before the feature')),
         SwitchListTile(
             value: config.theaterAmbience,
             onChanged: (value) async {
@@ -1733,7 +2040,7 @@ class _InterfaceExperienceStudioScreenState
         FilledButton.icon(
             onPressed: () => _launchExperience(InterfaceExperienceMode.theater),
             icon: const Icon(Icons.theaters),
-            label: const Text('Open Movie Theater mode')),
+            label: const Text('Open Private Theater mode')),
         _sectionHeading('TV remote navigation'),
         SwitchListTile(
             value: config.remoteNavigationEnabled,
@@ -1967,6 +2274,35 @@ class ExperiencePreviewScreen extends StatelessWidget {
         items = library.where((item) =>
             item.studios.any((name) => name.toLowerCase().contains(query)));
         break;
+      case 'type':
+        if (query == 'music' || query == 'audio') {
+          items = library.where((item) {
+            final mediaType = item.type.toLowerCase().replaceAll('_', ' ');
+            return mediaType.contains('music') ||
+                mediaType.contains('song') ||
+                mediaType.contains('track') ||
+                mediaType.contains('album') ||
+                mediaType.contains('audio');
+          });
+        } else if (query == 'tv' || query == 'television' || query == 'specials') {
+          items = library.where((item) {
+            final mediaType = item.type.toLowerCase().replaceAll('_', ' ');
+            return mediaType.contains('tv') ||
+                mediaType.contains('show') ||
+                mediaType.contains('series') ||
+                mediaType.contains('episode') ||
+                mediaType.contains('special');
+          });
+        } else if (query == 'movie' || query == 'movies' || query == 'film') {
+          items = library.where((item) {
+            final mediaType = item.type.toLowerCase();
+            return mediaType.contains('movie') || mediaType.contains('film');
+          });
+        } else {
+          items = library.where((item) =>
+              item.type.toLowerCase().replaceAll('_', ' ') == query);
+        }
+        break;
       case 'tag':
         items = library.where(
             (item) => item.tags.any((tag) => tag.toLowerCase() == query));
@@ -1989,12 +2325,13 @@ class ExperiencePreviewScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (mode) {
       case InterfaceExperienceMode.blockbuster:
-        return _StorePreview(
-            store: config.activeStore,
-            items: _items,
-            caseDesign: config.activeCaseDesign);
+        return VirtualStoreExperienceScreen(config: config);
       case InterfaceExperienceMode.redbox:
-        return _KioskPreview(kiosk: config.activeKiosk, items: _items);
+        return _KioskPreview(
+          kiosk: config.activeKiosk,
+          items: _items,
+          remoteNavigationEnabled: config.remoteNavigationEnabled,
+        );
       case InterfaceExperienceMode.theater:
         return _TheaterPreview(config: config, items: _items);
       case InterfaceExperienceMode.classic:
@@ -2008,120 +2345,15 @@ class ExperiencePreviewScreen extends StatelessWidget {
 
 typedef _RuleItems = List<MediaItem> Function(String, String, List<String>);
 
-class _StorePreview extends StatelessWidget {
-  const _StorePreview(
-      {required this.store, required this.items, this.caseDesign});
-  final VirtualStoreDesign? store;
-  final _RuleItems items;
-  final Map<String, dynamic>? caseDesign;
-
-  @override
-  Widget build(BuildContext context) {
-    final design = store;
-    if (design == null) {
-      return const Scaffold(
-          body: Center(
-              child: Text('Create a store in the Experience Studio first.')));
-    }
-    return Scaffold(
-      backgroundColor: Color(design.wallColor),
-      appBar: AppBar(
-          backgroundColor: Color(design.shelfColor),
-          title: Text(design.name),
-          actions: [
-            IconButton(
-                tooltip: 'Edit design',
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.design_services))
-          ]),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                  color: Color(design.shelfColor),
-                  borderRadius: BorderRadius.circular(18),
-                  border:
-                      Border.all(color: Color(design.accentColor), width: 2)),
-              child: Column(children: [
-                if (design.logoUrl.isNotEmpty)
-                  Image.network(design.logoUrl,
-                      height: 54,
-                      errorBuilder: (_, __, ___) => const SizedBox.shrink()),
-                Text(design.name.toUpperCase(),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900,
-                        color: Color(design.accentColor))),
-                const SizedBox(height: 6),
-                Text(design.greeting, textAlign: TextAlign.center)
-              ])),
-          const SizedBox(height: 12),
-          for (final aisle in design.aisles) ...[
-            Row(children: [
-              Container(
-                  width: 8,
-                  height: 26,
-                  decoration: BoxDecoration(
-                      color: Color(aisle.color),
-                      borderRadius: BorderRadius.circular(4))),
-              const SizedBox(width: 9),
-              Expanded(
-                  child: Text(aisle.name,
-                      style: TextStyle(
-                          fontSize: 21,
-                          fontWeight: FontWeight.bold,
-                          color: Color(design.accentColor))))
-            ]),
-            if (aisle.description.isNotEmpty)
-              Padding(
-                  padding: const EdgeInsets.only(left: 17, top: 3, bottom: 4),
-                  child: Text(aisle.description,
-                      style: const TextStyle(color: Colors.white70))),
-            _MediaPosterRow(
-                items:
-                    items(aisle.filterType, aisle.filterValue, aisle.mediaIds),
-                emptyLabel: 'No matching titles in this aisle yet.',
-                caseDesign: caseDesign),
-            for (final shelf in aisle.shelves) ...[
-              Padding(
-                  padding: const EdgeInsets.only(left: 17, top: 6),
-                  child: Text('↳ ${shelf.title}',
-                      style: const TextStyle(fontWeight: FontWeight.w700))),
-              _MediaPosterRow(
-                  items: items(
-                      shelf.filterType, shelf.filterValue, shelf.mediaIds),
-                  emptyLabel: 'No titles in this shelf yet.',
-                  caseDesign: caseDesign),
-            ],
-          ],
-          if (design.aisles.isEmpty)
-            const Center(
-                child: Text(
-                    'Your store is ready. Add aisles in the Experience Studio.')),
-          if (design.layoutElements.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            Text('Store floor plan · ${design.floorPlan}',
-                style: TextStyle(
-                    color: Color(design.accentColor),
-                    fontWeight: FontWeight.bold)),
-            _StoreLayoutPreview(
-                elements: design.layoutElements,
-                accentColor: design.accentColor,
-                floorColor: design.floorColor),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 class _KioskPreview extends StatelessWidget {
-  const _KioskPreview({required this.kiosk, required this.items});
+  const _KioskPreview({
+    required this.kiosk,
+    required this.items,
+    this.remoteNavigationEnabled = true,
+  });
   final KioskDesign? kiosk;
   final _RuleItems items;
+  final bool remoteNavigationEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -2146,6 +2378,9 @@ class _KioskPreview extends StatelessWidget {
                 icon: const Icon(Icons.tune))
           ]),
       body: FocusTraversalGroup(
+        policy: remoteNavigationEnabled
+            ? OrderedTraversalPolicy()
+            : ReadingOrderTraversalPolicy(),
         child: ListView(padding: const EdgeInsets.all(18), children: [
           Container(
               padding: const EdgeInsets.all(24),
@@ -2165,7 +2400,9 @@ class _KioskPreview extends StatelessWidget {
                     style: const TextStyle(
                         fontSize: 28, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 5),
-                Text(design.greeting)
+                Text(design.greeting),
+                const SizedBox(height: 8),
+                const Chip(avatar: Icon(Icons.verified_rounded, size: 16), label: Text('YOUR LIBRARY · NO CHECKOUT'))
               ])),
           const SizedBox(height: 12),
           Align(
@@ -2207,9 +2444,11 @@ class _KioskPreview extends StatelessWidget {
                         avatar: const Icon(Icons.auto_awesome, size: 16)))
                     .toList()),
           const SizedBox(height: 12),
-          const Text(
-              'Remote-ready: use directional navigation to move between focused titles and controls.',
-              style: TextStyle(color: Colors.white60)),
+          Text(
+              remoteNavigationEnabled
+                  ? 'Remote-ready: use directional navigation to move between focused titles and controls.'
+                  : 'Remote navigation is disabled. Use touch, mouse or standard keyboard navigation.',
+              style: const TextStyle(color: Colors.white60)),
         ]),
       ),
     );
@@ -2224,16 +2463,30 @@ class _TheaterPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final movies = AppController.instance.library
-        .where((item) =>
-            AppController.instance.isOwned(item.id) &&
-            item.type.toLowerCase().contains('movie'))
-        .take(40)
-        .toList();
+        .where((item) {
+          if (!AppController.instance.isOwned(item.id)) return false;
+          final type = item.type.toLowerCase().replaceAll('_', ' ').trim();
+          final isMusic = type.contains('music') ||
+              type.contains('song') ||
+              type.contains('track') ||
+              type.contains('album');
+          return !isMusic &&
+              (type.contains('movie') ||
+                  type.contains('film') ||
+                  type.contains('tv') ||
+                  type.contains('show') ||
+                  type.contains('series') ||
+                  type.contains('episode') ||
+                  type.contains('special'));
+        })
+        .take(60)
+        .toList()
+      ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
     return Scaffold(
       backgroundColor: const Color(0xFF100708),
       appBar: AppBar(
           backgroundColor: const Color(0xFF100708),
-          title: const Text('Movie Theater')),
+          title: const Text('Private Home Theater')),
       body: ListView(padding: const EdgeInsets.all(18), children: [
         Container(
             padding: const EdgeInsets.all(28),
@@ -2243,11 +2496,11 @@ class _TheaterPreview extends StatelessWidget {
                 border: Border.all(color: Colors.amber, width: 2)),
             child: const Column(children: [
               Icon(Icons.theaters_rounded, size: 52, color: Colors.amber),
-              Text('TONIGHT AT YOUR THEATER',
+              Text('YOUR PRIVATE CINEMA',
                   style:
                       TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2)),
               SizedBox(height: 8),
-              Text('Choose your feature',
+              Text('Choose something you own',
                   style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold))
             ])),
         const SizedBox(height: 12),
@@ -2269,86 +2522,15 @@ class _TheaterPreview extends StatelessWidget {
           ListTile(
               leading: const Icon(Icons.local_movies),
               title: Text(item.title),
-              subtitle: Text(item.releaseYear?.toString() ?? ''),
+              subtitle: Text('${item.releaseYear ?? item.type} · From your library'),
               onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute<void>(
                       builder: (_) => MediaDetailsScreen(media: item)))),
         if (movies.isEmpty)
-          const Text('Import movie titles to populate your theater lobby.'),
+          const Text('Import movies, TV episodes or specials to populate your private theater.'),
       ]),
     );
-  }
-}
-
-class _StoreLayoutPreview extends StatelessWidget {
-  const _StoreLayoutPreview(
-      {required this.elements,
-      required this.accentColor,
-      required this.floorColor});
-  final List<Map<String, dynamic>> elements;
-  final int accentColor;
-  final int floorColor;
-
-  double _value(Map<String, dynamic> item, String key, double fallback) =>
-      item[key] is num ? (item[key] as num).toDouble() : fallback;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        height: 220,
-        decoration: BoxDecoration(
-            color: Color(floorColor),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Color(accentColor))),
-        child: LayoutBuilder(
-            builder: (context, constraints) => Stack(children: [
-                  for (var index = 0; index < elements.length; index++)
-                    _element(elements[index], index, constraints.maxWidth),
-                  const Positioned(
-                      left: 8,
-                      bottom: 6,
-                      child: Text('ENTRANCE / AISLES / FEATURE WALL',
-                          style:
-                              TextStyle(fontSize: 9, color: Colors.white70))),
-                ])),
-      );
-
-  Widget _element(Map<String, dynamic> item, int index, double width) {
-    final x =
-        _value(item, 'x', 0.04 + (index % 3) * .30).clamp(0.0, .85).toDouble();
-    final y = _value(item, 'y', .08 + ((index ~/ 3) % 2) * .42)
-        .clamp(0.0, .75)
-        .toDouble();
-    final w = _value(item, 'width', .25).clamp(.12, .8).toDouble();
-    final h = _value(item, 'height', .24).clamp(.12, .6).toDouble();
-    final type = item['type']?.toString() ?? 'shelves';
-    final color = type == 'entrance'
-        ? const Color(0xFF2E7D32)
-        : type == 'featured'
-            ? Color(accentColor)
-            : type == 'decoration'
-                ? const Color(0xFF6A1B9A)
-                : const Color(0xFF5D4037);
-    return Positioned(
-        left: x * width,
-        top: y * 220,
-        width: w * width,
-        height: h * 220,
-        child: Container(
-            alignment: Alignment.center,
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-                color: color.withValues(alpha: .85),
-                border: Border.all(color: Colors.white70),
-                borderRadius: BorderRadius.circular(7)),
-            child: Text(item['label']?.toString() ?? type,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white))));
   }
 }
 
@@ -2508,38 +2690,10 @@ class _KioskCategoryLayout extends StatelessWidget {
   }
 }
 
-Widget _caseFace(MediaItem item, Map<String, dynamic>? design) {
-  final customTitle = design?['frontTitle']?.toString().trim();
-  final title =
-      customTitle == null || customTitle.isEmpty || customTitle == 'Movie Title'
-          ? item.title
-          : customTitle;
-  return Container(
-    color: Color(_caseColor(design?['primaryColor'], 0xFF243447)),
-    alignment: Alignment.center,
-    padding: const EdgeInsets.all(7),
-    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      const Icon(Icons.local_movies, size: 30, color: Colors.white70),
-      const SizedBox(height: 6),
-      Text(title,
-          maxLines: 4,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-              fontSize: 11, fontWeight: FontWeight.w900, color: Colors.white)),
-    ]),
-  );
-}
-
-int _caseColor(Object? value, int fallback) =>
-    value is num ? value.toInt() : fallback;
-
 class _MediaPosterRow extends StatelessWidget {
-  const _MediaPosterRow(
-      {required this.items, required this.emptyLabel, this.caseDesign});
+  const _MediaPosterRow({required this.items, required this.emptyLabel});
   final List<MediaItem> items;
   final String emptyLabel;
-  final Map<String, dynamic>? caseDesign;
 
   @override
   Widget build(BuildContext context) {
@@ -2570,59 +2724,14 @@ class _MediaPosterRow extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Color(_caseColor(
-                                caseDesign?['primaryColor'], 0xFF243447)),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.white24),
-                            boxShadow: const [
-                              BoxShadow(
-                                  color: Colors.black45,
-                                  blurRadius: 5,
-                                  offset: Offset(2, 2))
-                            ],
-                          ),
-                          padding: const EdgeInsets.all(3),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(5),
-                            child: Stack(fit: StackFit.expand, children: [
-                              if ((caseDesign?['frontArtUrl']
-                                      ?.toString()
-                                      .isNotEmpty ??
-                                  false))
-                                Image.network(
-                                    caseDesign!['frontArtUrl'].toString(),
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) =>
-                                        _caseFace(item, caseDesign))
-                              else if (item.imageUrl != null)
-                                Image.network(item.imageUrl!,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) =>
-                                        _caseFace(item, caseDesign))
-                              else
-                                _caseFace(item, caseDesign),
-                              Positioned(
-                                  left: 3,
-                                  right: 3,
-                                  top: 3,
-                                  child: Align(
-                                      alignment: Alignment.topLeft,
-                                      child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 4, vertical: 2),
-                                          color: Colors.black87,
-                                          child: Text(
-                                              caseDesign?['format']
-                                                      ?.toString() ??
-                                                  'Blu-ray',
-                                              style: const TextStyle(
-                                                  fontSize: 8,
-                                                  fontWeight:
-                                                      FontWeight.bold))))),
-                            ]),
-                          ),
+                        child: MediaCase3DView(
+                          title: item.title,
+                          media: item,
+                          format: item.displayCaseFormat,
+                          year: item.releaseYear,
+                          caseColor: 0xFF243447,
+                          width: 108,
+                          height: 142,
                         ),
                       ),
                       const SizedBox(height: 4),

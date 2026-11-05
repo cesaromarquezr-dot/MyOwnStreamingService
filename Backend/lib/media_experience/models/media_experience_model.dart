@@ -1,0 +1,6 @@
+class MediaExperienceModel {
+  const MediaExperienceModel({required this.mediaId, this.profileId = '', this.positionSeconds = 0, this.selectedAudioTrack, this.selectedSubtitleTrack, this.lastSceneId, this.updatedAt});
+  final String mediaId; final String profileId; final int positionSeconds; final String? selectedAudioTrack; final String? selectedSubtitleTrack; final String? lastSceneId; final DateTime? updatedAt;
+  factory MediaExperienceModel.fromJson(Map<String,dynamic> json) => MediaExperienceModel(mediaId: json['mediaId']?.toString() ?? '', profileId: json['profileId']?.toString() ?? '', positionSeconds: (int.tryParse(json['positionSeconds']?.toString() ?? '') ?? 0).clamp(0, 2147483647), selectedAudioTrack: json['selectedAudioTrack']?.toString(), selectedSubtitleTrack: json['selectedSubtitleTrack']?.toString(), lastSceneId: json['lastSceneId']?.toString(), updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? ''));
+  Map<String,dynamic> toJson() => {'mediaId':mediaId,'profileId':profileId,'positionSeconds':positionSeconds,'selectedAudioTrack':selectedAudioTrack,'selectedSubtitleTrack':selectedSubtitleTrack,'lastSceneId':lastSceneId,'updatedAt':updatedAt?.toUtc().toIso8601String()};
+}

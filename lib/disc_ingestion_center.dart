@@ -269,6 +269,8 @@ class _DiscIngestionCenterScreenState extends State<DiscIngestionCenterScreen> {
     final artworkController = TextEditingController();
     final discTitleController = TextEditingController();
     final editionNameController = TextEditingController();
+    final collectionTitleController = TextEditingController();
+    final discNumberController = TextEditingController(text: '1');
     String kind = 'movie';
     String contentCategory = 'Main Feature';
     String discType = _defaultDiscType();
@@ -384,7 +386,11 @@ class _DiscIngestionCenterScreenState extends State<DiscIngestionCenterScreen> {
                       const Text('Linked bonus content appears under Details → Information → Extras & Special Features. DVD menus, IFO/BUP navigation and interactive mini-games are not ordinary MKV files; preserve the original disc or a lawful full-disc image for those elements.', style: TextStyle(fontSize: 11, color: Colors.white54, height: 1.35)),
                     ],
                     const SizedBox(height: 8),
-                    TextField(controller: discTitleController, decoration: const InputDecoration(labelText: 'Disc / edition label (optional)')),
+                    TextField(controller: discTitleController, decoration: const InputDecoration(labelText: 'Disc label (optional)', hintText: 'Disc 1 · Main Features')),
+                    const SizedBox(height: 8),
+                    TextField(controller: collectionTitleController, decoration: const InputDecoration(labelText: 'Physical collection / box-set title (optional)', hintText: 'The Grinch Ultimate Edition')),
+                    const SizedBox(height: 8),
+                    TextField(controller: discNumberController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Disc number', helperText: 'Use the same collection title and the correct disc number for every import in a box set.')),
                     const SizedBox(height: 8),
                     TextField(controller: artworkController, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Poster artwork URL (optional)', hintText: 'https://…')),
                     const SizedBox(height: 12),
@@ -409,6 +415,16 @@ class _DiscIngestionCenterScreenState extends State<DiscIngestionCenterScreen> {
                     _dialogMessage(dialogContext, 'Enter a valid release year.');
                     return;
                   }
+                  final collectionTitle = collectionTitleController.text.trim();
+                  final discNumberText = discNumberController.text.trim();
+                  final discNumber = collectionTitle.isEmpty
+                      ? null
+                      : (discNumberText.isEmpty ? 1 : int.tryParse(discNumberText));
+                  if (collectionTitle.isNotEmpty &&
+                      (discNumber == null || discNumber < 1 || discNumber > 999)) {
+                    _dialogMessage(dialogContext, 'Enter a disc number between 1 and 999.');
+                    return;
+                  }
                   if (artwork.isNotEmpty) {
                     final uri = Uri.tryParse(artwork);
                     if (uri == null || !uri.hasAuthority || uri.scheme.toLowerCase() != 'https' || uri.userInfo.isNotEmpty || uri.hasQuery || uri.hasFragment) {
@@ -427,6 +443,8 @@ class _DiscIngestionCenterScreenState extends State<DiscIngestionCenterScreen> {
                       artworkUrl: artwork,
                       discTitle: discTitleController.text,
                       editionName: editionNameController.text,
+                      discCollectionTitle: collectionTitle,
+                      discNumber: discNumber,
                       contentCategory: contentCategory,
                       parentMediaId: parentMediaId,
                     );
@@ -473,6 +491,8 @@ class _DiscIngestionCenterScreenState extends State<DiscIngestionCenterScreen> {
       artworkController.dispose();
       discTitleController.dispose();
       editionNameController.dispose();
+      collectionTitleController.dispose();
+      discNumberController.dispose();
     }
   }
 

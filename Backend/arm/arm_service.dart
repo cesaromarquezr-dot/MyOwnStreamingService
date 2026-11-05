@@ -342,6 +342,7 @@ class ArmService {
         'physicalDiscId': physicalDisc.id,
         'physicalReleaseId': physicalDisc.releaseId,
         'discNumber': physicalDisc.discNumber,
+        'position': content.position ?? index + 1,
         'contentId': content.id,
         'contentType': content.contentType.name,
         'isPrimaryContent': content.primary,

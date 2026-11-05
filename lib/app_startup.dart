@@ -55,7 +55,8 @@ Future<void> initializeMyStreamingService({
     initializeSupabase: () => SupabaseService.instance.initialize(),
     initializeHomeCustomization: initializeHomeCustomization,
     initializePageAppearance: PageAppearanceStore.initialize,
-    initializePageContentCustomization: PageContentCustomizationStore.initialize,
+    initializePageContentCustomization:
+        PageContentCustomizationStore.initialize,
     initializeAppSectionCustomization: AppSectionCustomizationStore.initialize,
     initializeDetailsCustomization: DetailsCustomizationStore.initialize,
     initializeMusicCustomization: MusicPageCustomizationStore.initialize,

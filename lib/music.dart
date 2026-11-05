@@ -5,7 +5,6 @@
 
 import 'dart:async';
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
@@ -2014,8 +2013,12 @@ class _MusicScreenState extends State<MusicScreen> {
     final settings = customization;
 
     return AnimatedBuilder(
-      animation: Listenable.merge(
-          <Listenable>[library, playback, MusicFavoritesBridge.changes, UserMediaRatingStore.changes]),
+      animation: Listenable.merge(<Listenable>[
+        library,
+        playback,
+        MusicFavoritesBridge.changes,
+        UserMediaRatingStore.changes
+      ]),
       builder: (context, _) {
         return Scaffold(
           backgroundColor: Color(int.parse(library.homeBackground)),
@@ -2030,11 +2033,11 @@ class _MusicScreenState extends State<MusicScreen> {
                   ),
                   actions: [
                     if (settings.showSearch)
-                    IconButton(
-                      onPressed: _showSearch,
-                      icon: const Icon(Icons.search_rounded),
-                      tooltip: 'Search everything',
-                    ),
+                      IconButton(
+                        onPressed: _showSearch,
+                        icon: const Icon(Icons.search_rounded),
+                        tooltip: 'Search everything',
+                      ),
                     IconButton(
                       onPressed: _openDiscover,
                       icon: const Icon(Icons.explore_rounded),
@@ -2275,16 +2278,20 @@ class _MusicScreenState extends State<MusicScreen> {
           final lowestFirst = settings.artistSortOrder == 'Lowest Rated';
           artistNames.sort((a, b) {
             final scoreA = UserMediaRatingStore.scorePercentFor(
-              profileId, UserMediaRatingStore.artistKey(a));
+                profileId, UserMediaRatingStore.artistKey(a));
             final scoreB = UserMediaRatingStore.scorePercentFor(
-              profileId, UserMediaRatingStore.artistKey(b));
-            if (scoreA == null && scoreB == null) return a.toLowerCase().compareTo(b.toLowerCase());
+                profileId, UserMediaRatingStore.artistKey(b));
+            if (scoreA == null && scoreB == null) {
+              return a.toLowerCase().compareTo(b.toLowerCase());
+            }
             if (scoreA == null) return 1;
             if (scoreB == null) return -1;
             final comparison = lowestFirst
                 ? scoreA.compareTo(scoreB)
                 : scoreB.compareTo(scoreA);
-            return comparison != 0 ? comparison : a.toLowerCase().compareTo(b.toLowerCase());
+            return comparison != 0
+                ? comparison
+                : a.toLowerCase().compareTo(b.toLowerCase());
           });
         } else if (settings.artistSortOrder == 'Z-A') {
           artistNames
@@ -2861,16 +2868,19 @@ class _MusicScreenState extends State<MusicScreen> {
         final trackA = albumTracks[a.toLowerCase()]!;
         final trackB = albumTracks[b.toLowerCase()]!;
         final scoreA = UserMediaRatingStore.scorePercentFor(
-          profileId, UserMediaRatingStore.albumKey(a, trackA.artist));
+            profileId, UserMediaRatingStore.albumKey(a, trackA.artist));
         final scoreB = UserMediaRatingStore.scorePercentFor(
-          profileId, UserMediaRatingStore.albumKey(b, trackB.artist));
-        if (scoreA == null && scoreB == null) return a.toLowerCase().compareTo(b.toLowerCase());
+            profileId, UserMediaRatingStore.albumKey(b, trackB.artist));
+        if (scoreA == null && scoreB == null) {
+          return a.toLowerCase().compareTo(b.toLowerCase());
+        }
         if (scoreA == null) return 1;
         if (scoreB == null) return -1;
-        final comparison = lowestFirst
-            ? scoreA.compareTo(scoreB)
-            : scoreB.compareTo(scoreA);
-        return comparison != 0 ? comparison : a.toLowerCase().compareTo(b.toLowerCase());
+        final comparison =
+            lowestFirst ? scoreA.compareTo(scoreB) : scoreB.compareTo(scoreA);
+        return comparison != 0
+            ? comparison
+            : a.toLowerCase().compareTo(b.toLowerCase());
       });
     } else {
       albumTitles.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
@@ -2895,7 +2905,9 @@ class _MusicScreenState extends State<MusicScreen> {
           runSpacing: 3,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Text('$tracksOnAlbum track${tracksOnAlbum == 1 ? '' : 's'} · ${track.artist}', style: const TextStyle(color: Colors.white60, fontSize: 11)),
+            Text(
+                '$tracksOnAlbum track${tracksOnAlbum == 1 ? '' : 's'} · ${track.artist}',
+                style: const TextStyle(color: Colors.white60, fontSize: 11)),
             UserScoreBadge(
               score: UserMediaRatingStore.scoreFor(
                 AppController.instance.currentProfile?.id,
@@ -2911,7 +2923,8 @@ class _MusicScreenState extends State<MusicScreen> {
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints.tightFor(width: 28, height: 28),
               onPressed: () => _rateMusicItem(
-                mediaId: UserMediaRatingStore.albumKey(albumTitle, track.artist),
+                mediaId:
+                    UserMediaRatingStore.albumKey(albumTitle, track.artist),
                 title: albumTitle,
                 mediaType: 'album',
               ),
@@ -2954,7 +2967,14 @@ class _MusicScreenState extends State<MusicScreen> {
                           fontSize: 20, fontWeight: FontWeight.w900))),
               _sortDropdown(
                   sortOrder,
-                  const ['A-Z', 'Z-A', 'Most Played', 'Recently Added', 'Top Rated', 'Lowest Rated'],
+                  const [
+                    'A-Z',
+                    'Z-A',
+                    'Most Played',
+                    'Recently Added',
+                    'Top Rated',
+                    'Lowest Rated'
+                  ],
                   onSortChanged),
             ]),
             const SizedBox(height: 4),
@@ -3044,7 +3064,10 @@ class _MusicScreenState extends State<MusicScreen> {
                 _sortDropdown(
                     sortOrder,
                     <String>[
-                      'A-Z', 'Z-A', 'Most Played', 'Recently Added',
+                      'A-Z',
+                      'Z-A',
+                      'Most Played',
+                      'Recently Added',
                       if (rateItems) 'Top Rated',
                       if (rateItems) 'Lowest Rated',
                     ],
@@ -3082,7 +3105,8 @@ class _MusicScreenState extends State<MusicScreen> {
                               child: Text(values[index],
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontWeight: FontWeight.w700)),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700)),
                             ),
                             if (rateItems) ...[
                               UserScoreBadge(
@@ -3098,13 +3122,16 @@ class _MusicScreenState extends State<MusicScreen> {
                                 tooltip: 'Rate artist',
                                 visualDensity: VisualDensity.compact,
                                 padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+                                constraints: const BoxConstraints.tightFor(
+                                    width: 28, height: 28),
                                 onPressed: () => _rateMusicItem(
-                                  mediaId: UserMediaRatingStore.artistKey(values[index]),
+                                  mediaId: UserMediaRatingStore.artistKey(
+                                      values[index]),
                                   title: values[index],
                                   mediaType: 'artist',
                                 ),
-                                icon: const Icon(Icons.star_outline_rounded, size: 16),
+                                icon: const Icon(Icons.star_outline_rounded,
+                                    size: 16),
                               ),
                             ],
                           ],
@@ -3156,16 +3183,19 @@ class _MusicScreenState extends State<MusicScreen> {
       final lowestFirst = sortOrder == 'Lowest Rated';
       tracks.sort((a, b) {
         final scoreA = UserMediaRatingStore.scorePercentFor(
-          profileId, UserMediaRatingStore.trackKey(a.id));
+            profileId, UserMediaRatingStore.trackKey(a.id));
         final scoreB = UserMediaRatingStore.scorePercentFor(
-          profileId, UserMediaRatingStore.trackKey(b.id));
-        if (scoreA == null && scoreB == null) return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+            profileId, UserMediaRatingStore.trackKey(b.id));
+        if (scoreA == null && scoreB == null) {
+          return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+        }
         if (scoreA == null) return 1;
         if (scoreB == null) return -1;
-        final comparison = lowestFirst
-            ? scoreA.compareTo(scoreB)
-            : scoreB.compareTo(scoreA);
-        return comparison != 0 ? comparison : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+        final comparison =
+            lowestFirst ? scoreA.compareTo(scoreB) : scoreB.compareTo(scoreA);
+        return comparison != 0
+            ? comparison
+            : a.title.toLowerCase().compareTo(b.title.toLowerCase());
       });
     } else {
       tracks.sort(
@@ -3184,7 +3214,14 @@ class _MusicScreenState extends State<MusicScreen> {
                           fontSize: 20, fontWeight: FontWeight.w900))),
               _sortDropdown(
                   sortOrder,
-                  const ['A-Z', 'Z-A', 'Most Played', 'Recently Added', 'Top Rated', 'Lowest Rated'],
+                  const [
+                    'A-Z',
+                    'Z-A',
+                    'Most Played',
+                    'Recently Added',
+                    'Top Rated',
+                    'Lowest Rated'
+                  ],
                   onSortChanged),
             ]),
             const SizedBox(height: 4),
@@ -3221,7 +3258,8 @@ class _MusicScreenState extends State<MusicScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text('${library.listenCounts[track.id] ?? 0} plays',
-                        style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                        style: const TextStyle(
+                            color: Colors.white54, fontSize: 11)),
                     const SizedBox(width: 8),
                     UserScoreBadge(
                       score: UserMediaRatingStore.scoreFor(
@@ -4127,7 +4165,8 @@ class MusicArtistProfileScreen extends StatelessWidget {
                                   '/app/page/performer-universe',
                                   arguments: artistName),
                               icon: const Icon(Icons.theater_comedy_rounded),
-                              label: const UniversalText('Explore full career')),
+                              label:
+                                  const UniversalText('Explore full career')),
                         ]),
                       ]),
                 ),

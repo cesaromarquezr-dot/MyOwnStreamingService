@@ -562,6 +562,8 @@ class DiscIngestionService extends ChangeNotifier {
     String? artworkUrl,
     String? discTitle,
     String? editionName,
+    String? discCollectionTitle,
+    int? discNumber,
     String contentCategory = 'Main Feature',
     String? parentMediaId,
   }) async {
@@ -599,6 +601,22 @@ class DiscIngestionService extends ChangeNotifier {
         (contentCategory == 'Main Feature' ||
             contentCategory == 'Alternate Feature');
     final cleanEditionName = (editionName ?? '').trim();
+    final cleanCollectionTitle = (discCollectionTitle ?? '').trim();
+    final collectionId = cleanCollectionTitle.isEmpty
+        ? null
+        : 'manual-release-${_stablePathHash('${discType.toLowerCase()}:${cleanCollectionTitle.toLowerCase()}')}';
+    final cleanDiscNumber = discNumber != null && discNumber > 0 ? discNumber : null;
+    final discContentPosition = collectionId == null
+        ? null
+        : AppController.instance.library
+                .where((item) =>
+                    item.discCollectionId == collectionId &&
+                    (item.discNumber ?? 1) == (cleanDiscNumber ?? 1))
+                .fold<int>(0, (max, item) =>
+                    (item.discContentPosition ?? 0) > max
+                        ? item.discContentPosition!
+                        : max) +
+            1;
     final fileName = filePath.trim().split(RegExp(r'[/\\]')).last;
     final inferredEditionName = fileName.replaceFirst(
       RegExp(r'\.mkv$', caseSensitive: false),
@@ -636,9 +654,15 @@ class DiscIngestionService extends ChangeNotifier {
       editionFeatures: isMainFeature
           ? <String>[]
           : <String>[contentCategory],
+      isBonusContent: !isMainFeature,
       releaseYear: releaseYear,
       discType: discType,
       discTitle: (discTitle ?? '').trim().isEmpty ? null : discTitle!.trim(),
+      discCollectionId: collectionId,
+      discCollectionTitle:
+          cleanCollectionTitle.isEmpty ? null : cleanCollectionTitle,
+      discNumber: cleanDiscNumber,
+      discContentPosition: discContentPosition,
       parentMediaId: parentMediaId?.trim().isNotEmpty == true ? parentMediaId!.trim() : null,
       addedAt: DateTime.now(),
       addedByProfileId: profile?.id,

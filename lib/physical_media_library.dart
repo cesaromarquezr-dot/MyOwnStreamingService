@@ -60,6 +60,29 @@ class PhysicalMediaLibraryScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
+          Card(
+            color: const Color(0xFF201A31),
+            child: ListTile(
+              leading: const CircleAvatar(
+                backgroundColor: Color(0x338B7CFF),
+                child: Icon(Icons.album_rounded, color: _physicalAccent),
+              ),
+              title: const Text('Disc & Box Set Collections',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+              subtitle: Text(
+                '${_discCollectionCount(library)} collections · multi-disc editions, anthologies and TV-special discs',
+                style: const TextStyle(color: Colors.white70),
+              ),
+              trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white60),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => const PhysicalDiscCollectionsScreen(),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           ...formats.map((format) {
             final count = countFor(format);
             return Card(
@@ -146,7 +169,22 @@ class _PhysicalMediaFormatScreenState extends State<PhysicalMediaFormatScreen> {
     });
     return Scaffold(
       backgroundColor: const Color(0xFF0B0B10),
-      appBar: AppBar(title: Text(format.label), backgroundColor: const Color(0xFF11111A)),
+      appBar: AppBar(
+        title: Text(format.label),
+        backgroundColor: const Color(0xFF11111A),
+        actions: [
+          IconButton(
+            tooltip: 'Disc and box-set collections',
+            icon: const Icon(Icons.collections_bookmark_outlined),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => const PhysicalDiscCollectionsScreen(),
+              ),
+            ),
+          ),
+        ],
+      ),
       body: Column(children: [
         Padding(padding: const EdgeInsets.fromLTRB(12, 12, 12, 4), child: TextField(
           controller: _searchController,
@@ -200,6 +238,276 @@ class _PhysicalMediaFormatScreenState extends State<PhysicalMediaFormatScreen> {
             ),
         ),
       ]),
+    );
+  }
+}
+
+
+int _discCollectionCount(List<MediaItem> items) {
+  final keys = <String>{};
+  for (final item in items) {
+    final id = item.physicalReleaseId?.trim().isNotEmpty == true
+        ? item.physicalReleaseId!.trim()
+        : (item.discCollectionId?.trim() ?? '');
+    final title = item.discCollectionTitle?.trim() ?? '';
+    if (id.isNotEmpty) {
+      keys.add('id:$id');
+    } else if (title.isNotEmpty) {
+      keys.add('title:${title.toLowerCase()}');
+    }
+  }
+  return keys.length;
+}
+
+/// Groups playable media by the physical disc edition that supplied it.
+/// One disc may contain several standalone specials, episodes or bonus items.
+class PhysicalDiscCollectionsScreen extends StatelessWidget {
+  const PhysicalDiscCollectionsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = AppController.instance;
+    final owned = controller.library
+        .where((item) => controller.isOwned(item.id))
+        .toList(growable: false);
+    final groups = <String, List<MediaItem>>{};
+    for (final item in owned) {
+      final releaseId = item.physicalReleaseId?.trim().isNotEmpty == true
+          ? item.physicalReleaseId!.trim()
+          : (item.discCollectionId?.trim() ?? '');
+      final title = item.discCollectionTitle?.trim() ?? '';
+      if (releaseId.isEmpty && title.isEmpty) continue;
+      final key = releaseId.isNotEmpty
+          ? 'id:$releaseId'
+          : 'title:${title.toLowerCase()}';
+      groups.putIfAbsent(key, () => <MediaItem>[]).add(item);
+    }
+    final rows = groups.entries.toList()
+      ..sort((a, b) {
+        final aTitle = a.value.first.discCollectionTitle ?? a.value.first.title;
+        final bTitle = b.value.first.discCollectionTitle ?? b.value.first.title;
+        return aTitle.toLowerCase().compareTo(bTitle.toLowerCase());
+      });
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF0B0B10),
+      appBar: AppBar(
+        title: const Text('Disc & Box Set Collections'),
+        backgroundColor: const Color(0xFF11111A),
+      ),
+      body: rows.isEmpty
+          ? const Center(
+              child: Padding(
+                padding: EdgeInsets.all(28),
+                child: Text(
+                  'No disc collections have been linked yet. When ARM import metadata includes a physical release ID, physical disc ID and disc number, its programs will be grouped here automatically.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(14),
+              itemCount: rows.length,
+              itemBuilder: (context, index) {
+                final items = rows[index].value;
+                final first = items.first;
+                final title = first.discCollectionTitle?.trim().isNotEmpty == true
+                    ? first.discCollectionTitle!.trim()
+                    : first.discTitle?.trim().isNotEmpty == true
+                        ? first.discTitle!.trim()
+                        : first.editionName?.trim().isNotEmpty == true
+                            ? first.editionName!.trim()
+                            : first.title;
+                final discNumbers = items
+                    .map((item) => item.physicalDiscId?.trim().isNotEmpty == true
+                        ? 'id:${item.physicalDiscId!.trim()}'
+                        : 'number:${item.discNumber ?? 1}')
+                    .toSet()
+                    .length;
+                return Card(
+                  color: const Color(0xFF171722),
+                  margin: const EdgeInsets.only(bottom: 10),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.all(12),
+                    leading: ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: (first.imageUrl ?? '').trim().isEmpty
+                          ? const SizedBox(
+                              width: 58,
+                              height: 78,
+                              child: Icon(Icons.video_library_rounded,
+                                  color: _physicalAccent, size: 34),
+                            )
+                          : Image.network(
+                              first.imageUrl!,
+                              width: 58,
+                              height: 78,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const SizedBox(
+                                width: 58,
+                                height: 78,
+                                child: Icon(Icons.video_library_rounded,
+                                    color: _physicalAccent),
+                              ),
+                            ),
+                    ),
+                    title: Text(title,
+                        style: const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.w800)),
+                    subtitle: Text(
+                      '$discNumbers ${discNumbers == 1 ? 'disc' : 'discs'} · ${items.length} ${items.length == 1 ? 'program' : 'programs'}',
+                      style: const TextStyle(color: Colors.white60),
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded,
+                        color: Colors.white54),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => PhysicalDiscCollectionDetailsScreen(
+                          collectionTitle: title,
+                          items: items,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+    );
+  }
+}
+
+class PhysicalDiscCollectionDetailsScreen extends StatelessWidget {
+  const PhysicalDiscCollectionDetailsScreen({
+    super.key,
+    required this.collectionTitle,
+    required this.items,
+  });
+
+  final String collectionTitle;
+  final List<MediaItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final discs = <String, List<MediaItem>>{};
+    for (final item in items) {
+      final physicalDiscId = item.physicalDiscId?.trim() ?? '';
+      final key = physicalDiscId.isNotEmpty
+          ? 'id:$physicalDiscId'
+          : 'number:${item.discNumber ?? 1}';
+      discs.putIfAbsent(key, () => <MediaItem>[]).add(item);
+    }
+    for (final discItems in discs.values) {
+      discItems.sort((a, b) {
+        final aPosition = a.discContentPosition ?? 0x3fffffff;
+        final bPosition = b.discContentPosition ?? 0x3fffffff;
+        final byPosition = aPosition.compareTo(bPosition);
+        return byPosition != 0
+            ? byPosition
+            : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+      });
+    }
+    final discKeys = discs.keys.toList()
+      ..sort((a, b) {
+        final aNumber = discs[a]!.first.discNumber ?? 1;
+        final bNumber = discs[b]!.first.discNumber ?? 1;
+        final byNumber = aNumber.compareTo(bNumber);
+        return byNumber != 0 ? byNumber : a.compareTo(b);
+      });
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF0B0B10),
+      appBar: AppBar(
+        title: Text(collectionTitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+        backgroundColor: const Color(0xFF11111A),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(14),
+        children: [
+          Card(
+            color: const Color(0xFF201A31),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('PHYSICAL EDITION',
+                      style: TextStyle(
+                          color: _physicalAccent,
+                          fontSize: 11,
+                          letterSpacing: 1.4,
+                          fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 6),
+                  Text(collectionTitle,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${discKeys.length} discs · ${items.length} playable programs or extras',
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'The package is one owned edition. Each program remains an individual library item and can be opened or played separately.',
+                    style: TextStyle(color: Colors.white60),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          for (final discKey in discKeys) ...[
+            Builder(builder: (context) {
+              final discItems = discs[discKey]!;
+              final discNumber = discItems.first.discNumber ?? 1;
+              final discTitle = discItems.first.discTitle?.trim() ?? '';
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(4, 18, 4, 8),
+                child: Text(
+                  'DISC $discNumber${discTitle.isNotEmpty ? ' · ${discTitle.toUpperCase()}' : ''} · ${discItems.length} ${discItems.length == 1 ? 'PROGRAM' : 'PROGRAMS'}',
+                style: const TextStyle(
+                    color: _physicalAccent,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.1),
+                ),
+              );
+            }),
+            for (final item in discs[discKey]!)
+              Card(
+                color: const Color(0xFF171722),
+                child: ListTile(
+                  leading: const Icon(Icons.play_circle_outline_rounded,
+                      color: _physicalAccent, size: 30),
+                  title: Text(item.title,
+                      style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.w700)),
+                  subtitle: Text(
+                    [
+                      item.type,
+                      if (item.releaseYear != null) '${item.releaseYear}',
+                      if ((item.discTitle ?? '').trim().isNotEmpty)
+                        item.discTitle!.trim(),
+                      if (item.isBonusContent ||
+                          item.parentMediaId?.trim().isNotEmpty == true)
+                        'Bonus content',
+                    ].join(' · '),
+                    style: const TextStyle(color: Colors.white60),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded,
+                      color: Colors.white54),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => MediaDetailsScreen(media: item),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ],
+      ),
     );
   }
 }

@@ -98,6 +98,7 @@ class Media {
   final String? discCollectionId;
   final String? discCollectionTitle;
   final int? discNumber;
+  final int? discContentPosition;
   final String? discTitleId;
   final List<String> chapters;
   final List<String> audioTracks;
@@ -192,6 +193,7 @@ class Media {
     this.discCollectionId,
     this.discCollectionTitle,
     this.discNumber,
+    this.discContentPosition,
     this.discTitleId,
     this.chapters = const [],
     this.audioTracks = const [],
@@ -316,6 +318,7 @@ class Media {
       'discCollectionId': discCollectionId,
       'discCollectionTitle': discCollectionTitle,
       'discNumber': discNumber,
+      'discContentPosition': discContentPosition,
       'discTitleId': discTitleId,
       'chapters': List<String>.from(chapters),
       'audioTracks': List<String>.from(audioTracks),
@@ -407,6 +410,9 @@ class Media {
       discCollectionTitle:
           _nullableString(json['discCollectionTitle']),
       discNumber: _parseInt(json['discNumber']),
+      discContentPosition: _parseInt(
+        json['discContentPosition'] ?? json['disc_content_position'],
+      ),
       discTitleId: _nullableString(json['discTitleId']),
       chapters: _stringList(json['chapters']),
       audioTracks: _stringList(json['audioTracks']),
@@ -492,6 +498,7 @@ class Media {
     String? discCollectionId,
     String? discCollectionTitle,
     int? discNumber,
+    int? discContentPosition,
     String? discTitleId,
     List<String>? chapters,
     List<String>? audioTracks,
@@ -604,6 +611,8 @@ class Media {
       discCollectionTitle:
           discCollectionTitle ?? this.discCollectionTitle,
       discNumber: discNumber ?? this.discNumber,
+      discContentPosition:
+          discContentPosition ?? this.discContentPosition,
       discTitleId: discTitleId ?? this.discTitleId,
       chapters: chapters ?? this.chapters,
       audioTracks: audioTracks ?? this.audioTracks,

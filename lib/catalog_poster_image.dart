@@ -20,6 +20,7 @@ class CatalogPosterImage extends StatefulWidget {
     this.fit = BoxFit.cover,
     this.placeholder,
     this.errorPlaceholder,
+    this.forcePosterOnly = false,
   });
 
   final MediaItem media;
@@ -28,6 +29,7 @@ class CatalogPosterImage extends StatefulWidget {
   final BoxFit fit;
   final Widget? placeholder;
   final Widget? errorPlaceholder;
+  final bool forcePosterOnly;
 
   @override
   State<CatalogPosterImage> createState() => _CatalogPosterImageState();
@@ -48,11 +50,12 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
   @override
   void initState() {
     super.initState();
-    _imageUrl = widget.media.imageUrl?.trim() ?? '';
+    _imageUrl = _normalizeArtworkUrl(widget.media.imageUrl);
     _mediaKey = _keyFor(widget.media);
     AppController.instance.addListener(_onAppControllerChanged);
     AppSectionCustomizationStore.revision.addListener(_onArtworkSettingsChanged);
     ArtworkSelectionStore.revision.addListener(_onArtworkSelectionChanged);
+    unawaited(_loadSelectedPoster());
     _startProviderLookupIfReady();
     _startBackdropLookupIfNeeded();
   }
@@ -60,6 +63,7 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
   void _onAppControllerChanged() {
     // A card can be mounted before login. Retry the lookup after authentication
     // changes without requiring the user to leave and re-enter the Home page.
+    unawaited(_loadSelectedPoster());
     _startProviderLookupIfReady();
     _startBackdropLookupIfNeeded();
   }
@@ -76,13 +80,62 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
   }
 
   void _onArtworkSelectionChanged() {
-    if (!mounted || _artworkDisplayMode == 'Poster only') return;
+    if (!mounted) return;
+    unawaited(_loadSelectedPoster());
+    if (widget.forcePosterOnly || _artworkDisplayMode == 'Poster only') return;
     _backdropLookupStarted = false;
     unawaited(_loadBackdrop());
   }
 
+  static String _normalizeArtworkUrl(String? raw) {
+    final value = raw?.trim() ?? '';
+    if (value.isEmpty || value.startsWith('http://') || value.startsWith('https://')) {
+      return value;
+    }
+    if (value.startsWith('/')) {
+      return CinematicTitleMetadataService.imageUrl(value) ?? value;
+    }
+    return value;
+  }
+
+  Future<void> _loadSelectedPoster() async {
+    final media = widget.media;
+    final key = _mediaKey;
+    final profileId = AppController.instance.currentProfile?.id ?? 'guest';
+    try {
+      final selected = await ArtworkSelectionStore.readPosterPath(
+        profileId: profileId,
+        mediaId: media.id,
+      );
+      // Profile-specific artwork takes priority. If the active profile has no
+      // selection, fall back to the media's own image or a previously verified
+      // automatic poster rather than retaining another profile's selection.
+      final selectedUrl = _normalizeArtworkUrl(selected);
+      final savedAutomatic = selectedUrl.isEmpty
+          ? await MediaArtworkAutoResolver.readAutoPosterUrl(media.id)
+          : null;
+      final url = selectedUrl.isNotEmpty
+          ? selectedUrl
+          : _normalizeArtworkUrl(
+              (media.imageUrl?.trim().isNotEmpty ?? false)
+                  ? media.imageUrl
+                  : savedAutomatic,
+            );
+      if (!mounted ||
+          _mediaKey != key ||
+          (AppController.instance.currentProfile?.id ?? 'guest') != profileId) {
+        return;
+      }
+      if (_imageUrl != url) setState(() => _imageUrl = url);
+      if (url.isEmpty) _startProviderLookupIfReady();
+    } catch (_) {
+      // A missing local artwork preference must not block poster rendering.
+    }
+  }
+
   void _startBackdropLookupIfNeeded() {
     if (!mounted ||
+        widget.forcePosterOnly ||
         _artworkDisplayMode == 'Poster only' ||
         _backdropLookupStarted ||
         !MediaArtworkAutoResolver.isMovieOrShow(widget.media)) {
@@ -202,12 +255,13 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
       _providerLookupStarted = false;
       _backdropLookupStarted = false;
       _backdropUrl = null;
-      _imageUrl = widget.media.imageUrl?.trim() ?? '';
+      _imageUrl = _normalizeArtworkUrl(widget.media.imageUrl);
+      unawaited(_loadSelectedPoster());
       _startProviderLookupIfReady();
       _startBackdropLookupIfNeeded();
     } else if (!_fallbackAttempted && _imageUrl.isEmpty &&
         (widget.media.imageUrl?.trim().isNotEmpty ?? false)) {
-      _imageUrl = widget.media.imageUrl!.trim();
+      _imageUrl = _normalizeArtworkUrl(widget.media.imageUrl);
     }
   }
 
@@ -260,7 +314,7 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
   @override
   Widget build(BuildContext context) {
     final url = _imageUrl.trim();
-    final mode = _artworkDisplayMode;
+    final mode = widget.forcePosterOnly ? 'Poster only' : _artworkDisplayMode;
     final preview = mode == 'Poster + backdrop or previews'
         ? _youtubeThumbnail(widget.media.trailerUrl)
         : null;

@@ -27,6 +27,7 @@ class OfflineMetadataCache {
     // Physical-disc and edition metadata is catalog data, not a local path.
     'releaseDate', 'editionReleaseYear', 'editionReleaseDate', 'editionName',
     'editionType', 'canonicalWorkId', 'editionFeatures', 'discType',
+    'casePresentationFormat',
     'discRegion', 'discCollectionId', 'discCollectionTitle', 'discNumber',
     'discTitleId', 'discTitle', 'discMarketCountry', 'parentMediaId',
   };

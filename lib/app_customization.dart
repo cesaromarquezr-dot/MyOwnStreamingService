@@ -62,7 +62,7 @@ class ArtworkDisplayModePicker extends StatelessWidget {
                 style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
             const SizedBox(height: 4),
             const Text(
-              'Shared by all Customize App pages for this profile. Trailer preview thumbnails appear when available; hero banners can override this in their own settings.',
+              'Shared artwork preference for Classic and standard library pages. Virtual Store uses framed wall posters and hanging aisle banners instead of a rotating hero carousel; Kiosk and Theater use their own display controls.',
               style: TextStyle(color: Colors.white60, fontSize: 12, height: 1.35),
             ),
             const SizedBox(height: 10),

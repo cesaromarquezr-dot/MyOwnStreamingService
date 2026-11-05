@@ -4,7 +4,6 @@
 
 import 'dart:async';
 import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -35,6 +34,7 @@ import 'media_graph_relationship.dart';
 import 'media_edition_identity.dart';
 
 import 'backend_api_compatibility.dart';
+
 class _StoryAdaptationLink {
   const _StoryAdaptationLink({
     required this.media,
@@ -260,9 +260,10 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     final targetAudioLanguage = preferences.preferredAudioLanguage.isNotEmpty
         ? preferences.preferredAudioLanguage
         : (preferences.preferOriginalAudio ? originalLanguage : null);
-    final targetSubtitleLanguage = preferences.preferredSubtitleLanguage.isNotEmpty
-        ? preferences.preferredSubtitleLanguage
-        : (preferences.preferOriginalSubtitles ? originalLanguage : null);
+    final targetSubtitleLanguage =
+        preferences.preferredSubtitleLanguage.isNotEmpty
+            ? preferences.preferredSubtitleLanguage
+            : (preferences.preferOriginalSubtitles ? originalLanguage : null);
     final savedTracks = await PlaybackTrackSelectionStore.load(
       profileId: AppController.instance.currentProfile?.id ?? 'default',
       mediaId: media.id,
@@ -273,9 +274,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         ) ??
         'Default';
     final savedAudio = savedTracks['audio'];
-    final audio = media.audioTracks.contains(savedAudio)
-        ? savedAudio!
-        : automaticAudio;
+    final audio =
+        media.audioTracks.contains(savedAudio) ? savedAudio! : automaticAudio;
     final savedSubtitle = savedTracks['subtitle'];
     final automaticSubtitle = preferences.subtitlesEnabled
         ? OriginalLanguageDefaults.bestTrack(
@@ -287,7 +287,9 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     final subtitle = !preferences.subtitlesEnabled ||
             (savedTracks.containsKey('subtitle') && savedSubtitle == '')
         ? null
-        : (media.subtitles.contains(savedSubtitle) ? savedSubtitle : automaticSubtitle);
+        : (media.subtitles.contains(savedSubtitle)
+            ? savedSubtitle
+            : automaticSubtitle);
     if (!mounted) return;
     setState(() {
       selectedAudio = audio;
@@ -2780,8 +2782,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     final playButton = SizedBox(
       height: 52,
       child: ElevatedButton.icon(
-        onPressed:
-            (pressedPlay || _selectedEdition == null) ? null : playMedia,
+        onPressed: (pressedPlay || _selectedEdition == null) ? null : playMedia,
         icon: const Icon(Icons.play_arrow_rounded),
         label: const UniversalText(
           'Play',
@@ -2798,7 +2799,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                   child: OutlinedButton.icon(
                     onPressed: _showEditionPicker,
                     icon: const Icon(Icons.video_library_outlined),
-                    label: UniversalText('Versions (${_linkedEditions().length})'),
+                    label:
+                        UniversalText('Versions (${_linkedEditions().length})'),
                   ),
                 ),
               ),
@@ -2916,13 +2918,17 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                           ? 'Original audio: ${OriginalLanguageDefaults.displayName(originalLanguage)} (no matching track identified in this file)'
                           : 'Original audio: ${OriginalLanguageDefaults.displayName(originalLanguage)} · $originalAudioTrack'),
                     if (originalLanguage == null)
-                      const Text('Original audio language: not verified in metadata; no language is inferred from cultural inspiration.'),
-                    if (media.countryOfOrigin != null && media.countryOfOrigin!.trim().isNotEmpty)
+                      const Text(
+                          'Original audio language: not verified in metadata; no language is inferred from cultural inspiration.'),
+                    if (media.countryOfOrigin != null &&
+                        media.countryOfOrigin!.trim().isNotEmpty)
                       Text('Production origin: ${media.countryOfOrigin}'),
                     if (media.culturalSettings.isNotEmpty)
-                      Text('Cultural setting: ${media.culturalSettings.join(', ')}'),
+                      Text(
+                          'Cultural setting: ${media.culturalSettings.join(', ')}'),
                     if (media.culturalInspirations.isNotEmpty)
-                      Text('Cultural inspiration: ${media.culturalInspirations.join(', ')}'),
+                      Text(
+                          'Cultural inspiration: ${media.culturalInspirations.join(', ')}'),
                     if (media.language != null &&
                         media.language!.trim().isNotEmpty)
                       Text('Language: ${media.language}'),
@@ -2972,7 +2978,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           selectedAudio: selectedAudio,
           subtitlesEnabled: subtitlesEnabled,
           selectedSubtitle: selectedSubtitle,
-          originalAudioLanguage: OriginalLanguageDefaults.resolveForMedia(media),
+          originalAudioLanguage:
+              OriginalLanguageDefaults.resolveForMedia(media),
           originalAudioTrack: OriginalLanguageDefaults.matchingTrack(
             media.audioTracks,
             targetLanguage: OriginalLanguageDefaults.resolveForMedia(media),

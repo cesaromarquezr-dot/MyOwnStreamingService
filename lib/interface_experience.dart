@@ -28,11 +28,11 @@ extension InterfaceExperienceModeLabel on InterfaceExperienceMode {
       case InterfaceExperienceMode.classic:
         return 'Your familiar, fully customizable streaming interface.';
       case InterfaceExperienceMode.blockbuster:
-        return 'A browsable rental store with aisles, shelves and custom cases.';
+        return 'A walk-through home video store built from your owned library, with themed aisles, shelves and display cases. No rentals or purchases.';
       case InterfaceExperienceMode.redbox:
-        return 'A streamlined kiosk designed for television remotes.';
+        return 'A streamlined, remote-friendly kiosk for browsing and playing titles already in your library. No checkout or payment.';
       case InterfaceExperienceMode.theater:
-        return 'A cinematic lobby for choosing a feature and starting a movie night.';
+        return 'A private home-cinema lobby for choosing an owned movie or TV special and starting a movie night. No tickets or paid showtimes.';
     }
   }
 
@@ -152,23 +152,73 @@ class StoreAisle {
       );
 }
 
+
+/// A user-curated digital collection shown as a virtual display group.
+/// Unlike a physical box set, it has no case/disc unless its items have a
+/// separately indexed physical release in the owned library.
+class StoreCuratedCollection {
+  StoreCuratedCollection({
+    String? id,
+    this.title = 'New collection',
+    this.description = '',
+    List<String>? mediaIds,
+    this.artworkUrl = '',
+    this.featured = false,
+  })  : id = id ?? _experienceId('store_collection'),
+        mediaIds = mediaIds ?? <String>[];
+
+  final String id;
+  String title;
+  String description;
+  List<String> mediaIds;
+  String artworkUrl;
+  bool featured;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'description': description,
+        'mediaIds': mediaIds,
+        'artworkUrl': artworkUrl,
+        'featured': featured,
+      };
+
+  factory StoreCuratedCollection.fromJson(Map<String, dynamic> json) =>
+      StoreCuratedCollection(
+        id: _stringValue(json['id'], _experienceId('store_collection')),
+        title: _stringValue(json['title'], 'New collection'),
+        description: json['description']?.toString() ?? '',
+        mediaIds: _stringList(json['mediaIds']),
+        artworkUrl: json['artworkUrl']?.toString() ?? '',
+        featured: json['featured'] == true,
+      );
+}
+
 class VirtualStoreDesign {
   VirtualStoreDesign({
     String? id,
     this.name = "Cesar's Video World",
     this.logoUrl = '',
-    this.greeting = 'Welcome. Your next movie night starts here.',
+    this.greeting = 'Welcome to your collection. Your next movie night starts here.',
     this.wallColor = 0xFF1B1B1B,
     this.floorColor = 0xFF292522,
     this.shelfColor = 0xFF4E342E,
     this.accentColor = 0xFFFFC107,
     this.floorPlan = 'Classic wide aisles',
+    this.navigationMode = 'thirdPerson',
+    this.animationLevel = 'full',
+    this.movementSpeed = 3,
+    this.showWallPosters = true,
+    this.showHangingBanners = true,
+    this.collectionGalleryPlacement = 'Center island',
     List<StoreAisle>? aisles,
+    List<StoreCuratedCollection>? curatedCollections,
     List<Map<String, dynamic>>? layoutElements,
     List<Map<String, dynamic>>? seasonalRules,
     List<Map<String, dynamic>>? revisions,
   })  : id = id ?? _experienceId('store'),
         aisles = aisles ?? <StoreAisle>[],
+        curatedCollections = curatedCollections ?? <StoreCuratedCollection>[],
         layoutElements = layoutElements ?? <Map<String, dynamic>>[],
         seasonalRules = seasonalRules ?? <Map<String, dynamic>>[],
         revisions = revisions ?? <Map<String, dynamic>>[];
@@ -182,7 +232,16 @@ class VirtualStoreDesign {
   int shelfColor;
   int accentColor;
   String floorPlan;
+  /// firstPerson, thirdPerson or easyBrowse.
+  String navigationMode;
+  /// full, reduced or minimal.
+  String animationLevel;
+  int movementSpeed;
+  bool showWallPosters;
+  bool showHangingBanners;
+  String collectionGalleryPlacement;
   List<StoreAisle> aisles;
+  List<StoreCuratedCollection> curatedCollections;
   List<Map<String, dynamic>> layoutElements;
   List<Map<String, dynamic>> seasonalRules;
   List<Map<String, dynamic>> revisions;
@@ -197,7 +256,14 @@ class VirtualStoreDesign {
         'shelfColor': shelfColor,
         'accentColor': accentColor,
         'floorPlan': floorPlan,
+        'navigationMode': navigationMode,
+        'animationLevel': animationLevel,
+        'movementSpeed': movementSpeed,
+        'showWallPosters': showWallPosters,
+        'showHangingBanners': showHangingBanners,
+        'collectionGalleryPlacement': collectionGalleryPlacement,
         'aisles': aisles.map((aisle) => aisle.toJson()).toList(),
+        'curatedCollections': curatedCollections.map((item) => item.toJson()).toList(),
         'layoutElements': layoutElements,
         'seasonalRules': seasonalRules,
         if (includeRevisions) 'revisions': revisions,
@@ -220,13 +286,28 @@ class VirtualStoreDesign {
         id: _stringValue(json['id'], _experienceId('store')),
         name: _stringValue(json['name'], 'My Video Store'),
         logoUrl: json['logoUrl']?.toString() ?? '',
-        greeting: json['greeting']?.toString() ?? '',
+        greeting: _stringValue(json['greeting'], 'Welcome to your collection. Your next movie night starts here.'),
         wallColor: _intValue(json['wallColor'], 0xFF1B1B1B),
         floorColor: _intValue(json['floorColor'], 0xFF292522),
         shelfColor: _intValue(json['shelfColor'], 0xFF4E342E),
         accentColor: _intValue(json['accentColor'], 0xFFFFC107),
         floorPlan: _stringValue(json['floorPlan'], 'Classic wide aisles'),
+        navigationMode: const ['firstPerson', 'thirdPerson', 'easyBrowse'].contains(json['navigationMode'])
+            ? json['navigationMode'].toString()
+            : 'thirdPerson',
+        animationLevel: const ['full', 'reduced', 'minimal'].contains(json['animationLevel'])
+            ? json['animationLevel'].toString()
+            : 'full',
+        movementSpeed: _intValue(json['movementSpeed'], 3).clamp(1, 5).toInt(),
+        showWallPosters: json['showWallPosters'] != false,
+        showHangingBanners: json['showHangingBanners'] != false,
+        collectionGalleryPlacement: const ['Center island', 'Back wall', 'Front display']
+                .contains(json['collectionGalleryPlacement'])
+            ? json['collectionGalleryPlacement'].toString()
+            : 'Center island',
         aisles: _mapList(json['aisles']).map(StoreAisle.fromJson).toList(),
+        curatedCollections: _mapList(json['curatedCollections'])
+            .map(StoreCuratedCollection.fromJson).toList(),
         layoutElements: _mapList(json['layoutElements']),
         seasonalRules: _mapList(json['seasonalRules']),
         revisions: _mapList(json['revisions']),
@@ -284,7 +365,7 @@ class KioskDesign {
     String? id,
     this.name = 'My Movie Kiosk',
     this.logoUrl = '',
-    this.greeting = 'Choose something great to watch.',
+    this.greeting = 'Choose a title from your collection. It is already yours and ready to play.',
     this.backgroundColor = 0xFF101820,
     this.accentColor = 0xFFE53935,
     this.layoutStyle = 'Featured banner + grid',
@@ -349,7 +430,7 @@ class KioskDesign {
         id: _stringValue(json['id'], _experienceId('kiosk')),
         name: _stringValue(json['name'], 'My Movie Kiosk'),
         logoUrl: json['logoUrl']?.toString() ?? '',
-        greeting: json['greeting']?.toString() ?? '',
+        greeting: _stringValue(json['greeting'], 'Choose a title from your collection. It is already yours and ready to play.'),
         backgroundColor: _intValue(json['backgroundColor'], 0xFF101820),
         accentColor: _intValue(json['accentColor'], 0xFFE53935),
         layoutStyle: _stringValue(json['layoutStyle'], 'Featured banner + grid'),
@@ -527,11 +608,32 @@ class InterfaceExperienceConfig {
     final store = VirtualStoreDesign(
       aisles: [
         StoreAisle(
+          name: 'Movies & Films',
+          description: 'Feature films, documentaries, short films and concert films',
+          filterType: 'type',
+          filterValue: 'movie',
+          color: 0xFFB71C1C,
+        ),
+        StoreAisle(
+          name: 'TV Shows & Specials',
+          description: 'Series, seasons, episodes and standalone television specials',
+          filterType: 'type',
+          filterValue: 'tv',
+          color: 0xFF1565C0,
+        ),
+        StoreAisle(
+          name: 'Music & Albums',
+          description: 'Albums, CDs, vinyl releases and individual songs',
+          filterType: 'type',
+          filterValue: 'music',
+          color: 0xFF00897B,
+        ),
+        StoreAisle(
           name: 'Marvel Universe',
           description: 'MCU, animated Marvel, X-Men and Spider-Man',
           filterType: 'franchise',
           filterValue: 'Marvel',
-          color: 0xFFB71C1C,
+          color: 0xFF8E2424,
           shelves: [
             ExperienceContentRule(title: 'Marvel Cinematic Universe', filterType: 'franchise', filterValue: 'Marvel Cinematic Universe'),
           ],
@@ -550,12 +652,24 @@ class InterfaceExperienceConfig {
           filterValue: 'Horror',
           color: 0xFF512DA8,
         ),
+        StoreAisle(
+          name: 'All Owned Media',
+          description: 'Every accessible movie, show, special and music title',
+          filterType: 'all',
+          color: 0xFF8B7CFF,
+        ),
       ],
       layoutElements: [
-        {'id': 'entrance', 'type': 'entrance', 'label': 'Welcome entrance'},
-        {'id': 'feature', 'type': 'featured', 'label': 'Featured wall'},
-        {'id': 'shelves', 'type': 'shelves', 'label': 'Main shelves'},
-        {'id': 'decor', 'type': 'decoration', 'label': 'Decorations'},
+        {'id': 'entrance', 'type': 'entrance', 'label': 'Welcome entrance', 'placement': 'front entrance', 'x': 0.5, 'y': 0.08, 'width': 0.28, 'height': 0.14},
+        {'id': 'poster-movies', 'type': 'poster', 'label': 'Movies & Films', 'placement': 'left wall', 'x': 0.12, 'y': 0.22, 'width': 0.12, 'height': 0.28},
+        {'id': 'poster-tv', 'type': 'poster', 'label': 'TV Shows & Specials', 'placement': 'right wall', 'x': 0.76, 'y': 0.22, 'width': 0.12, 'height': 0.28},
+        {'id': 'banner-movies', 'type': 'hangingBanner', 'label': 'MOVIES & FILMS', 'placement': 'overhead · front aisle', 'x': 0.28, 'y': 0.36, 'width': 0.42, 'height': 0.10},
+        {'id': 'banner-tv', 'type': 'hangingBanner', 'label': 'TV SHOWS & SPECIALS', 'placement': 'overhead · center aisle', 'x': 0.66, 'y': 0.40, 'width': 0.30, 'height': 0.10},
+        {'id': 'banner-music', 'type': 'hangingBanner', 'label': 'MUSIC & ALBUMS', 'placement': 'overhead · music aisle', 'x': 0.28, 'y': 0.60, 'width': 0.42, 'height': 0.10},
+        {'id': 'banner-collections', 'type': 'hangingBanner', 'label': 'COLLECTION GALLERY', 'placement': 'overhead · center island', 'x': 0.50, 'y': 0.76, 'width': 0.30, 'height': 0.10},
+        {'id': 'banner-listening', 'type': 'hangingBanner', 'label': 'LISTENING LOUNGE', 'placement': 'overhead · back wall', 'x': 0.72, 'y': 0.18, 'width': 0.26, 'height': 0.10},
+        {'id': 'collection-island', 'type': 'collectionIsland', 'label': 'Collection Gallery', 'placement': 'center island', 'x': 0.38, 'y': 0.76, 'width': 0.24, 'height': 0.14},
+        {'id': 'poster-music', 'type': 'poster', 'label': 'Music Listening Lounge', 'placement': 'back wall', 'x': 0.43, 'y': 0.15, 'width': 0.14, 'height': 0.26},
       ],
     );
     final kiosk = KioskDesign(
@@ -564,6 +678,9 @@ class InterfaceExperienceConfig {
         KioskCategoryDesign(title: 'Mexican Cinema', description: 'Stories from Mexico', filterType: 'country', filterValue: 'Mexico'),
         KioskCategoryDesign(title: 'Recently Added', description: 'Your newest additions', filterType: 'recent'),
         KioskCategoryDesign(title: 'Horror', description: 'Thrillers and horror', filterType: 'genre', filterValue: 'Horror'),
+        KioskCategoryDesign(title: 'TV Shows & Specials', description: 'Owned series, episodes and standalone TV specials', filterType: 'type', filterValue: 'tv'),
+        KioskCategoryDesign(title: 'Music & Albums', description: 'Browse your owned music library', filterType: 'type', filterValue: 'music'),
+        KioskCategoryDesign(title: 'All Owned Media', description: 'Everything available to this profile', filterType: 'all', featured: true),
       ],
     );
     return InterfaceExperienceConfig(

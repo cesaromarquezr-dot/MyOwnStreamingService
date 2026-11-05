@@ -4,7 +4,6 @@
 // application logic, UI, and collection navigation.
 
 import 'package:flutter/material.dart';
-
 import 'app_core.dart';
 import 'widgets/added_by_profile_label.dart';
 import 'details.dart';
@@ -96,9 +95,7 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
     switch (preferences.itemSort) {
       case 'Title':
         result.sort(
-          (a, b) => a.title
-              .toLowerCase()
-              .compareTo(b.title.toLowerCase()),
+          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
         );
         break;
 
@@ -170,9 +167,14 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
                   ),
                   actions: [
                     IconButton(
-                      tooltip: collection.isLikedByCurrentProfile ? 'Remove from favorite collections' : 'Add to favorite collections',
-                      icon: Icon(collection.isLikedByCurrentProfile ? Icons.favorite : Icons.favorite_border),
-                      onPressed: () => controller.toggleCollectionLike(collection.id),
+                      tooltip: collection.isLikedByCurrentProfile
+                          ? 'Remove from favorite collections'
+                          : 'Add to favorite collections',
+                      icon: Icon(collection.isLikedByCurrentProfile
+                          ? Icons.favorite
+                          : Icons.favorite_border),
+                      onPressed: () =>
+                          controller.toggleCollectionLike(collection.id),
                     ),
                   ],
                 ),
@@ -206,8 +208,7 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (final section in sections)
-            _section(section),
+          for (final section in sections) _section(section),
         ],
       ),
     );
@@ -241,9 +242,7 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
             : const SizedBox.shrink();
 
       case 'Play':
-        return customization.showPlay
-            ? _buildPlay()
-            : const SizedBox.shrink();
+        return customization.showPlay ? _buildPlay() : const SizedBox.shrink();
 
       case 'Collection Items':
         return _buildItems();
@@ -375,11 +374,7 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
         const SizedBox(height: 8),
         UniversalText(
           '${items.length} titles • '
-          '${collection.isAutomatic
-              ? 'automatic'
-              : collection.isShared
-                  ? 'collaborative'
-                  : 'private'}',
+          '${collection.isAutomatic ? 'automatic' : collection.isShared ? 'collaborative' : 'private'}',
           textAlign: _textAlignment(),
           style: const TextStyle(
             color: Colors.white70,
@@ -461,9 +456,7 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
                 : Icons.check_circle_outline,
           ),
           title: Text(
-            collection.isAutomatic
-                ? 'System collection'
-                : 'Profile collection',
+            collection.isAutomatic ? 'System collection' : 'Profile collection',
           ),
           subtitle: Text(
             collection.isAutomatic
@@ -500,16 +493,12 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
       child: Align(
         alignment: _buttonAlignment(),
         child: FilledButton.icon(
-          onPressed: items.isEmpty
-              ? null
-              : _playSelected,
+          onPressed: items.isEmpty ? null : _playSelected,
           icon: const Icon(
             Icons.play_arrow_rounded,
           ),
           label: Text(
-            collection.autoPlayEnabled
-                ? 'Play Collection'
-                : 'Play',
+            collection.autoPlayEnabled ? 'Play Collection' : 'Play',
           ),
         ),
       ),
@@ -571,7 +560,11 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
 
     if (_collectionViewMode == LibraryViewMode.grid) {
       final width = MediaQuery.sizeOf(context).width;
-      final columns = width >= 1000 ? 4 : width >= 650 ? 3 : 2;
+      final columns = width >= 1000
+          ? 4
+          : width >= 650
+              ? 3
+              : 2;
       return Padding(
         padding: const EdgeInsets.only(bottom: 24),
         child: Column(
@@ -596,16 +589,19 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
       );
     }
 
-    final entries = media.map((item) => LibraryViewEntry(
-      title: item.title,
-      subtitle: '${item.releaseYear ?? ''} · ${item.type}',
-      year: item.releaseYear,
-      artworkBuilder: (context, fit) => CatalogPosterImage(media: item, fit: fit),
-      fallbackIcon: Icons.movie_outlined,
-      onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => MediaDetailsScreen(media: item),
-      )),
-    )).toList(growable: false);
+    final entries = media
+        .map((item) => LibraryViewEntry(
+              title: item.title,
+              subtitle: '${item.releaseYear ?? ''} · ${item.type}',
+              year: item.releaseYear,
+              artworkBuilder: (context, fit) =>
+                  CatalogPosterImage(media: item, fit: fit),
+              fallbackIcon: Icons.movie_outlined,
+              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => MediaDetailsScreen(media: item),
+              )),
+            ))
+        .toList(growable: false);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 24),
@@ -736,8 +732,7 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
         child: Padding(
           padding: const EdgeInsets.all(18),
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               UniversalText(
                 'Information',
@@ -772,15 +767,13 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
   }
 
   Widget _buildLibrary() {
-    final canManage = !collection.isAutomatic &&
-        collection.canCurrentProfileEdit();
+    final canManage =
+        !collection.isAutomatic && collection.canCurrentProfileEdit();
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
       child: OutlinedButton.icon(
-        onPressed: canManage
-            ? _showCollectionActions
-            : null,
+        onPressed: canManage ? _showCollectionActions : null,
         icon: const Icon(
           Icons.tune_rounded,
         ),
@@ -902,8 +895,7 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
                 onTap: () {
                   Navigator.pop(context);
 
-                  AppController.instance
-                      .toggleCollectionLike(
+                  AppController.instance.toggleCollectionLike(
                     collection.id,
                   );
                 },
@@ -924,8 +916,7 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
 
     final available = controller.library
         .where(
-          (media) =>
-              !collection.mediaIds.contains(media.id),
+          (media) => !collection.mediaIds.contains(media.id),
         )
         .toList();
 
@@ -936,8 +927,7 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
       builder: (sheetContext) {
         return SafeArea(
           child: SizedBox(
-            height:
-                MediaQuery.sizeOf(sheetContext).height * .75,
+            height: MediaQuery.sizeOf(sheetContext).height * .75,
             child: Column(
               children: [
                 Padding(
@@ -980,8 +970,7 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
                           ),
                         )
                       : ListView.builder(
-                          padding:
-                              const EdgeInsets.fromLTRB(
+                          padding: const EdgeInsets.fromLTRB(
                             12,
                             0,
                             12,
@@ -989,8 +978,7 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
                           ),
                           itemCount: available.length,
                           itemBuilder: (_, index) {
-                            final media =
-                                available[index];
+                            final media = available[index];
 
                             return Card(
                               child: ListTile(
@@ -1004,14 +992,14 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
                                 title: Text(
                                   media.title,
                                   maxLines: 2,
-                                  overflow:
-                                      TextOverflow.ellipsis,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                                 subtitle: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Text('${media.releaseYear ?? ''} • ${media.type}'),
+                                    Text(
+                                        '${media.releaseYear ?? ''} • ${media.type}'),
                                     AddedByProfileLabel.forMedia(media),
                                   ],
                                 ),
@@ -1019,25 +1007,31 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
                                   Icons.add_rounded,
                                 ),
                                 onTap: () async {
-                                  final result = await UniversalMediaActions.perform(
+                                  final result =
+                                      await UniversalMediaActions.perform(
                                     context: UniversalMediaActionContext(
                                       contentType: media.type,
                                       contentId: media.id,
                                       mediaVersionId: media.mediaVersionId,
-                                      profileId: AppController.instance.currentProfile?.id ??
+                                      profileId: AppController
+                                              .instance.currentProfile?.id ??
                                           'local-profile',
                                       availableActions: const {
                                         UniversalMediaAction.addToCollection,
                                       },
                                     ),
-                                    action: UniversalMediaAction.addToCollection,
+                                    action:
+                                        UniversalMediaAction.addToCollection,
                                     targetId: collection.id,
                                     apply: () => controller.addToCollection(
                                       collection.id,
                                       media.id,
                                     ),
                                   );
-                                  if (!result.applied || !sheetContext.mounted) return;
+                                  if (!result.applied ||
+                                      !sheetContext.mounted) {
+                                    return;
+                                  }
                                   Navigator.pop(sheetContext);
                                 },
                               ),
@@ -1078,40 +1072,33 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
                 ),
                 const SizedBox(height: 12),
                 for (final profile
-                    in controller.currentAccount?.profiles ??
-                        <Profile>[])
+                    in controller.currentAccount?.profiles ?? <Profile>[])
                   CheckboxListTile(
-                    value: collection
-                        .contributorProfileIds
-                        .contains(profile.id),
+                    value:
+                        collection.contributorProfileIds.contains(profile.id),
                     title: Text(
                       profile.name,
                     ),
-                    onChanged:
-                        profile.id ==
-                                collection.createdByProfileId
-                            ? null
-                            : (value) {
-                                setState(() {
-                                  if (value == true) {
-                                    collection
-                                        .contributorProfileIds
-                                        .add(profile.id);
-                                  } else {
-                                    collection
-                                        .contributorProfileIds
-                                        .remove(profile.id);
-                                  }
-                                });
-                              },
+                    onChanged: profile.id == collection.createdByProfileId
+                        ? null
+                        : (value) {
+                            setState(() {
+                              if (value == true) {
+                                collection.contributorProfileIds
+                                    .add(profile.id);
+                              } else {
+                                collection.contributorProfileIds
+                                    .remove(profile.id);
+                              }
+                            });
+                          },
                   ),
               ],
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () =>
-                  Navigator.pop(dialogContext),
+              onPressed: () => Navigator.pop(dialogContext),
               child: const UniversalText(
                 'Done',
               ),

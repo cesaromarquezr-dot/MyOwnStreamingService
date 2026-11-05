@@ -37,6 +37,30 @@ class CinematicSeedExamples {
   static bool isInternationalExample(CinematicSeedExample example) =>
       internationalCatalogCountries.contains(example.universe);
 
+  /// Physical package format used by the local demo catalog. This is sample
+  /// presentation metadata for the Virtual Store/Kiosk; it does not claim that
+  /// a real disc copy is owned or that a playable file is attached. Unlisted
+  /// film and television examples default to DVD, while selected titles below
+  /// deliberately demonstrate Blu-ray and 4K Ultra HD cases.
+  static String casePresentationFormatFor(CinematicSeedExample example) {
+    final title = example.title.trim().toLowerCase();
+    return switch (title) {
+      'captain america: brave new world' ||
+      'thunderbolts*' ||
+      'spider-man: brand new day' => '4K Ultra HD',
+      'avengers: endgame' ||
+      'ant-man' ||
+      'doctor strange' ||
+      'black panther' => 'Blu-ray',
+      // Explicit DVD examples requested for the Store's sample shelves.
+      'howard the duck' ||
+      'blade' ||
+      'spider-man' ||
+      'spider-man: no way home' => 'DVD',
+      _ => 'DVD',
+    };
+  }
+
   static const List<CinematicSeedExample> movies = <CinematicSeedExample>[
     CinematicSeedExample(title: 'Iron Man', isTv: false, universe: mcu, year: 2008),
     CinematicSeedExample(title: 'The Incredible Hulk', isTv: false, universe: mcu, year: 2008),
@@ -71,6 +95,7 @@ class CinematicSeedExamples {
     CinematicSeedExample(title: 'Deadpool & Wolverine', isTv: false, universe: mcu, year: 2024),
     CinematicSeedExample(title: 'Captain America: Brave New World', isTv: false, universe: mcu, year: 2025),
     CinematicSeedExample(title: 'Thunderbolts*', isTv: false, universe: mcu, year: 2025),
+    CinematicSeedExample(title: 'Spider-Man: Brand New Day', isTv: false, universe: mcu, year: 2026),
   ];
 
   static const List<CinematicSeedExample> shows = <CinematicSeedExample>[
@@ -136,6 +161,8 @@ class CinematicSeedExamples {
     CinematicSeedExample(title: 'Harry Potter and the Deathly Hallows: Part 2', isTv: false, universe: 'Wizarding World', year: 2011),
     CinematicSeedExample(title: 'The Incredibles', isTv: false, universe: 'Pixar', year: 2004),
     CinematicSeedExample(title: 'Finding Nemo', isTv: false, universe: 'Pixar', year: 2003),
+    CinematicSeedExample(title: 'Howard the Duck', isTv: false, universe: 'Marvel Legacy Films', year: 1986, countryOfOrigin: 'United States'),
+    CinematicSeedExample(title: 'Blade', isTv: false, universe: 'Blade Trilogy', year: 1998, countryOfOrigin: 'United States'),
   ];
 
   static const List<CinematicSeedExample> additionalShows = <CinematicSeedExample>[

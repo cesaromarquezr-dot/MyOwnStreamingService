@@ -125,6 +125,11 @@ import 'services/transcode_cache_service.dart';
 import 'services/transcoding_service.dart';
 import 'services/operations_bot_service.dart';
 import 'supabase_store.dart';
+import 'lib/shared/owned_experience_store.dart';
+import 'lib/collections/routes/collection_routes.dart';
+import 'lib/kiosk/routes/kiosk_routes.dart';
+import 'lib/media_experience/repositories/media_experience_routes.dart';
+import 'lib/theater/routes/theater_routes.dart';
 
 PaymentProcessorVerifier? _createPaymentProcessorVerifier() {
   final mockEnabled =
@@ -526,6 +531,26 @@ Future<void> main() async {
     store: SupabaseStore.instance,
   );
 
+  // Private owned-media experiences. These routes never create sales, rentals,
+  // returns, checkout orders, or paid theater admission.
+  final ownedExperienceStore = OwnedExperienceStore();
+  final collectionRoutes = CollectionRoutes(
+    authentication: authentication,
+    store: ownedExperienceStore,
+  );
+  final kioskRoutes = KioskRoutes(
+    authentication: authentication,
+    store: ownedExperienceStore,
+  );
+  final mediaExperienceRoutes = MediaExperienceRoutes(
+    authentication: authentication,
+    store: ownedExperienceStore,
+  );
+  final theaterRoutes = TheaterRoutes(
+    authentication: authentication,
+    store: ownedExperienceStore,
+  );
+
   final remoteAccessRoutes = RemoteAccessRoutes(
     authentication: authentication,
     service: remoteAccessService,
@@ -593,6 +618,10 @@ Future<void> main() async {
       tvChannelRoutes,
       supportRoutes,
       securityBotRoutes,
+      collectionRoutes,
+      kioskRoutes,
+      mediaExperienceRoutes,
+      theaterRoutes,
     ).catchError(
       (Object error, StackTrace stackTrace) {
         developer.log(
@@ -647,6 +676,10 @@ Future<void> _handleRequest(
   TvChannelRoutes tvChannelRoutes,
   SupportRoutes supportRoutes,
   SecurityBotRoutes securityBotRoutes,
+  CollectionRoutes collectionRoutes,
+  KioskRoutes kioskRoutes,
+  MediaExperienceRoutes mediaExperienceRoutes,
+  TheaterRoutes theaterRoutes,
 ) async {
   var responseStarted = false;
 
@@ -1131,6 +1164,31 @@ Future<void> _handleRequest(
         request,
       );
 
+      responseStarted = true;
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // PRIVATE OWNED-MEDIA EXPERIENCES
+    // ----------------------------------------------------------
+
+    if (path == '/api/v1/collections' || path.startsWith('/api/v1/collections/')) {
+      await collectionRoutes.handle(request);
+      responseStarted = true;
+      return;
+    }
+    if (path == '/api/v1/kiosk/sessions' || path.startsWith('/api/v1/kiosk/sessions/')) {
+      await kioskRoutes.handle(request);
+      responseStarted = true;
+      return;
+    }
+    if (path == '/api/v1/media-experience/progress' || path.startsWith('/api/v1/media-experience/progress/')) {
+      await mediaExperienceRoutes.handle(request);
+      responseStarted = true;
+      return;
+    }
+    if (path == '/api/v1/theater/sessions' || path.startsWith('/api/v1/theater/sessions/')) {
+      await theaterRoutes.handle(request);
       responseStarted = true;
       return;
     }

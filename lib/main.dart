@@ -1,12 +1,12 @@
 // FILE: `lib/main.dart`.
 // Purpose: Implements the main portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
+import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:url_launcher/url_launcher.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -88,6 +88,10 @@ import 'performer_universe.dart';
 import 'personal_media_intelligence_center.dart';
 import 'interface_experience_studio.dart';
 import 'interface_experience.dart';
+import 'media_experience/media_experience.dart';
+import 'kiosk/kiosk.dart';
+import 'theater/theater.dart';
+import 'collections/collections.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -386,7 +390,8 @@ class _MyStreamingServiceState extends State<MyStreamingService> {
           final argument = ModalRoute.of(context)?.settings.arguments;
           final performerName = argument is String ? argument.trim() : '';
           return PerformerUniverseScreen(
-            performerName: performerName.isEmpty ? 'Unknown performer' : performerName,
+            performerName:
+                performerName.isEmpty ? 'Unknown performer' : performerName,
           );
         },
       },
@@ -2708,6 +2713,64 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   }
 
   /// Performs `_headerCard` for this feature. Update this documentation when its contract changes.
+  Widget _activeInterfaceCustomizationCard() {
+    final experience = InterfaceExperienceRepository.instance.notifier.value;
+    final mode = parseInterfaceExperienceMode(experience?.activeExperience);
+    final IconData icon;
+    final String detail;
+    switch (mode) {
+      case InterfaceExperienceMode.classic:
+        icon = Icons.dashboard_customize_rounded;
+        detail = 'Customize your classic home layout, navigation, rows and artwork behavior.';
+        break;
+      case InterfaceExperienceMode.blockbuster:
+        icon = Icons.storefront_rounded;
+        detail = 'Customize the store floor, walking style, shelves, wall posters, hanging aisle banners, case animations and collection gallery.';
+        break;
+      case InterfaceExperienceMode.redbox:
+        icon = Icons.dns_rounded;
+        detail = 'Customize kiosk tile density, poster wall, remote focus, screensaver and touch-friendly browsing.';
+        break;
+      case InterfaceExperienceMode.theater:
+        icon = Icons.theaters_rounded;
+        detail = 'Customize the private cinema lobby, lighting, ambience, countdown and pre-show experience.';
+        break;
+    }
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 34),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Active interface · ${mode.label}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 5),
+                  Text(detail, style: const TextStyle(color: Colors.white60, fontSize: 12, height: 1.35)),
+                  const SizedBox(height: 10),
+                  FilledButton.tonalIcon(
+                    onPressed: () async {
+                      await Navigator.of(context).push(MaterialPageRoute<void>(
+                        builder: (_) => const InterfaceExperienceStudioScreen(),
+                      ));
+                      if (mounted) setState(() {});
+                    },
+                    icon: const Icon(Icons.tune_rounded),
+                    label: Text('Customize ${mode.label}'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _headerCard() {
     final isHome = selectedPage == CustomizationPage.home;
     final isMusic = selectedPage == CustomizationPage.music;
@@ -4559,6 +4622,11 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   Widget build(BuildContext context) {
     final isHome = selectedPage == CustomizationPage.home;
     final isMusic = selectedPage == CustomizationPage.music;
+    final activeInterfaceMode = parseInterfaceExperienceMode(
+      InterfaceExperienceRepository.instance.notifier.value?.activeExperience,
+    );
+    final useClassicHomeCustomizer =
+        !isHome || activeInterfaceMode == InterfaceExperienceMode.classic;
 
     return Scaffold(
       backgroundColor: const Color(0xFF070707),
@@ -4599,21 +4667,47 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             if (widget.lockedPage == null || widget.firstSetup) _pageSelector(),
             const SizedBox(height: 18),
             _headerCard(),
-            const SizedBox(height: 12),
-            ArtworkDisplayModePicker(
-              value: _artworkSectionDraft.artworkDisplayMode,
-              onChanged: (value) => setState(() {
-                _artworkSectionDraft.artworkDisplayMode = value;
-              }),
-            ),
-            const SizedBox(height: 12),
-            if (isHome)
+            if (isHome) ...[
+              const SizedBox(height: 12),
+              _activeInterfaceCustomizationCard(),
+            ],
+            if (useClassicHomeCustomizer) ...[
+              const SizedBox(height: 12),
+              ArtworkDisplayModePicker(
+                value: _artworkSectionDraft.artworkDisplayMode,
+                onChanged: (value) => setState(() {
+                  _artworkSectionDraft.artworkDisplayMode = value;
+                }),
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (isHome && !useClassicHomeCustomizer)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'This interface has its own customization workspace.',
+                        style: TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${activeInterfaceMode.label} uses its own layout, colors, navigation and preview. Classic home controls are kept separate and are not applied to this experience.',
+                        style: const TextStyle(color: Colors.white60, height: 1.4),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else if (isHome)
               _buildHomePage()
             else if (isMusic)
               _buildMusicPage()
             else
               _buildDetailsPage(),
-            _customizationPreview(),
+            if (useClassicHomeCustomizer) _customizationPreview(),
             const SizedBox(height: 26),
             SizedBox(
               height: 54,
@@ -4955,6 +5049,26 @@ void _showGlobalMore() {
         push(const SecurityBotCenterScreen(),
             routeName: '/app/page/security-bots');
       },
+      onVirtualStore: () {
+        Navigator.of(sheetContext).pop();
+        push(const VirtualStoreScreen(), routeName: '/app/page/virtual-store');
+      },
+      onKiosk: () {
+        Navigator.of(sheetContext).pop();
+        push(const KioskHomeScreen(), routeName: '/app/page/kiosk');
+      },
+      onTheater: () {
+        Navigator.of(sheetContext).pop();
+        push(const TheaterHomeScreen(), routeName: '/app/page/theater');
+      },
+      onCollections: () {
+        Navigator.of(sheetContext).pop();
+        push(const CollectionsScreen(), routeName: '/app/page/collections');
+      },
+      onMediaExperience: () {
+        Navigator.of(sheetContext).pop();
+        push(const MediaExperienceScreen(), routeName: '/app/page/media-experience');
+      },
     ),
   );
 }
@@ -5257,7 +5371,8 @@ class _AppShellHeaderState extends State<AppShellHeader> {
             tooltip: 'Switch interface experience',
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
-                settings: const RouteSettings(name: '/app/page/interface-experience'),
+                settings:
+                    const RouteSettings(name: '/app/page/interface-experience'),
                 builder: (_) => const InterfaceExperienceStudioScreen(),
               ),
             ),
@@ -5303,6 +5418,11 @@ class _MoreActionsSheet extends StatelessWidget {
   final VoidCallback onInnovationHub;
   final VoidCallback onInterruptionMode;
   final VoidCallback onSecurityBots;
+  final VoidCallback onVirtualStore;
+  final VoidCallback onKiosk;
+  final VoidCallback onTheater;
+  final VoidCallback onCollections;
+  final VoidCallback onMediaExperience;
 
   const _MoreActionsSheet({
     required this.onSettings,
@@ -5328,6 +5448,11 @@ class _MoreActionsSheet extends StatelessWidget {
     required this.onInnovationHub,
     required this.onInterruptionMode,
     required this.onSecurityBots,
+    required this.onVirtualStore,
+    required this.onKiosk,
+    required this.onTheater,
+    required this.onCollections,
+    required this.onMediaExperience,
   });
 
   @override
@@ -5343,6 +5468,19 @@ class _MoreActionsSheet extends StatelessWidget {
         physics: const NeverScrollableScrollPhysics(),
         childAspectRatio: 1.25,
         children: [
+          _combinedCard(
+            context,
+            Icons.local_movies_rounded,
+            'Owned Media Experiences',
+            'Browse, organize and play media already in your collection',
+            [
+              _MoreChoice('Virtual Store', 'Explore your owned media catalog', Icons.storefront_outlined, onVirtualStore),
+              _MoreChoice('Virtual Kiosk', 'Self-service browsing for your library', Icons.point_of_sale_outlined, onKiosk),
+              _MoreChoice('Private Theater', 'Create a free at-home screening', Icons.theaters_outlined, onTheater),
+              _MoreChoice('Disc & Box Set Collections', 'Browse multi-disc editions and TV-special sets', Icons.album_outlined, onCollections),
+              _MoreChoice('Media Experience', 'Open disc menus, scenes, audio and bonus features', Icons.slow_motion_video_rounded, onMediaExperience),
+            ],
+          ),
           _combinedCard(
             context,
             Icons.manage_accounts_outlined,
@@ -7204,17 +7342,19 @@ class _MediaCardState extends State<MediaCard> {
                 ),
               ),
               if (media.isSeries ||
-                  <String>{'movie', 'film'}.contains(media.type.trim().toLowerCase()))
+                  <String>{'movie', 'film'}
+                      .contains(media.type.trim().toLowerCase()))
                 TmdbMediaRatingBadge(
                   title: media.title,
                   isTv: media.isSeries,
                   year: media.seriesStartYear ?? media.releaseYear,
                 ),
               if (UserMediaRatingStore.scorePercentFor(
-                    AppController.instance.currentProfile?.id, media.id) != null)
+                      AppController.instance.currentProfile?.id, media.id) !=
+                  null)
                 UserScoreBadge(
                   score: UserMediaRatingStore.scoreFor(
-                    AppController.instance.currentProfile?.id, media.id),
+                      AppController.instance.currentProfile?.id, media.id),
                   palette: UserMediaRatingStore.paletteFor(
                     AppController.instance.currentProfile?.id,
                   ),
@@ -7526,10 +7666,15 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
       final nestedMetadata = metadata['metadata'] is Map
           ? Map<String, dynamic>.from(metadata['metadata'] as Map)
           : <String, dynamic>{};
-      final rawIndex = metadata['titleIndex'] ?? metadata['title_index'] ??
-          metadata['index'] ?? metadata['titleNumber'] ?? metadata['title_number'] ??
-          nestedMetadata['titleIndex'] ?? nestedMetadata['title_index'] ??
-          nestedMetadata['index'] ?? nestedMetadata['titleNumber'] ??
+      final rawIndex = metadata['titleIndex'] ??
+          metadata['title_index'] ??
+          metadata['index'] ??
+          metadata['titleNumber'] ??
+          metadata['title_number'] ??
+          nestedMetadata['titleIndex'] ??
+          nestedMetadata['title_index'] ??
+          nestedMetadata['index'] ??
+          nestedMetadata['titleNumber'] ??
           nestedMetadata['title_number'];
       final parsedIndex = rawIndex is num
           ? rawIndex.toInt()
@@ -7540,32 +7685,47 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
           nestedMetadata.containsKey('title_number');
       final index = parsedIndex == null
           ? entry.key
-          : isTitleNumber ? (parsedIndex - 1).clamp(0, 10000).toInt() : parsedIndex;
-      final rawDuration = metadata['durationSeconds'] ?? metadata['duration_seconds'] ??
-          metadata['duration'] ?? metadata['runtime'] ?? metadata['length'] ??
-          nestedMetadata['durationSeconds'] ?? nestedMetadata['duration_seconds'] ??
-          nestedMetadata['duration'] ?? nestedMetadata['runtime'] ?? nestedMetadata['length'];
+          : isTitleNumber
+              ? (parsedIndex - 1).clamp(0, 10000).toInt()
+              : parsedIndex;
+      final rawDuration = metadata['durationSeconds'] ??
+          metadata['duration_seconds'] ??
+          metadata['duration'] ??
+          metadata['runtime'] ??
+          metadata['length'] ??
+          nestedMetadata['durationSeconds'] ??
+          nestedMetadata['duration_seconds'] ??
+          nestedMetadata['duration'] ??
+          nestedMetadata['runtime'] ??
+          nestedMetadata['length'];
       final rawDurationText = rawDuration?.toString() ?? '';
-      final clock = RegExp(r'^(\d+):([0-5]\d):([0-5]\d)$').firstMatch(rawDurationText);
-      final clockSeconds = clock == null ? 0 :
-          (int.tryParse(clock.group(1) ?? '') ?? 0) * 3600 +
-          (int.tryParse(clock.group(2) ?? '') ?? 0) * 60 +
-          (int.tryParse(clock.group(3) ?? '') ?? 0);
+      final clock =
+          RegExp(r'^(\d+):([0-5]\d):([0-5]\d)$').firstMatch(rawDurationText);
+      final clockSeconds = clock == null
+          ? 0
+          : (int.tryParse(clock.group(1) ?? '') ?? 0) * 3600 +
+              (int.tryParse(clock.group(2) ?? '') ?? 0) * 60 +
+              (int.tryParse(clock.group(3) ?? '') ?? 0);
       final seconds = (row['durationSeconds'] as num?)?.round() ??
           (row['duration'] as num?)?.round() ??
-          (rawDuration is num ? rawDuration.round() :
-              int.tryParse(rawDurationText) ?? clockSeconds);
+          (rawDuration is num
+              ? rawDuration.round()
+              : int.tryParse(rawDurationText) ?? clockSeconds);
       final duration = seconds > 0
           ? '${(seconds ~/ 3600).toString().padLeft(2, '0')}:${((seconds % 3600) ~/ 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}'
           : '';
-      final rawChapters = metadata['chapters'] ?? metadata['chapterCount'] ??
-          metadata['chapter_count'] ?? nestedMetadata['chapters'] ??
-          nestedMetadata['chapterCount'] ?? nestedMetadata['chapter_count'];
+      final rawChapters = metadata['chapters'] ??
+          metadata['chapterCount'] ??
+          metadata['chapter_count'] ??
+          nestedMetadata['chapters'] ??
+          nestedMetadata['chapterCount'] ??
+          nestedMetadata['chapter_count'];
       final chapters = rawChapters is num
           ? rawChapters.toInt()
           : int.tryParse(rawChapters?.toString() ?? '') ?? 0;
       return <String, dynamic>{
-        'title': 'Title ${index + 1}: ${row['title'] ?? row['name'] ?? 'Detected title'}',
+        'title':
+            'Title ${index + 1}: ${row['title'] ?? row['name'] ?? 'Detected title'}',
         'duration': duration,
         'titleIndex': index,
         'chapters': chapters,
@@ -7634,14 +7794,18 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
         final summaries = _armEpisodeTitleSummaries(discData['titles']);
         if (fingerprint.isNotEmpty && summaries.isNotEmpty) {
           final remembered = discData['rememberedEpisodeMapping'] is Map
-              ? Map<String, dynamic>.from(discData['rememberedEpisodeMapping'] as Map)
+              ? Map<String, dynamic>.from(
+                  discData['rememberedEpisodeMapping'] as Map)
               : null;
           final mappingRows = remembered?['titleMappings'] is List
               ? (remembered!['titleMappings'] as List).whereType<Map>().toList()
               : const <Map>[];
           final mappingSummary = mappingRows.map((row) {
-            final number = row['titleNumber'] ?? ((row['titleIndex'] as num?)?.toInt() ?? 0) + 1;
-            final episode = row['episodeNumber'] == null ? 'not assigned' : 'S${((remembered?['seasonNumber'] as num?)?.toInt() ?? 0).toString().padLeft(2, '0')}E${((row['episodeNumber'] as num?)?.toInt() ?? 0).toString().padLeft(2, '0')}';
+            final number = row['titleNumber'] ??
+                ((row['titleIndex'] as num?)?.toInt() ?? 0) + 1;
+            final episode = row['episodeNumber'] == null
+                ? 'not assigned'
+                : 'S${((remembered?['seasonNumber'] as num?)?.toInt() ?? 0).toString().padLeft(2, '0')}E${((row['episodeNumber'] as num?)?.toInt() ?? 0).toString().padLeft(2, '0')}';
             final title = (row['episodeTitle'] ?? '').toString();
             return 'Title $number → $episode${title.isEmpty ? '' : ' · $title'}';
           }).join('\n');
@@ -7666,7 +7830,9 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                 ),
                 FilledButton(
                   onPressed: () => Navigator.pop(dialogContext, true),
-                  child: Text(remembered == null ? 'Identify episodes' : 'Review mapping'),
+                  child: Text(remembered == null
+                      ? 'Identify episodes'
+                      : 'Review mapping'),
                 ),
               ],
             ),
@@ -8051,8 +8217,21 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
 
     final poster = posterController.text.trim();
     final trailer = trailerController.text.trim();
-    final collectionId = job['discId']?.toString() ??
-        job['disc_id']?.toString() ??
+    final physicalReleaseId = (job['physicalReleaseId'] ??
+            job['physical_release_id'] ??
+            (selectedTitles.isNotEmpty
+                ? selectedTitles.first['physicalReleaseId']
+                : null))
+        ?.toString();
+    final physicalDiscId = (job['physicalDiscId'] ??
+            job['physical_disc_id'] ??
+            (selectedTitles.isNotEmpty
+                ? selectedTitles.first['physicalDiscId']
+                : null))
+        ?.toString();
+    final collectionId = (physicalReleaseId?.trim().isNotEmpty == true
+            ? physicalReleaseId
+            : job['discId']?.toString() ?? job['disc_id']?.toString()) ??
         'disc_${DateTime.now().microsecondsSinceEpoch}';
     final collectionTitle = job['collectionTitle']?.toString() ??
         job['discTitle']?.toString() ??
@@ -8113,6 +8292,30 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
             AppController.instance.currentProfile?.id ?? '';
         final reviewerProfileName =
             AppController.instance.currentProfile?.name ?? '';
+        final titlePhysicalReleaseId = (titleData['physicalReleaseId'] ??
+                titleData['physical_release_id'] ??
+                metadata['physicalReleaseId'] ??
+                metadata['physical_release_id'] ??
+                physicalReleaseId)
+            ?.toString();
+        final titlePhysicalDiscId = (titleData['physicalDiscId'] ??
+                titleData['physical_disc_id'] ??
+                metadata['physicalDiscId'] ??
+                metadata['physical_disc_id'] ??
+                physicalDiscId)
+            ?.toString();
+        final rawDiscPosition = titleData['position'] ??
+            titleData['discContentPosition'] ??
+            metadata['position'] ??
+            metadata['discContentPosition'];
+        final discPosition = rawDiscPosition is num
+            ? rawDiscPosition.toInt()
+            : int.tryParse(rawDiscPosition?.toString() ?? '') ??
+                (detectedDiscTitles.indexOf(titleData) + 1);
+        final rawBonusFlag = titleData['isBonusContent'] ??
+            titleData['is_bonus_content'] ??
+            metadata['isBonusContent'] ??
+            metadata['is_bonus_content'];
         final media = MediaItem(
           id: 'arm_${DateTime.now().microsecondsSinceEpoch}_${titleData['id']}',
           mediaVersionId: (titleData['mediaVersionId'] ??
@@ -8159,9 +8362,23 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
           originalLanguage: titleData['originalLanguage']?.toString(),
           countryOfOrigin: titleData['countryOfOrigin']?.toString(),
           canonicalTitle: titleData['canonicalTitle']?.toString() ?? title,
-          discCollectionId: collectionId,
+          discCollectionId: titlePhysicalReleaseId?.trim().isNotEmpty == true
+              ? titlePhysicalReleaseId
+              : collectionId,
           discCollectionTitle: collectionTitle,
           discNumber: discNumber,
+          physicalReleaseId: titlePhysicalReleaseId,
+          physicalDiscId: titlePhysicalDiscId,
+          discContentId: (titleData['discContentId'] ??
+                  titleData['disc_content_id'] ??
+                  titleData['contentId'] ??
+                  titleData['content_id'] ??
+                  metadata['discContentId'] ??
+                  metadata['contentId'])
+              ?.toString(),
+          discContentPosition: discPosition > 0 ? discPosition : null,
+          isBonusContent: rawBonusFlag == true ||
+              rawBonusFlag?.toString().toLowerCase() == 'true',
           discTitleId: titleData['id']?.toString(),
           actors: _strings(titleData['actors']).isNotEmpty
               ? _strings(titleData['actors'])
@@ -10093,7 +10310,8 @@ class HomeMediaIntelligenceToolsShelf extends StatelessWidget {
       ),
       (
         title: 'Discovery Center',
-        subtitle: 'For You, Performer Universe, studios, stories and music links',
+        subtitle:
+            'For You, Performer Universe, studios, stories and music links',
         icon: Icons.auto_awesome_rounded,
         color: const Color(0xFFBDAAFF),
         page: const DiscoveryCenterScreen(),
@@ -10101,7 +10319,8 @@ class HomeMediaIntelligenceToolsShelf extends StatelessWidget {
       ),
       (
         title: 'Personal Media Intelligence',
-        subtitle: 'Music Memory, Music Wrapped, episode identification and media preservation',
+        subtitle:
+            'Music Memory, Music Wrapped, episode identification and media preservation',
         icon: Icons.auto_awesome_mosaic_rounded,
         color: const Color(0xFF9CC8FF),
         page: const PersonalMediaIntelligenceCenterScreen(),
