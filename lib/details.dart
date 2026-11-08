@@ -60,10 +60,12 @@ class _EditionSelection {
 /// Implements the `MediaDetailsScreen` class for this feature or UI component.
 class MediaDetailsScreen extends StatefulWidget {
   final MediaItem media;
+  final String? theaterRoomId;
 
   const MediaDetailsScreen({
     super.key,
     required this.media,
+    this.theaterRoomId,
   });
 
   @override
@@ -3755,6 +3757,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         pageBuilder: (_, __, ___) {
           return PlayerScreen(
             media: selectedEdition,
+            theaterRoomId: widget.theaterRoomId,
           );
         },
         transitionsBuilder: (

@@ -76,8 +76,11 @@ extension BackendApiLibraryMethods on BackendApi {
     );
     final raw = data['hiddenMediaIds'];
     if (raw is! List) return <String>[];
-    return raw.map((value) => value.toString().trim())
-        .where((value) => value.isNotEmpty).toSet().toList(growable: false);
+    return raw
+        .map((value) => value.toString().trim())
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
   }
 
   /// Replaces the full hidden-ID snapshot during first-time reconciliation.
@@ -88,8 +91,12 @@ extension BackendApiLibraryMethods on BackendApi {
     required Iterable<String> mediaIds,
   }) async {
     _requireAuthentication();
-    final normalized = mediaIds.map((id) => id.trim())
-        .where((id) => id.isNotEmpty).toSet().toList()..sort();
+    final normalized = mediaIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
     final response = await _networkClient.put(
       Uri.parse('$baseUrl/library/membership'),
       headers: _headers,
@@ -99,7 +106,8 @@ extension BackendApiLibraryMethods on BackendApi {
         'hiddenMediaIds': normalized,
       }),
     );
-    await _requireSuccess(response, 'Unable to reconcile saved library removals.');
+    await _requireSuccess(
+        response, 'Unable to reconcile saved library removals.');
   }
 
   /// Saves or clears a durable profile-scoped removal marker on the home server.
@@ -118,7 +126,8 @@ extension BackendApiLibraryMethods on BackendApi {
         'hidden': hidden,
       }),
     );
-    await _requireSuccess(response, 'Unable to save the library membership change.');
+    await _requireSuccess(
+        response, 'Unable to save the library membership change.');
   }
 
   /// Scans the home server's completed media directories.
@@ -153,9 +162,9 @@ extension BackendApiLibraryMethods on BackendApi {
   Future<Map<String, dynamic>> searchLibrarySubtitles(String query) async {
     _requireAuthentication();
     final cleanQuery = query.trim();
-    if (cleanQuery.length < 2 || cleanQuery.length > 160) {
+    if (cleanQuery.length < 2 || cleanQuery.length > 500) {
       throw BackendApiException(
-        'Search terms must contain 2 to 160 characters.',
+        'Search terms must contain 2 to 500 characters.',
       );
     }
     final uri = Uri.parse('$baseUrl/library/subtitles/search').replace(
@@ -181,11 +190,51 @@ extension BackendApiLibraryMethods on BackendApi {
     };
   }
 
+  /// Finds subtitle uploads for a known title or TMDB ID.
+  /// This searches subtitle availability; it does not search every subtitle
+  /// transcript for a remembered quote. The OpenSubtitles key stays backend-only.
+  Future<Map<String, dynamic>> searchOpenSubtitles({
+    String? query,
+    int? tmdbId,
+    String type = 'all',
+    String languages = 'en,es',
+    int? year,
+  }) async {
+    _requireAuthentication();
+    final parameters = <String, String>{
+      if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+      if (tmdbId != null && tmdbId > 0) 'tmdb_id': tmdbId.toString(),
+      if (type.trim().isNotEmpty) 'type': type.trim(),
+      if (languages.trim().isNotEmpty) 'languages': languages.trim(),
+      if (year != null) 'year': year.toString(),
+    };
+    if (!parameters.containsKey('q') && !parameters.containsKey('tmdb_id')) {
+      throw BackendApiException('Provide a title query or TMDB ID.');
+    }
+    final uri = Uri.parse('$baseUrl/library/subtitles/opensubtitles')
+        .replace(queryParameters: parameters);
+    final response = await _networkClient.get(uri, headers: _headers);
+    return _requireSuccess(
+      response,
+      'Unable to find subtitle uploads on OpenSubtitles.',
+    );
+  }
+
+  /// Reads whether the server has an OpenSubtitles key configured.
+  Future<Map<String, dynamic>> getOpenSubtitlesStatus() async {
+    _requireAuthentication();
+    final response = await _networkClient.get(
+      Uri.parse('$baseUrl/library/subtitles/opensubtitles/status'),
+      headers: _headers,
+    );
+    return _requireSuccess(response, 'Unable to check OpenSubtitles status.');
+  }
+
   /// Persists a reviewed ARM rip in the home server's indexed library.
   /// The backend verifies that the output file exists inside MEDIA_ROOT.
   Future<List<Map<String, dynamic>>> getScheduledLibraryAdditions() async {
-    final response = await _networkClient.get(Uri.parse('$baseUrl/library/releases'),
-        headers: _headers);
+    final response = await _networkClient
+        .get(Uri.parse('$baseUrl/library/releases'), headers: _headers);
     final data = await _requireSuccess(
         response, 'Unable to load scheduled library additions.');
     final raw = data['items'];
@@ -200,15 +249,16 @@ extension BackendApiLibraryMethods on BackendApi {
       required String mediaType,
       required DateTime scheduledFor,
       String timeZone = 'UTC'}) async {
-    final response = await _networkClient.post(Uri.parse('$baseUrl/library/releases'),
-        headers: _headers,
-        body: jsonEncode({
-          'mediaId': mediaId,
-          'title': title,
-          'mediaType': mediaType,
-          'scheduledFor': scheduledFor.toUtc().toIso8601String(),
-          'timeZone': timeZone
-        }));
+    final response =
+        await _networkClient.post(Uri.parse('$baseUrl/library/releases'),
+            headers: _headers,
+            body: jsonEncode({
+              'mediaId': mediaId,
+              'title': title,
+              'mediaType': mediaType,
+              'scheduledFor': scheduledFor.toUtc().toIso8601String(),
+              'timeZone': timeZone
+            }));
     return _requireSuccess(response, 'Unable to schedule library addition.');
   }
 
@@ -221,7 +271,8 @@ extension BackendApiLibraryMethods on BackendApi {
   }
 
   Future<Map<String, dynamic>> cancelScheduledLibraryAddition(String id) async {
-    final r = await _networkClient.post(Uri.parse('$baseUrl/library/releases/$id/cancel'),
+    final r = await _networkClient.post(
+        Uri.parse('$baseUrl/library/releases/$id/cancel'),
         headers: _headers);
     return _requireSuccess(r, 'Unable to cancel scheduled library addition.');
   }
@@ -466,6 +517,4 @@ extension BackendApiLibraryMethods on BackendApi {
       'Unable to synchronize account data with Supabase.',
     );
   }
-
-
 }

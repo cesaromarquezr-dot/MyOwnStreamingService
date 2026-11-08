@@ -299,6 +299,51 @@ class SmartSearchIntelligence {
       titles.add('Happy Death Day');
     }
 
+    // Wolfblood clue: a British teen-supernatural series about wolfbloods.
+    final werewolfCue = hasWord(const <String>[
+      'werewolf', 'werewolves', 'wolfblood', 'lycanthrope', 'lycanthropy',
+      'shapeshifter', 'shapeshifters',
+    ]);
+    final teenCue = hasWord(const <String>[
+      'teen', 'teens', 'teenager', 'teenagers', 'adolescent', 'adolescents',
+      'student', 'students', 'youngster', 'youngsters',
+    ]);
+    final britishCue = hasWord(const <String>[
+      'uk', 'british', 'england', 'scotland', 'wales', 'britain',
+    ]) || hasPhrase(const <String>['united kingdom', 'great britain']);
+    if (werewolfCue && teenCue && britishCue) {
+      titles.add('Wolfblood');
+    }
+
+    // Avengers: Endgame's final battle is identifiable from the returned
+    // heroes and Hulk's snap even when the remembered line is incomplete.
+    final hulkCue = hasWord(const <String>['hulk', 'bruce', 'banner']);
+    final snapCue = hasWord(const <String>[
+      'snap', 'snaps', 'snapped', 'snapping', 'finger', 'fingers', 'gauntlet',
+    ]);
+    final returnCue = hasWord(const <String>[
+      'return', 'returned', 'come', 'back', 'reappear', 'reappeared',
+      'heroes', 'avengers', 'assemble', 'battle', 'charge',
+    ]);
+    if (hulkCue && snapCue && returnCue) {
+      titles.addAll(<String>['Avengers: Endgame', 'Avengers Endgame']);
+    }
+
+    // The post-Terrance-and-Phillip school sequence helps disambiguate the
+    // South Park feature from dialogue that also appears in the TV series.
+    final terranceCue = hasWord(const <String>[
+      'terrence', 'terrance', 'phillip', 'philip',
+    ]);
+    final schoolCue = hasWord(const <String>[
+      'school', 'classroom', 'garrison', 'cartman', 'eric', 'kids', 'boys',
+    ]);
+    if (terranceCue && schoolCue) {
+      titles.addAll(<String>[
+        'South Park: Bigger, Longer & Uncut',
+        'South Park: Bigger, Longer and Uncut',
+      ]);
+    }
+
     return List<String>.unmodifiable(titles.toSet());
   }
 
@@ -389,11 +434,35 @@ class SmartSearchIntelligence {
         case 'female':
         case 'teen':
         case 'teens':
+        case 'teenager':
+        case 'teenagers':
+        case 'adolescent':
+        case 'adolescents':
         case 'student':
         case 'students':
         case 'daughter':
         case 'heroine':
           return 'protagonist';
+        case 'werewolves':
+        case 'wolves':
+        case 'wolf':
+        case 'wolfblood':
+        case 'lycanthrope':
+        case 'lycanthropy':
+        case 'shapeshifter':
+        case 'shapeshifters':
+          return 'werewolf';
+        case 'paranormal':
+        case 'fantasy':
+        case 'occult':
+        case 'magic':
+          return 'supernatural';
+        case 'british':
+        case 'england':
+        case 'scotland':
+        case 'wales':
+        case 'britain':
+          return 'uksetting';
         case 'skeletons':
         case 'bones':
         case 'adamantium':
@@ -424,6 +493,18 @@ class SmartSearchIntelligence {
       if (RegExp(r'\b(wedding night|newly married|gets married)\b')
           .hasMatch(normalized)) {
         result.add('wedding');
+      }
+      if (RegExp(r'\b(uk|united kingdom|great britain|british isles)\b')
+          .hasMatch(normalized)) {
+        result.add('uksetting');
+      }
+      if (RegExp(r'\b(supernatural|paranormal|werewolf|werewolves)\b')
+          .hasMatch(normalized)) {
+        result.add('supernatural');
+      }
+      if (RegExp(r'\b(werewolf|werewolves|wolfblood|lycanthrope)\b')
+          .hasMatch(normalized)) {
+        result.add('werewolf');
       }
       return result;
     }

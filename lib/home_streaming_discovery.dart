@@ -117,6 +117,7 @@ class HomeBrowseNavigation extends StatelessWidget {
   final VoidCallback onComingSoon;
   final VoidCallback onWrapped;
   final VoidCallback onIdentifySong;
+  final VoidCallback onIdentifyMedia;
   final ValueChanged<DiscFormat> onDiscFormat;
 
   const HomeBrowseNavigation({
@@ -128,6 +129,7 @@ class HomeBrowseNavigation extends StatelessWidget {
     required this.onComingSoon,
     required this.onWrapped,
     required this.onIdentifySong,
+    required this.onIdentifyMedia,
     required this.onDiscFormat,
   });
 
@@ -168,6 +170,8 @@ class HomeBrowseNavigation extends StatelessWidget {
               ],
               const SizedBox(width: 7),
               _tab('Identify Song', onTap: onIdentifySong),
+              const SizedBox(width: 7),
+              _tab('Identify Movie / Show', onTap: onIdentifyMedia),
               const SizedBox(width: 7),
               _tab('Entertainment Wrapped', onTap: onWrapped),
             ],

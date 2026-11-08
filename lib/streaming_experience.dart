@@ -18,6 +18,7 @@ import 'privacy_preferences.dart';
 import 'playback_interruption_bridge.dart';
 import 'core/services/original_language_defaults.dart';
 import 'energy_saver.dart';
+import 'stores/theater_store.dart';
 
 class StreamingExperiencePreferences {
   static const int automaticResolution = 0;
@@ -789,12 +790,14 @@ class AdaptiveStreamingPlayer extends StatefulWidget {
   final MediaItem media;
   final String? activityLabel;
   final int? initialPositionSeconds;
+  final String? theaterRoomId;
 
   const AdaptiveStreamingPlayer({
     super.key,
     required this.media,
     this.activityLabel,
     this.initialPositionSeconds,
+    this.theaterRoomId,
   });
 
   @override
@@ -823,6 +826,7 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
   bool _loading = true;
   String? _error;
   String? _backendSessionId;
+  String? _lastTheaterStatus;
   StreamingExperiencePreferences _preferences =
       StreamingExperiencePreferences();
   String? get _profileId => AppController.instance.currentProfile?.id;
@@ -852,6 +856,7 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
             'The media gateway did not provide a valid HTTP(S) playback URL.';
       });
       await _record('playback_error');
+      _updateTheaterRoomStatus('error');
       return;
     }
 
@@ -881,6 +886,7 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
       PlaybackInterruptionBridge.attach(
         owner: this,
         title: widget.media.title,
+        roomId: widget.theaterRoomId,
         pause: () {
           unawaited(player.pause());
           unawaited(_syncBackendSession(state: 'paused'));
@@ -900,6 +906,12 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
                 .updatePlaybackProgress(widget.media.id, normalized);
           }
           unawaited(_syncBackendSession());
+        },
+        stop: () {
+          unawaited(player.pause());
+          _updateTheaterRoomStatus('stopped', player.value.position.inSeconds.toDouble());
+          unawaited(_syncBackendSession(state: 'stopped'));
+          if (mounted) Navigator.of(context).maybePop();
         },
       );
       if (widget.initialPositionSeconds != null &&
@@ -937,6 +949,10 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
           return;
         }
         unawaited(_syncBackendSession());
+        _updateTheaterRoomStatus(
+          'playing',
+          activePlayer.value.position.inSeconds.toDouble(),
+        );
       });
     } catch (_) {
       if (!mounted) return;
@@ -949,6 +965,7 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
         _errorLogged = true;
         await _record('playback_error');
       }
+      _updateTheaterRoomStatus('error');
     }
   }
 
@@ -1063,6 +1080,16 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
     if (player == null || !player.value.isInitialized) return;
     final value = player.value;
     _trackWatchTime(value);
+    if (value.hasError) {
+      _updateTheaterRoomStatus('error', value.position.inSeconds.toDouble());
+    } else if (value.duration > Duration.zero &&
+        value.position >= value.duration - const Duration(milliseconds: 500)) {
+      _updateTheaterRoomStatus('completed', value.position.inSeconds.toDouble());
+    } else if (value.isPlaying) {
+      _updateTheaterRoomStatus('playing', value.position.inSeconds.toDouble());
+    } else if (value.isInitialized && !_loading) {
+      _updateTheaterRoomStatus('paused', value.position.inSeconds.toDouble());
+    }
     if (value.isPlaying && !value.isBuffering) {
       final now = DateTime.now();
       if (_lastSegmentScanAt == null ||
@@ -1130,6 +1157,19 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
     }
   }
 
+  void _updateTheaterRoomStatus(String status, [double? positionSeconds]) {
+    final roomId = widget.theaterRoomId;
+    if (roomId == null || roomId.isEmpty) return;
+    if (_lastTheaterStatus == status && positionSeconds == null) return;
+    _lastTheaterStatus = status;
+    unawaited(TheaterStore.instance.updatePlaybackState(
+      roomId: roomId,
+      mediaId: widget.media.id,
+      status: status,
+      positionSeconds: positionSeconds,
+    ));
+  }
+
   Future<void> _createBackendSession() async {
     final profile = AppController.instance.currentProfile;
     final api = AppController.instance.backendApi;
@@ -1188,6 +1228,9 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
     PlaybackInterruptionBridge.detach(this);
     _syncTimer?.cancel();
     _flushWatchTime();
+    if (_lastTheaterStatus != null && _lastTheaterStatus != 'completed') {
+      _updateTheaterRoomStatus('stopped', _controller?.value.position.inSeconds.toDouble());
+    }
     final player = _controller;
     if (_wasBuffering && _bufferStartedAt != null) {
       unawaited(_record('buffer_end',

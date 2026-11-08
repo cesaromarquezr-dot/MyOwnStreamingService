@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
-import 'details.dart';
 import 'interface_experience.dart';
 import 'virtual_store_experience_screen.dart';
-import 'widgets/media_case_3d_view.dart';
+import 'screens/redbox_home_screen.dart';
+import 'screens/theater_home_screen.dart';
 
 class _ExperienceDesignOption {
   const _ExperienceDesignOption({required this.id, required this.name});
@@ -49,7 +49,8 @@ class _InterfaceExperienceStudioScreenState
       _config = config;
       _loading = false;
     });
-    _tabs.animateTo(switch (parseInterfaceExperienceMode(config.activeExperience)) {
+    _tabs.animateTo(
+        switch (parseInterfaceExperienceMode(config.activeExperience)) {
       InterfaceExperienceMode.classic => 0,
       InterfaceExperienceMode.blockbuster => 1,
       InterfaceExperienceMode.redbox => 2,
@@ -602,7 +603,9 @@ class _InterfaceExperienceStudioScreenState
   Future<void> _addDecoration({required bool store}) async {
     final label = await _textDialog(
       title: store ? 'Name the in-store display' : 'Name the kiosk decoration',
-      hint: store ? 'e.g. New releases, Marvel wall poster, Music aisle' : 'e.g. Featured display',
+      hint: store
+          ? 'e.g. New releases, Marvel wall poster, Music aisle'
+          : 'e.g. Featured display',
     );
     if (!mounted || label == null || label.isEmpty) return;
 
@@ -700,10 +703,12 @@ class _InterfaceExperienceStudioScreenState
     );
     if (!mounted || title == null || title.isEmpty) return;
     final description = await _textDialog(
-      title: 'Collection description',
-      hint: 'A group of titles you curated; this is not a physical box set.',
-      maxLines: 2,
-    ) ?? '';
+          title: 'Collection description',
+          hint:
+              'A group of titles you curated; this is not a physical box set.',
+          maxLines: 2,
+        ) ??
+        '';
     if (!mounted) return;
     final mediaIds = <String>[];
     await _pickMedia(
@@ -711,7 +716,8 @@ class _InterfaceExperienceStudioScreenState
       title: 'Choose titles for $title',
     );
     if (!mounted || mediaIds.isEmpty) return;
-    final selectedMedia = AppController.instance.library.where((item) => mediaIds.contains(item.id));
+    final selectedMedia = AppController.instance.library
+        .where((item) => mediaIds.contains(item.id));
     var artworkUrl = '';
     for (final item in selectedMedia) {
       if (item.imageUrl?.trim().isNotEmpty == true) {
@@ -739,7 +745,8 @@ class _InterfaceExperienceStudioScreenState
       title: 'Choose titles for ${collection.title}',
     );
     if (!mounted) return;
-    final selectedMedia = AppController.instance.library.where((item) => collection.mediaIds.contains(item.id));
+    final selectedMedia = AppController.instance.library
+        .where((item) => collection.mediaIds.contains(item.id));
     if (selectedMedia.isNotEmpty && collection.artworkUrl.isEmpty) {
       collection.artworkUrl = selectedMedia.first.imageUrl ?? '';
     }
@@ -752,7 +759,8 @@ class _InterfaceExperienceStudioScreenState
     final controller = AppController.instance;
     final profile = controller.currentProfile;
     final library = controller.library
-        .where((item) => item.isAccessibleTo(profile) && controller.isOwned(item.id))
+        .where((item) =>
+            item.isAccessibleTo(profile) && controller.isOwned(item.id))
         .toList();
     if (library.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -872,7 +880,9 @@ class _InterfaceExperienceStudioScreenState
                 mediaType.contains('album') ||
                 mediaType.contains('audio');
           });
-        } else if (target == 'tv' || target == 'television' || target == 'specials') {
+        } else if (target == 'tv' ||
+            target == 'television' ||
+            target == 'specials') {
           items = library.where((item) {
             final mediaType = item.type.toLowerCase().replaceAll('_', ' ');
             return mediaType.contains('tv') ||
@@ -881,14 +891,16 @@ class _InterfaceExperienceStudioScreenState
                 mediaType.contains('episode') ||
                 mediaType.contains('special');
           });
-        } else if (target == 'movie' || target == 'movies' || target == 'film') {
+        } else if (target == 'movie' ||
+            target == 'movies' ||
+            target == 'film') {
           items = library.where((item) {
             final mediaType = item.type.toLowerCase();
             return mediaType.contains('movie') || mediaType.contains('film');
           });
         } else {
-          items = library.where((item) =>
-              item.type.toLowerCase().replaceAll('_', ' ') == target);
+          items = library.where(
+              (item) => item.type.toLowerCase().replaceAll('_', ' ') == target);
         }
         break;
       case 'tag':
@@ -1211,9 +1223,15 @@ class _InterfaceExperienceStudioScreenState
           initialValue: store.navigationMode,
           decoration: const InputDecoration(labelText: 'Navigation view'),
           items: const [
-            DropdownMenuItem(value: 'firstPerson', child: Text('First-person · camera view')),
-            DropdownMenuItem(value: 'thirdPerson', child: Text('Third-person · visible walker')),
-            DropdownMenuItem(value: 'easyBrowse', child: Text('Easy Browse · no walking character')),
+            DropdownMenuItem(
+                value: 'firstPerson',
+                child: Text('First-person · camera view')),
+            DropdownMenuItem(
+                value: 'thirdPerson',
+                child: Text('Third-person · visible walker')),
+            DropdownMenuItem(
+                value: 'easyBrowse',
+                child: Text('Easy Browse · no walking character')),
           ],
           onChanged: (value) async {
             if (value == null) return;
@@ -1226,7 +1244,8 @@ class _InterfaceExperienceStudioScreenState
           decoration: const InputDecoration(labelText: 'Animation intensity'),
           items: const [
             DropdownMenuItem(value: 'full', child: Text('Full animations')),
-            DropdownMenuItem(value: 'reduced', child: Text('Reduced animations')),
+            DropdownMenuItem(
+                value: 'reduced', child: Text('Reduced animations')),
             DropdownMenuItem(value: 'minimal', child: Text('Minimal motion')),
           ],
           onChanged: (value) async {
@@ -1259,7 +1278,8 @@ class _InterfaceExperienceStudioScreenState
             await _save('Store wall posters');
           },
           title: const Text('Show wall posters and standees'),
-          subtitle: const Text('Frame owned-media artwork on the walls around the store.'),
+          subtitle: const Text(
+              'Frame owned-media artwork on the walls around the store.'),
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
@@ -1269,15 +1289,19 @@ class _InterfaceExperienceStudioScreenState
             await _save('Store hanging banners');
           },
           title: const Text('Show hanging aisle banners'),
-          subtitle: const Text('Display category signs above aisles, not as a rotating hero banner.'),
+          subtitle: const Text(
+              'Display category signs above aisles, not as a rotating hero banner.'),
         ),
         DropdownButtonFormField<String>(
           initialValue: store.collectionGalleryPlacement,
-          decoration: const InputDecoration(labelText: 'Physical collection gallery location'),
+          decoration: const InputDecoration(
+              labelText: 'Physical collection gallery location'),
           items: const [
-            DropdownMenuItem(value: 'Center island', child: Text('Center island')),
+            DropdownMenuItem(
+                value: 'Center island', child: Text('Center island')),
             DropdownMenuItem(value: 'Back wall', child: Text('Back wall')),
-            DropdownMenuItem(value: 'Front display', child: Text('Front display')),
+            DropdownMenuItem(
+                value: 'Front display', child: Text('Front display')),
           ],
           onChanged: (value) async {
             if (value == null) return;
@@ -1424,18 +1448,21 @@ class _InterfaceExperienceStudioScreenState
             child: ListTile(
               leading: const Icon(Icons.collections_bookmark_outlined),
               title: Text(collection.title),
-              subtitle: Text('${collection.mediaIds.length} titles · Digital collection'),
+              subtitle: Text(
+                  '${collection.mediaIds.length} titles · Digital collection'),
               trailing: Wrap(
                 children: [
                   IconButton(
                     tooltip: 'Edit collection contents',
-                    onPressed: () => _editStoreCuratedCollection(store, collection),
+                    onPressed: () =>
+                        _editStoreCuratedCollection(store, collection),
                     icon: const Icon(Icons.edit_outlined),
                   ),
                   IconButton(
                     tooltip: 'Remove digital collection',
                     onPressed: () async {
-                      setState(() => store.curatedCollections.removeWhere((item) => item.id == collection.id));
+                      setState(() => store.curatedCollections
+                          .removeWhere((item) => item.id == collection.id));
                       await _save('Digital collection removed');
                     },
                     icon: const Icon(Icons.delete_outline),
@@ -1486,7 +1513,8 @@ class _InterfaceExperienceStudioScreenState
         OutlinedButton.icon(
             onPressed: () => _addDecoration(store: true),
             icon: const Icon(Icons.add),
-            label: const Text('Add wall poster, hanging banner, standee or sign')),
+            label:
+                const Text('Add wall poster, hanging banner, standee or sign')),
         _sectionHeading('Seasonal stores'),
         SwitchListTile(
             value: config.seasonalAutomationEnabled,
@@ -2234,518 +2262,20 @@ class ExperiencePreviewScreen extends StatelessWidget {
   final InterfaceExperienceMode mode;
   final InterfaceExperienceConfig config;
 
-  List<MediaItem> _items(String type, String value, List<String> ids) {
-    final library = AppController.instance.library
-        .where((item) => AppController.instance.isOwned(item.id))
-        .toList();
-    final query = value.toLowerCase().trim();
-    Iterable<MediaItem> items = library;
-    switch (type) {
-      case 'manual':
-        items = library.where((item) => ids.contains(item.id));
-        break;
-      case 'genre':
-        items = library.where((item) =>
-            item.genres.any((genre) => genre.toLowerCase() == query) ||
-            item.primaryGenre?.toLowerCase() == query);
-        break;
-      case 'country':
-        items = library
-            .where((item) => item.countryOfOrigin?.toLowerCase() == query);
-        break;
-      case 'decade':
-        final decade = int.tryParse(value);
-        if (decade != null) {
-          items = library.where((item) =>
-              item.releaseYear != null &&
-              item.releaseYear! >= decade &&
-              item.releaseYear! < decade + 10);
-        }
-        break;
-      case 'franchise':
-        items = library.where((item) =>
-            item.franchiseNames
-                .any((name) => name.toLowerCase().contains(query)) ||
-            item.franchiseName?.toLowerCase().contains(query) == true ||
-            item.cinematicUniverseNames
-                .any((name) => name.toLowerCase().contains(query)));
-        break;
-      case 'studio':
-        items = library.where((item) =>
-            item.studios.any((name) => name.toLowerCase().contains(query)));
-        break;
-      case 'type':
-        if (query == 'music' || query == 'audio') {
-          items = library.where((item) {
-            final mediaType = item.type.toLowerCase().replaceAll('_', ' ');
-            return mediaType.contains('music') ||
-                mediaType.contains('song') ||
-                mediaType.contains('track') ||
-                mediaType.contains('album') ||
-                mediaType.contains('audio');
-          });
-        } else if (query == 'tv' || query == 'television' || query == 'specials') {
-          items = library.where((item) {
-            final mediaType = item.type.toLowerCase().replaceAll('_', ' ');
-            return mediaType.contains('tv') ||
-                mediaType.contains('show') ||
-                mediaType.contains('series') ||
-                mediaType.contains('episode') ||
-                mediaType.contains('special');
-          });
-        } else if (query == 'movie' || query == 'movies' || query == 'film') {
-          items = library.where((item) {
-            final mediaType = item.type.toLowerCase();
-            return mediaType.contains('movie') || mediaType.contains('film');
-          });
-        } else {
-          items = library.where((item) =>
-              item.type.toLowerCase().replaceAll('_', ' ') == query);
-        }
-        break;
-      case 'tag':
-        items = library.where(
-            (item) => item.tags.any((tag) => tag.toLowerCase() == query));
-        break;
-      case 'recent':
-        final recent = library.toList()
-          ..sort((a, b) => b.addedAt.compareTo(a.addedAt));
-        return recent.take(24).toList();
-      case 'favorites':
-        items = library.where((item) =>
-            AppController.instance.liked.any((liked) => liked.id == item.id));
-        break;
-      case 'all':
-        break;
-    }
-    return items.take(30).toList();
-  }
-
   @override
   Widget build(BuildContext context) {
     switch (mode) {
       case InterfaceExperienceMode.blockbuster:
         return VirtualStoreExperienceScreen(config: config);
       case InterfaceExperienceMode.redbox:
-        return _KioskPreview(
-          kiosk: config.activeKiosk,
-          items: _items,
-          remoteNavigationEnabled: config.remoteNavigationEnabled,
-        );
+        return const RedboxHomeScreen();
       case InterfaceExperienceMode.theater:
-        return _TheaterPreview(config: config, items: _items);
+        return const TheaterHomeScreen();
       case InterfaceExperienceMode.classic:
         return const Scaffold(
             body: Center(
                 child: Text(
                     'Return to Classic Home from the Experience Studio.')));
     }
-  }
-}
-
-typedef _RuleItems = List<MediaItem> Function(String, String, List<String>);
-
-class _KioskPreview extends StatelessWidget {
-  const _KioskPreview({
-    required this.kiosk,
-    required this.items,
-    this.remoteNavigationEnabled = true,
-  });
-  final KioskDesign? kiosk;
-  final _RuleItems items;
-  final bool remoteNavigationEnabled;
-
-  @override
-  Widget build(BuildContext context) {
-    final design = kiosk;
-    if (design == null) {
-      return const Scaffold(
-          body: Center(
-              child: Text(
-                  'Create a kiosk design in the Experience Studio first.')));
-    }
-    final categories =
-        design.categories.where((category) => category.visible).toList();
-    return Scaffold(
-      backgroundColor: Color(design.backgroundColor),
-      appBar: AppBar(
-          backgroundColor: Color(design.backgroundColor),
-          title: Text(design.name),
-          actions: [
-            IconButton(
-                tooltip: 'Edit kiosk',
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.tune))
-          ]),
-      body: FocusTraversalGroup(
-        policy: remoteNavigationEnabled
-            ? OrderedTraversalPolicy()
-            : ReadingOrderTraversalPolicy(),
-        child: ListView(padding: const EdgeInsets.all(18), children: [
-          Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: [
-                    Color(design.accentColor).withValues(alpha: .9),
-                    Color(design.backgroundColor)
-                  ]),
-                  borderRadius: BorderRadius.circular(18)),
-              child: Column(children: [
-                if (design.logoUrl.isNotEmpty)
-                  Image.network(design.logoUrl,
-                      height: 46,
-                      errorBuilder: (_, __, ___) => const SizedBox.shrink()),
-                Text(design.name.toUpperCase(),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontSize: 28, fontWeight: FontWeight.w900)),
-                const SizedBox(height: 5),
-                Text(design.greeting),
-                const SizedBox(height: 8),
-                const Chip(avatar: Icon(Icons.verified_rounded, size: 16), label: Text('YOUR LIBRARY · NO CHECKOUT'))
-              ])),
-          const SizedBox(height: 12),
-          Align(
-              alignment: Alignment.centerRight,
-              child: Chip(
-                  avatar: const Icon(Icons.view_quilt, size: 16),
-                  label: Text(design.layoutStyle))),
-          for (final category in categories) ...[
-            Row(children: [
-              Expanded(
-                  child: Text(category.title,
-                      style: TextStyle(
-                          color: Color(design.accentColor),
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold))),
-              if (category.featured) const Chip(label: Text('Featured'))
-            ]),
-            if (category.description.isNotEmpty)
-              Text(category.description,
-                  style: const TextStyle(color: Colors.white70)),
-            _KioskCategoryLayout(
-              layoutStyle: design.layoutStyle,
-              accentColor: design.accentColor,
-              items: items(
-                  category.filterType, category.filterValue, category.mediaIds),
-              emptyLabel: 'No matching titles yet.',
-            ),
-          ],
-          if (categories.isEmpty)
-            const Text(
-                'No categories are visible. Configure the kiosk in the Experience Studio.'),
-          if (design.decorations.isNotEmpty)
-            Wrap(
-                spacing: 8,
-                children: design.decorations
-                    .map((item) => Chip(
-                        label: Text(
-                            item['label']?.toString() ?? 'Kiosk decoration'),
-                        avatar: const Icon(Icons.auto_awesome, size: 16)))
-                    .toList()),
-          const SizedBox(height: 12),
-          Text(
-              remoteNavigationEnabled
-                  ? 'Remote-ready: use directional navigation to move between focused titles and controls.'
-                  : 'Remote navigation is disabled. Use touch, mouse or standard keyboard navigation.',
-              style: const TextStyle(color: Colors.white60)),
-        ]),
-      ),
-    );
-  }
-}
-
-class _TheaterPreview extends StatelessWidget {
-  const _TheaterPreview({required this.config, required this.items});
-  final InterfaceExperienceConfig config;
-  final _RuleItems items;
-
-  @override
-  Widget build(BuildContext context) {
-    final movies = AppController.instance.library
-        .where((item) {
-          if (!AppController.instance.isOwned(item.id)) return false;
-          final type = item.type.toLowerCase().replaceAll('_', ' ').trim();
-          final isMusic = type.contains('music') ||
-              type.contains('song') ||
-              type.contains('track') ||
-              type.contains('album');
-          return !isMusic &&
-              (type.contains('movie') ||
-                  type.contains('film') ||
-                  type.contains('tv') ||
-                  type.contains('show') ||
-                  type.contains('series') ||
-                  type.contains('episode') ||
-                  type.contains('special'));
-        })
-        .take(60)
-        .toList()
-      ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
-    return Scaffold(
-      backgroundColor: const Color(0xFF100708),
-      appBar: AppBar(
-          backgroundColor: const Color(0xFF100708),
-          title: const Text('Private Home Theater')),
-      body: ListView(padding: const EdgeInsets.all(18), children: [
-        Container(
-            padding: const EdgeInsets.all(28),
-            decoration: BoxDecoration(
-                color: const Color(0xFF391116),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: Colors.amber, width: 2)),
-            child: const Column(children: [
-              Icon(Icons.theaters_rounded, size: 52, color: Colors.amber),
-              Text('YOUR PRIVATE CINEMA',
-                  style:
-                      TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2)),
-              SizedBox(height: 8),
-              Text('Choose something you own',
-                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold))
-            ])),
-        const SizedBox(height: 12),
-        if (config.theaterCountdown)
-          const ListTile(
-              leading: Icon(Icons.timer),
-              title: Text('Pre-show countdown enabled')),
-        if (config.theaterTrailers)
-          const ListTile(
-              leading: Icon(Icons.movie_filter),
-              title: Text(
-                  'Trailer pre-show enabled (requires available trailer metadata)')),
-        if (config.theaterAmbience)
-          const ListTile(
-              leading: Icon(Icons.surround_sound),
-              title:
-                  Text('Theater ambience enabled (sound assets not bundled)')),
-        for (final item in movies)
-          ListTile(
-              leading: const Icon(Icons.local_movies),
-              title: Text(item.title),
-              subtitle: Text('${item.releaseYear ?? item.type} · From your library'),
-              onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                      builder: (_) => MediaDetailsScreen(media: item)))),
-        if (movies.isEmpty)
-          const Text('Import movies, TV episodes or specials to populate your private theater.'),
-      ]),
-    );
-  }
-}
-
-class _KioskCategoryLayout extends StatelessWidget {
-  const _KioskCategoryLayout(
-      {required this.layoutStyle,
-      required this.accentColor,
-      required this.items,
-      required this.emptyLabel});
-  final String layoutStyle;
-  final int accentColor;
-  final List<MediaItem> items;
-  final String emptyLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    if (items.isEmpty) {
-      return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child:
-              Text(emptyLabel, style: const TextStyle(color: Colors.white54)));
-    }
-    if (layoutStyle == 'Compact list') {
-      return Column(children: [
-        for (final item in items.take(12))
-          ListTile(
-            dense: true,
-            focusColor: Color(accentColor).withValues(alpha: .18),
-            leading: SizedBox(
-                width: 42,
-                child: item.imageUrl == null
-                    ? const Icon(Icons.movie)
-                    : Image.network(item.imageUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(Icons.movie))),
-            title:
-                Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-            subtitle:
-                Text(item.releaseYear?.toString() ?? item.type, maxLines: 1),
-            onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute<void>(
-                    builder: (_) => MediaDetailsScreen(media: item))),
-          ),
-      ]);
-    }
-    if (layoutStyle == 'Featured banner + grid') {
-      final featured = items.first;
-      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        InkWell(
-          onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                  builder: (_) => MediaDetailsScreen(media: featured))),
-          child: Container(
-            height: 154,
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-                color: Color(accentColor).withValues(alpha: .18),
-                borderRadius: BorderRadius.circular(12)),
-            clipBehavior: Clip.antiAlias,
-            child: Stack(fit: StackFit.expand, children: [
-              if (featured.imageUrl != null)
-                Image.network(featured.imageUrl!,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const SizedBox.shrink()),
-              DecoratedBox(
-                  decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                    Colors.transparent,
-                    Colors.black.withValues(alpha: .88)
-                  ]))),
-              Positioned(
-                  left: 14,
-                  right: 14,
-                  bottom: 12,
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('FEATURED TITLE',
-                            style: TextStyle(
-                                fontSize: 10,
-                                letterSpacing: 1.5,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white70)),
-                        Text(featured.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontSize: 19,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white)),
-                      ])),
-            ]),
-          ),
-        ),
-        if (items.length > 1)
-          _KioskCategoryLayout(
-              layoutStyle: 'Poster wall',
-              accentColor: accentColor,
-              items: items.skip(1).toList(),
-              emptyLabel: emptyLabel),
-      ]);
-    }
-    if (layoutStyle == 'Poster wall') {
-      return GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: items.take(24).length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 9,
-            mainAxisSpacing: 10,
-            childAspectRatio: .62),
-        itemBuilder: (context, index) {
-          final item = items[index];
-          return FocusTraversalOrder(
-              order: NumericFocusOrder(index.toDouble()),
-              child: InkWell(
-                onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                        builder: (_) => MediaDetailsScreen(media: item))),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                          child: ClipRRect(
-                              borderRadius: BorderRadius.circular(7),
-                              child: item.imageUrl == null
-                                  ? Container(
-                                      color: Color(accentColor)
-                                          .withValues(alpha: .2),
-                                      alignment: Alignment.center,
-                                      child: const Icon(Icons.movie, size: 30))
-                                  : Image.network(item.imageUrl!,
-                                      fit: BoxFit.cover,
-                                      width: double.infinity,
-                                      errorBuilder: (_, __, ___) => Container(
-                                          color: Colors.white12,
-                                          child: const Icon(Icons.movie))))),
-                      const SizedBox(height: 4),
-                      Text(item.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: 11, fontWeight: FontWeight.w600)),
-                    ]),
-              ));
-        },
-      );
-    }
-    return _MediaPosterRow(items: items, emptyLabel: emptyLabel);
-  }
-}
-
-class _MediaPosterRow extends StatelessWidget {
-  const _MediaPosterRow({required this.items, required this.emptyLabel});
-  final List<MediaItem> items;
-  final String emptyLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    if (items.isEmpty) {
-      return Padding(
-          padding: const EdgeInsets.only(left: 17, top: 8, bottom: 14),
-          child:
-              Text(emptyLabel, style: const TextStyle(color: Colors.white54)));
-    }
-    return SizedBox(
-      height: 178,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: items.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (context, index) {
-          final item = items[index];
-          return SizedBox(
-            width: 108,
-            child: FocusTraversalOrder(
-              order: NumericFocusOrder(index.toDouble()),
-              child: InkWell(
-                onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                        builder: (_) => MediaDetailsScreen(media: item))),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: MediaCase3DView(
-                          title: item.title,
-                          media: item,
-                          format: item.displayCaseFormat,
-                          year: item.releaseYear,
-                          caseColor: 0xFF243447,
-                          width: 108,
-                          height: 142,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(item.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.w600)),
-                    ]),
-              ),
-            ),
-          );
-        },
-      ),
-    );
   }
 }

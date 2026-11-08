@@ -27,7 +27,7 @@ class ConnectedCommandCenterScreen extends StatelessWidget {
         Text(profile == null ? 'Your entertainment, connected' : 'Personalized for ${profile.name}', style: const TextStyle(color: Colors.white70)),
         const SizedBox(height: 16),
         _FeatureTile(icon: Icons.search_rounded, title: 'Hey Universal Search', subtitle: 'Search your media library by title, person, genre or soundtrack.', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UniversalSearchHubScreen()))),
-        _FeatureTile(icon: Icons.subtitles_rounded, title: 'Search Dialogue', subtitle: 'Find lines across indexed movie and episode subtitles.', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DialogueSearchScreen()))),
+        _FeatureTile(icon: Icons.subtitles_rounded, title: 'Identify Movie or Show', subtitle: 'Find titles from dialogue, remembered scenes, or plot descriptions.', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DialogueSearchScreen()))),
         _FeatureTile(icon: Icons.hub_rounded, title: 'Three-Phase Discovery', subtitle: 'Compare shared cast across titles, explore person connections, get history-based recommendations and review library metadata health.', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ThreePhaseDiscoveryHubScreen()))),
         _FeatureTile(icon: Icons.auto_awesome_rounded, title: 'My Cinematic Universe', subtitle: 'Mood Mixer, hybrid genres, Smart Double Features, franchises, calendar, vault and Media Wrapped.', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CinematicDiscoveryStudioScreen()))),
         _FeatureTile(icon: Icons.gamepad_rounded, title: 'Hey Remote', subtitle: 'Playback controls and connected-device shortcuts.', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HeyRemoteScreen()))),
@@ -57,7 +57,21 @@ class _UniversalSearchHubScreenState extends State<UniversalSearchHubScreen> {
   @override Widget build(BuildContext context) {
     final library = AppController.instance.library;
     final results = SmartSearch.search(query, library);
-    return Scaffold(backgroundColor: const Color(0xFF0B0B10), appBar: AppBar(title: const Text('Hey Universal Search')), body: Column(children: [Padding(padding: const EdgeInsets.all(16), child: TextField(onChanged: (v) => setState(() => query = v), style: const TextStyle(color: Colors.white), decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search titles, actors, genres, music…', border: OutlineInputBorder()))), Expanded(child: query.trim().isEmpty ? const Center(child: Text('Search your available media catalog.', style: TextStyle(color: Colors.white60))) : results.isEmpty ? const Center(child: Text('No matches in the current library.', style: TextStyle(color: Colors.white60))) : ListView.builder(itemCount: results.length, itemBuilder: (context, i) { final item = results[i]; return ListTile(title: Text(item.title, style: const TextStyle(color: Colors.white)), subtitle: Text('${item.type} ${item.releaseYear ?? ''}', style: const TextStyle(color: Colors.white60)), leading: const Icon(Icons.play_circle_outline, color: _accent), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: item)))); }))]));
+    return Scaffold(backgroundColor: const Color(0xFF0B0B10), appBar: AppBar(
+        title: const Text('Hey Universal Search'),
+        actions: [
+          IconButton(
+            tooltip: 'Identify Movie or Show',
+            icon: const Icon(Icons.movie_filter_rounded),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => const DialogueSearchScreen(),
+              ),
+            ),
+          ),
+        ],
+      ), body: Column(children: [Padding(padding: const EdgeInsets.all(16), child: TextField(onChanged: (v) => setState(() => query = v), style: const TextStyle(color: Colors.white), decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search titles, actors, genres, music…', border: OutlineInputBorder()))), Expanded(child: query.trim().isEmpty ? const Center(child: Text('Search your available media catalog.', style: TextStyle(color: Colors.white60))) : results.isEmpty ? const Center(child: Text('No matches in the current library.', style: TextStyle(color: Colors.white60))) : ListView.builder(itemCount: results.length, itemBuilder: (context, i) { final item = results[i]; return ListTile(title: Text(item.title, style: const TextStyle(color: Colors.white)), subtitle: Text('${item.type} ${item.releaseYear ?? ''}', style: const TextStyle(color: Colors.white60)), leading: const Icon(Icons.play_circle_outline, color: _accent), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: item)))); }))]));
   }
 }
 

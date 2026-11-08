@@ -28,9 +28,47 @@ extension BackendApiOwnedExperienceMethods on BackendApi {
     return _maps(data['records']);
   }
 
-  Future<Map<String, dynamic>> createTheaterSession({required String profileId, required String mediaId, required String title, List<String> seatIds = const [], String roomId = 'main-room'}) async {
+  Future<Map<String, dynamic>> createTheaterSession({required String profileId, required String mediaId, required String title, List<String> seatIds = const [], String roomId = 'room-1'}) async {
     _requireAuthentication();
     final data = await _requireSuccess(await _networkClient.post(Uri.parse('$baseUrl/theater/sessions'), headers: _headers, body: jsonEncode({'profileId': profileId, 'data': {'mediaId': mediaId, 'title': title, 'seatIds': seatIds, 'roomId': roomId, 'status': 'ready'}})), 'Unable to create a private theater session.');
+    return _map(data['record']);
+  }
+
+  Future<Map<String, dynamic>> updateTheaterSession({
+    required String profileId,
+    required String sessionId,
+    required String mediaId,
+    required String title,
+    required String roomId,
+    required String status,
+    List<String> seatIds = const [],
+    double? positionSeconds,
+    String? subtitle,
+  }) async {
+    _requireAuthentication();
+    final endpoint = Uri.parse('$baseUrl/theater/sessions/${Uri.encodeComponent(sessionId)}')
+        .replace(queryParameters: {'profileId': profileId});
+    final data = await _requireSuccess(
+      await _networkClient.put(
+        endpoint,
+        headers: _headers,
+        body: jsonEncode({
+          'profileId': profileId,
+          'data': {
+            'mediaId': mediaId,
+            'title': title,
+            'roomId': roomId,
+            'seatIds': seatIds,
+            'status': status,
+            'positionSeconds': positionSeconds,
+            'subtitle': subtitle,
+            'privateViewing': true,
+            'paymentRequired': false,
+          },
+        }),
+      ),
+      'Unable to sync private theater playback status.',
+    );
     return _map(data['record']);
   }
 

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -10,16 +12,19 @@ import 'models/media_case_style.dart';
 import 'models/media_collection_models.dart';
 import 'music.dart';
 import 'screens/collection_details_screen.dart';
+import 'screens/virtual_store_catalog_computer_screen.dart';
+import 'screens/theater_home_screen.dart';
 import 'details.dart';
 import 'catalog_poster_image.dart';
 import 'stores/collection_store.dart';
 import 'widgets/animated_media_case_dialog.dart';
 import 'widgets/collection_box.dart';
 import 'widgets/media_case_3d_view.dart';
+import 'widgets/virtual_store_3d_scene.dart';
 
-/// The Virtual Store is a lightweight, accessible 2.5D environment.
-///
-/// It deliberately uses the user's owned media as its catalog. The store has
+/// The Virtual Store is an accessible, navigable 3D environment with an
+/// owned-library browser. It deliberately uses the user's owned media as its
+/// catalog. The store has
 /// no rental, checkout, payment, or purchasing flow.
 class VirtualStoreExperienceScreen extends StatefulWidget {
   const VirtualStoreExperienceScreen({
@@ -88,6 +93,8 @@ class _VirtualStoreExperienceScreenState
       ...aisles.map((aisle) => aisle.name),
       'Collection Gallery',
       'Listening Lounge',
+      'Catalog Computer',
+      'Theater Corridor',
     ];
   }
 
@@ -249,6 +256,18 @@ class _VirtualStoreExperienceScreenState
         _selectedMediaIndex = 0;
         _selectedMediaId = _currentAisleItems.isEmpty ? null : _currentAisleItems.first.id;
       });
+      return;
+    }
+    if (_safeZoneIndex == aisleCount + 2) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const VirtualStoreCatalogComputerScreen()),
+      );
+      return;
+    }
+    if (_safeZoneIndex == aisleCount + 3) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const TheaterHomeScreen()),
+      );
       return;
     }
     final target = _safeZoneIndex == aisleCount ? _collectionsKey : _playlistsKey;
@@ -506,7 +525,6 @@ class _VirtualStoreExperienceScreenState
     final posters = _ownedLibrary;
     final physicalCollections = CollectionRepository().fromLibrary();
     final zoneLabels = _zoneLabels;
-    final selectedZone = zoneLabels.isEmpty ? 'Entrance' : zoneLabels[_safeZoneIndex];
 
     return Scaffold(
       backgroundColor: Color(design.wallColor),
@@ -544,12 +562,18 @@ class _VirtualStoreExperienceScreenState
                 design: design,
                 posterMedia: posters,
               ),
+              const SizedBox(height: 18),
+              _buildNewReleaseWall(design),
+              const SizedBox(height: 18),
+              _buildGenreAisles(design),
+              const SizedBox(height: 18),
+              _buildStaffPicks(design),
               if (design.collectionGalleryPlacement == 'Front display') ...[
                 const SizedBox(height: 16),
                 _buildPhysicalCollections(physicalCollections, design),
               ],
               const SizedBox(height: 12),
-              _buildWalkway(design, zoneLabels, selectedZone),
+              _buildWalkway(design, zoneLabels),
               const SizedBox(height: 10),
               _buildNavigationPanel(design, zoneLabels),
               const SizedBox(height: 16),
@@ -573,129 +597,265 @@ class _VirtualStoreExperienceScreenState
     );
   }
 
+  Widget _buildNewReleaseWall(VirtualStoreDesign design) {
+    final items = _ownedLibrary.toList()
+      ..sort((a, b) => b.addedAt.compareTo(a.addedAt));
+    final recent = items.take(12).toList(growable: false);
+    if (recent.isEmpty) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 13, 12, 12),
+      decoration: BoxDecoration(
+        color: Color(design.shelfColor).withValues(alpha: .90),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Color(design.accentColor).withValues(alpha: .55)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _StoreSectionHeading(
+            title: 'New release wall',
+            subtitle: 'The newest additions to your personal collection',
+            icon: Icons.new_releases_rounded,
+            accent: Color(design.accentColor),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 174,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: recent.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (context, index) {
+                final media = recent[index];
+                return SizedBox(
+                  width: 108,
+                  child: InkWell(
+                    onTap: () => _openMediaDetails(media),
+                    borderRadius: BorderRadius.circular(9),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: SizedBox(width: double.infinity, child: CatalogPosterImage(media: media, fit: BoxFit.cover)),
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(media.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800)),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGenreAisles(VirtualStoreDesign design) {
+    final mediaByGenre = <String, List<MediaItem>>{};
+    for (final media in _ownedLibrary) {
+      final genres = media.genres.isNotEmpty
+          ? media.genres
+          : (media.primaryGenre?.trim().isNotEmpty == true ? <String>[media.primaryGenre!.trim()] : const <String>[]);
+      for (final genre in genres) {
+        final clean = genre.trim();
+        if (clean.isNotEmpty) (mediaByGenre[clean] ??= <MediaItem>[]).add(media);
+      }
+    }
+    final genres = mediaByGenre.keys.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    if (genres.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _StoreSectionHeading(
+          title: 'Browse by genre',
+          subtitle: 'Curated aisles built from the genres in your library',
+          icon: Icons.category_rounded,
+          accent: Color(design.accentColor),
+        ),
+        const SizedBox(height: 9),
+        SizedBox(
+          height: 112,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: genres.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 9),
+            itemBuilder: (context, index) {
+              final genre = genres[index];
+              final items = mediaByGenre[genre] ?? const <MediaItem>[];
+              final sample = items.isEmpty ? null : items.first;
+              return SizedBox(
+                width: 174,
+                child: Material(
+                  color: Color(design.shelfColor),
+                  borderRadius: BorderRadius.circular(11),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () => _showGenreAisle(genre, items),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (sample != null) CatalogPosterImage(media: sample, fit: BoxFit.cover),
+                        const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.centerLeft, end: Alignment.centerRight, colors: [Colors.black87, Colors.black26]))),
+                        Padding(
+                          padding: const EdgeInsets.all(11),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              Text(genre.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: .8, fontSize: 12)),
+                              Text('${items.length} titles', style: const TextStyle(color: Colors.white70, fontSize: 10)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showGenreAisle(String genre, List<MediaItem> items) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('$genre aisle'),
+        content: SizedBox(
+          width: 520,
+          height: 470,
+          child: items.isEmpty
+              ? const Center(child: Text('No owned titles are currently assigned to this genre.'))
+              : GridView.builder(
+                  itemCount: items.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    childAspectRatio: .62,
+                    crossAxisSpacing: 9,
+                    mainAxisSpacing: 10,
+                  ),
+                  itemBuilder: (context, index) {
+                    final media = items[index];
+                    return InkWell(
+                      onTap: () {
+                        Navigator.pop(dialogContext);
+                        _openMediaDetails(media);
+                      },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(7), child: SizedBox(width: double.infinity, child: CatalogPosterImage(media: media, fit: BoxFit.cover)))),
+                          const SizedBox(height: 4),
+                          Text(media.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Close'))],
+      ),
+    );
+  }
+
+  Widget _buildStaffPicks(VirtualStoreDesign design) {
+    final likedIds = AppController.instance.liked.map((media) => media.id).toSet();
+    final liked = _ownedLibrary.where((media) => likedIds.contains(media.id)).toList(growable: false);
+    final recent = _ownedLibrary.toList()..sort((a, b) => b.addedAt.compareTo(a.addedAt));
+    final picks = (liked.isNotEmpty ? liked : recent).take(8).toList(growable: false);
+    if (picks.isEmpty) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 13, 12, 12),
+      decoration: BoxDecoration(
+        color: Color(design.shelfColor).withValues(alpha: .60),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Color(design.accentColor).withValues(alpha: .35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _StoreSectionHeading(
+            title: 'Staff picks',
+            subtitle: liked.isNotEmpty ? 'Your liked titles, featured like a video-store recommendation wall' : 'A rotating selection from your owned library',
+            icon: Icons.star_rate_rounded,
+            accent: Color(design.accentColor),
+          ),
+          const SizedBox(height: 9),
+          SizedBox(
+            height: 135,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: picks.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 9),
+              itemBuilder: (context, index) {
+                final media = picks[index];
+                return SizedBox(
+                  width: 220,
+                  child: InkWell(
+                    onTap: () => _openMediaDetails(media),
+                    borderRadius: BorderRadius.circular(10),
+                    child: Card(
+                      margin: EdgeInsets.zero,
+                      color: Color(design.wallColor),
+                      clipBehavior: Clip.antiAlias,
+                      child: Row(
+                        children: [
+                          SizedBox(width: 82, height: double.infinity, child: CatalogPosterImage(media: media, fit: BoxFit.cover)),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.all(9),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(liked.isNotEmpty ? 'FAVORITE PICK' : 'FEATURED PICK', style: TextStyle(color: Color(design.accentColor), fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: .8)),
+                                  const SizedBox(height: 5),
+                                  Text(media.title, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
+                                  const SizedBox(height: 4),
+                                  const Text('Open details', style: TextStyle(color: Colors.white60, fontSize: 9)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildWalkway(
     VirtualStoreDesign design,
     List<String> zones,
-    String selectedZone,
   ) {
-    final maxIndex = (zones.length - 1).clamp(1, 1000).toDouble();
-    final alignmentX = -1.0 + (_safeZoneIndex / maxIndex) * 2.0;
-    return Container(
-      height: 178,
-      decoration: BoxDecoration(
-        color: Color(design.floorColor),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Color(design.accentColor).withValues(alpha: .65)),
-        boxShadow: const [
-          BoxShadow(color: Colors.black45, blurRadius: 14, offset: Offset(0, 7)),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color(design.wallColor),
-                    Color(design.floorColor),
-                    Colors.black.withValues(alpha: .72),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 38,
-            child: Container(height: 2, color: Color(design.accentColor).withValues(alpha: .45)),
-          ),
-          Positioned(
-            left: 12,
-            top: 10,
-            child: Text(
-              design.navigationMode == 'firstPerson'
-                  ? 'FIRST-PERSON WALKWAY'
-                  : design.navigationMode == 'easyBrowse'
-                      ? 'EASY BROWSE MAP'
-                      : 'STORE WALKWAY · THIRD PERSON',
-              style: const TextStyle(fontSize: 9, letterSpacing: 1.4, color: Colors.white60, fontWeight: FontWeight.w900),
-            ),
-          ),
-          if (design.navigationMode == 'thirdPerson')
-            AnimatedAlign(
-              alignment: Alignment(alignmentX, .28),
-              duration: _motionDuration,
-              curve: Curves.easeInOutCubic,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: Color(design.accentColor),
-                        shape: BoxShape.circle,
-                        boxShadow: [BoxShadow(color: Color(design.accentColor).withValues(alpha: .38), blurRadius: 14)],
-                      ),
-                      child: const Icon(Icons.person_rounded, color: Colors.black, size: 30),
-                    ),
-                    const SizedBox(height: 3),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(99)),
-                      child: const Text('YOU', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 1)),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          else if (design.navigationMode == 'firstPerson')
-            Center(
-              child: AnimatedScale(
-                duration: _motionDuration,
-                scale: 1 + (_safeZoneIndex % 3) * .025,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.visibility_rounded, size: 44, color: Color(design.accentColor)),
-                    const SizedBox(height: 4),
-                    const Text('YOUR VIEW', style: TextStyle(fontSize: 9, letterSpacing: 1.4, fontWeight: FontWeight.w900)),
-                  ],
-                ),
-              ),
-            )
-          else
-            Center(
-              child: Icon(Icons.explore_rounded, size: 46, color: Color(design.accentColor)),
-            ),
-          Positioned(
-            left: 10,
-            right: 10,
-            bottom: 7,
-            child: Row(
-              children: [
-                const Icon(Icons.place_rounded, size: 13, color: Colors.white70),
-                const SizedBox(width: 5),
-                Expanded(
-                  child: Text(
-                    'You are at: $selectedZone',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
-                  ),
-                ),
-                Text('${_safeZoneIndex + 1}/${zones.length}', style: const TextStyle(fontSize: 10, color: Colors.white60)),
-              ],
-            ),
-          ),
-        ],
+    return VirtualStore3DScene(
+      design: design,
+      aisles: design.aisles,
+      posterMedia: _ownedLibrary,
+      activeZoneIndex: _safeZoneIndex,
+      zoneLabels: zones,
+      onZoneChanged: (next) => setState(() {
+        _zoneIndex = next;
+        _shelfOpen = false;
+        _selectedMediaIndex = 0;
+        _selectedMediaId = null;
+      }),
+      onComputerSelected: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const VirtualStoreCatalogComputerScreen()),
       ),
     );
   }
@@ -721,8 +881,8 @@ class _VirtualStoreExperienceScreenState
             ),
             Text(
               design.navigationMode == 'easyBrowse'
-                  ? 'Tap a zone to browse. No walking controls required.'
-                  : 'Use W/A/S/D or the arrow keys to move between zones. Press E / Enter to interact.',
+                  ? 'Tap a zone to browse. Drag the 3D view to look around and use its arrow pad to walk.'
+                  : 'Drag the 3D view for a 360° look. Use its on-screen arrow pad to walk; use W/A/S/D or the zone chips to change areas. Press E / Enter to interact.',
               style: const TextStyle(color: Colors.white70, fontSize: 11),
             ),
             const SizedBox(height: 10),
@@ -794,8 +954,14 @@ class _VirtualStoreExperienceScreenState
     if (_safeZoneIndex == aisleCount) {
       return _buildCollectionsJumpPanel(design);
     }
-    if (_safeZoneIndex > aisleCount) {
+    if (_safeZoneIndex == aisleCount + 1) {
       return _buildPlaylistsJumpPanel(design);
+    }
+    if (_safeZoneIndex == aisleCount + 2) {
+      return _buildComputerJumpPanel(design);
+    }
+    if (_safeZoneIndex == aisleCount + 3) {
+      return _buildTheaterCorridorPanel(design);
     }
     if (aisle == null) return const SizedBox.shrink();
 
@@ -999,6 +1165,50 @@ class _VirtualStoreExperienceScreenState
         ),
       );
 
+  Widget _buildComputerJumpPanel(VirtualStoreDesign design) => Card(
+        color: Color(design.shelfColor).withValues(alpha: .88),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [Icon(Icons.computer_rounded, size: 30, color: Color(design.accentColor)), const SizedBox(width: 9), const Text('Catalog Computer', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900))]),
+              const SizedBox(height: 6),
+              const Text('Search your collection by movie, show, DVD, Blu-ray, 4K Ultra HD, CD, album or track. Ask the computer for a suggestion by mood, runtime or favorites.', style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.4)),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const VirtualStoreCatalogComputerScreen())),
+                icon: const Icon(Icons.search_rounded),
+                label: const Text('Use catalog computer'),
+              ),
+            ],
+          ),
+        ),
+      );
+
+  Widget _buildTheaterCorridorPanel(VirtualStoreDesign design) => Card(
+        color: Color(design.shelfColor).withValues(alpha: .86),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.meeting_room_rounded, size: 34, color: Color(design.accentColor)),
+              const SizedBox(height: 8),
+              Text('Private Theater Corridor', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(design.accentColor))),
+              const SizedBox(height: 5),
+              const Text('Step out of the store aisles and manage Room 1, Room 2, Room 3, Room 4, and any rooms you add.', style: TextStyle(color: Colors.white70, fontSize: 12)),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const TheaterHomeScreen())),
+                icon: const Icon(Icons.door_front_door_rounded),
+                label: const Text('Enter Theater Rooms'),
+              ),
+            ],
+          ),
+        ),
+      );
+
   Widget _buildCuratedCollections(VirtualStoreDesign design) {
     final collections = design.curatedCollections;
     return Column(
@@ -1120,6 +1330,50 @@ class _VirtualStoreExperienceScreenState
             icon: Icons.headphones_rounded,
             accent: Color(design.accentColor),
           ),
+          Builder(builder: (context) {
+            final albums = _ownedLibrary.where((media) {
+              final type = media.type.toLowerCase().replaceAll('_', ' ');
+              return type.contains('album') || type.contains('music');
+            }).toList(growable: false);
+            if (albums.isEmpty) return const SizedBox.shrink();
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 8),
+                  child: Text('ALBUM WALL', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.3)),
+                ),
+                SizedBox(
+                  height: 150,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: albums.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 9),
+                    itemBuilder: (context, index) {
+                      final album = albums[index];
+                      return SizedBox(
+                        width: 112,
+                        child: InkWell(
+                          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => MediaDetailsScreen(media: album))),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(8), child: SizedBox(width: double.infinity, child: CatalogPosterImage(media: album, fit: BoxFit.cover)))),
+                              const SizedBox(height: 5),
+                              Text(album.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800)),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Align(alignment: Alignment.centerLeft, child: OutlinedButton.icon(onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const MusicScreen())), icon: const Icon(Icons.library_music_rounded), label: const Text('Open full music library'))),
+                const SizedBox(height: 12),
+              ],
+            );
+          }),
           if (playlists.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
@@ -1250,11 +1504,13 @@ class _StoreInteriorWall extends StatelessWidget {
     final posters = configuredPosters.isNotEmpty
         ? configuredPosters
         : (design.showWallPosters
-            ? posterMedia.take(5).map((media) => <String, dynamic>{
-                'label': media.title,
-                'mediaId': media.id,
-                'placement': 'Around the store',
-              }).toList(growable: false)
+            ? (posterMedia.toList()..shuffle(math.Random(DateTime.now().day + design.name.hashCode)))
+                .take(12)
+                .map((media) => <String, dynamic>{
+                  'label': media.title,
+                  'mediaId': media.id,
+                  'placement': 'Around the store',
+                }).toList(growable: false)
             : <Map<String, dynamic>>[]);
     final posterGroups = <String, List<Map<String, dynamic>>>{};
     for (final poster in posters) {

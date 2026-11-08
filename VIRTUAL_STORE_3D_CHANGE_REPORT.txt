@@ -1,0 +1,36 @@
+MyOwnStreamingService — Virtual Store 3D Update
+
+Summary
+- Replaced the former flat 2.5D walkway preview with a real Flutter Scene 3D scene using the project's existing flutter_scene dependency.
+- Procedurally built a room shell, floor, multiple aisle racks, repeated physical media cases, overhead aisle sign structures, wall poster frames, entrance counter, collection gallery pedestals, and a music/CD listening area.
+- Loaded the project's existing GLB DVD, Blu-ray, Steelbook, CD, movie collection, series collection, music collection, and playlist box models as display props. If an optional GLB fails, the procedural store still renders.
+- The camera now moves to the selected aisle/gallery/lounge zone. Dragging inside the 3D view changes the camera look direction.
+- Existing owned-library media browsing and item inspection remain connected below the 3D environment.
+- Existing wall-poster selection now uses a daily/profile-design seeded shuffle of up to eight accessible owned media items instead of always choosing the first five.
+- Added Flutter GPU opt-in for iOS/macOS and Linux. Android and Windows already had it enabled.
+- Added a Flutter SDK constraint of >=3.47.0 to match flutter_scene 0.24.3 requirements.
+
+Files added
+- lib/widgets/virtual_store_3d_scene.dart
+- VIRTUAL_STORE_3D_SETUP.md
+- VIRTUAL_STORE_3D_CHANGE_REPORT.txt
+
+Files modified
+- lib/virtual_store_experience_screen.dart
+- pubspec.yaml
+- ios/Runner/Info.plist
+- macos/Runner/Info.plist
+- linux/runner/my_application.cc
+
+Backend
+- No Backend files changed.
+
+Validation
+- All project GLB files passed header/length integrity checks.
+- iOS and macOS Info.plist files parsed successfully and contain FLTEnableFlutterGPU=true.
+- Changed Dart files passed delimiter-balance/source-structure checks.
+- Flutter/Dart SDK is not installed in this environment, so flutter analyze, flutter test, and device rendering could not be run here.
+
+Known scope of this iteration
+- This is a genuine 3D rendered environment with a perspective camera, not a 2.5D transform mockup.
+- Movement between zones is camera teleport/section navigation, and drag gestures look around. Continuous free-roam WASD movement, collision/physics, raycast selection directly on an individual 3D case, and artwork textures mapped onto the 3D poster frames remain future refinements. The existing 2D owned-library browser remains the title-selection fallback and detail-opening path.

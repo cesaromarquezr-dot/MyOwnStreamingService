@@ -7,10 +7,12 @@ version: 1.0.0+1
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.47.0"
 
 dependencies:
   flutter:
     sdk: flutter
+
   flutter_localizations:
     sdk: flutter
     
@@ -54,3 +56,6 @@ flutter:
   uses-material-design: true
   assets:
     - .env
+    - assets/3d/cases/
+    - assets/3d/collections/
+    - assets/3d/kiosk/

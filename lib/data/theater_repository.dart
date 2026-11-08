@@ -15,7 +15,10 @@ class TheaterRepository {
           type.contains('film') ||
           type.contains('tv') ||
           type.contains('special') ||
-          type.contains('episode');
+          type.contains('episode') ||
+          type.contains('show') ||
+          type.contains('series') ||
+          type.contains('television');
     }).toList(growable: false);
   }
 

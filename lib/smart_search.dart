@@ -111,12 +111,20 @@ class SmartSearch {
           (compactQuery.length >= 4 &&
               _compactTitleKey(normalizedDescription).contains(compactQuery));
       final plotMetadata = <String>[
+        media.title,
         description,
         ...media.genres,
         ...media.tags,
+        ...media.themes,
+        ...media.tones,
         ...media.characters,
         ...media.franchiseNames,
         ...media.actors,
+        ...media.culturalSettings,
+        ...media.culturalInspirations,
+        media.countryOfOrigin ?? '',
+        media.originalLanguage ?? '',
+        media.language ?? '',
       ].join(' ');
       final semanticPlotScore = SmartSearchIntelligence.semanticPlotScore(
         query,

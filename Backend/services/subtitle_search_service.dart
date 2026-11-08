@@ -207,10 +207,10 @@ class SubtitleSearchService {
     required String accountId,
     required String query,
   }) {
-    final normalizedQuery = query.trim().toLowerCase();
-    if (normalizedQuery.length < 2 || normalizedQuery.length > 160) {
+    final normalizedQuery = _normalizeSearchText(query);
+    if (normalizedQuery.length < 2 || normalizedQuery.length > 500) {
       throw const FormatException(
-        'Search terms must contain 2 to 160 characters.',
+        'Search terms must contain 2 to 500 characters.',
       );
     }
 
@@ -219,28 +219,177 @@ class SubtitleSearchService {
       throw StateError('Index subtitles before searching dialogue.');
     }
 
-    final terms = normalizedQuery
-        .split(RegExp(r'\s+'))
-        .where((term) => term.isNotEmpty)
-        .toSet();
-    final matches = <SubtitleSearchCue>[];
-    var hasMore = false;
-    for (final cue in cues) {
-      final text = cue.text.toLowerCase();
-      if (terms.every(text.contains)) {
-        matches.add(cue);
-        if (matches.length > _maximumResults) {
-          hasMore = true;
-          break;
+    final queryTerms = _searchTerms(normalizedQuery);
+    if (queryTerms.isEmpty) {
+      throw const FormatException('Enter meaningful dialogue words to search.');
+    }
+
+    // Subtitle sentences are often split over several short SRT/VTT cues.
+    // Search a bounded rolling window so a remembered line can span adjacent
+    // caption cards instead of requiring every word to live in one cue.
+    // Pre-tokenize each cue once; the index can contain up to 100,000 cues.
+    final cueWords = cues
+        .map((cue) => _normalizeSearchText(cue.text)
+            .split(' ')
+            .where((word) => word.isNotEmpty)
+            .toSet())
+        .toList(growable: false);
+    final minimumCoverage = queryTerms.length <= 3 ? 0.999 : 0.68;
+    final candidates = <_ScoredCue>[];
+    for (var start = 0; start < cues.length; start++) {
+      final first = cues[start];
+      final combined = StringBuffer();
+      final candidateWords = <String>{};
+      var bestEnd = -1;
+      var bestScore = 0.0;
+      var bestText = '';
+      final lastAllowed = (start + 15).clamp(0, cues.length - 1);
+
+      for (var end = start; end <= lastAllowed; end++) {
+        final cue = cues[end];
+        if (cue.mediaId != first.mediaId) break;
+        if (end > start && cue.startMs - first.startMs > 90000) break;
+        if (combined.length > 0) combined.write(' ');
+        combined.write(cue.text);
+        final text = combined.toString();
+        if (text.length > 1800) break;
+        candidateWords.addAll(cueWords[end]);
+
+        final score = _termCoverage(
+          queryTerms,
+          candidateWords,
+          minimumCoverage: minimumCoverage,
+        );
+        if (score > bestScore) {
+          bestScore = score;
+          bestEnd = end;
+          bestText = text;
         }
+        if (score >= 0.999) break;
+      }
+
+      if (bestEnd >= start && bestScore >= minimumCoverage) {
+        candidates.add(_ScoredCue(
+          cue: SubtitleSearchCue(
+            mediaId: first.mediaId,
+            startMs: first.startMs,
+            text: bestText.length > 700
+                ? '${bestText.substring(0, 697)}…'
+                : bestText,
+          ),
+          score: bestScore,
+        ));
       }
     }
+
+    candidates.sort((left, right) {
+      final score = right.score.compareTo(left.score);
+      if (score != 0) return score;
+      return left.cue.startMs.compareTo(right.cue.startMs);
+    });
+
+    // Overlapping rolling windows are the same remembered scene. Keep the
+    // strongest hit per nearby timestamp while preserving separate episodes.
+    final deduplicated = <_ScoredCue>[];
+    for (final candidate in candidates) {
+      final duplicate = deduplicated.any((existing) =>
+          existing.cue.mediaId == candidate.cue.mediaId &&
+          (existing.cue.startMs - candidate.cue.startMs).abs() <= 12000);
+      if (!duplicate) deduplicated.add(candidate);
+      if (deduplicated.length > _maximumResults) break;
+    }
+
+    final hasMore = deduplicated.length > _maximumResults;
     return SubtitleSearchResult(
       matches: List<SubtitleSearchCue>.unmodifiable(
-        matches.take(_maximumResults),
+        deduplicated.take(_maximumResults).map((entry) => entry.cue),
       ),
       hasMore: hasMore,
     );
+  }
+
+  static String _normalizeSearchText(String value) => value
+      .toLowerCase()
+      .replaceAll(RegExp(r"[^a-z0-9']+"), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+
+  static Set<String> _searchTerms(String value) {
+    const stopWords = <String>{
+      'a', 'an', 'the', 'and', 'or', 'but', 'then', 'when', 'where', 'what',
+      'who', 'why', 'how', 'to', 'of', 'in', 'on', 'at', 'by', 'as', 'is',
+      'are', 'was', 'were', 'be', 'been', 'being', 'i', 'me', 'my', 'you',
+      'your', 'we', 'our', 'they', 'them', 'he', 'she', 'it', 'this', 'that',
+      'do', 'does', 'did', 'just', 'think', 'know', 'answer', 'say', 'said',
+    };
+    final words = value
+        .split(' ')
+        .map((word) => word.trim())
+        .where((word) => word.length >= 2 && !stopWords.contains(word))
+        .toSet();
+    return words.isEmpty
+        ? value.split(' ').where((word) => word.length >= 2).toSet()
+        : words;
+  }
+
+  static double _termCoverage(
+    Set<String> queryTerms,
+    Set<String> candidateWords, {
+    required double minimumCoverage,
+  }) {
+    if (candidateWords.isEmpty) return 0;
+    final exactMatches = queryTerms.intersection(candidateWords);
+    final minimumMatched = (queryTerms.length * minimumCoverage).ceil();
+    if (exactMatches.length >= minimumMatched) {
+      return exactMatches.length / queryTerms.length;
+    }
+
+    // Fuzzy edit-distance checks are relatively expensive. Only run them when
+    // a small number of misspelled words could lift this window to the match
+    // threshold; ordinary non-matching subtitle windows stay inexpensive.
+    final fuzzyBudget = queryTerms.length <= 3
+        ? 0
+        : (queryTerms.length * 0.15).ceil().clamp(1, 3).toInt();
+    if (exactMatches.length + fuzzyBudget < minimumMatched) {
+      return exactMatches.length / queryTerms.length;
+    }
+
+    var matched = exactMatches.length;
+    for (final term in queryTerms.difference(exactMatches)) {
+      final maximumDistance = term.length >= 7 ? 2 : 1;
+      final foundTypo = candidateWords.any((word) =>
+          (word.length - term.length).abs() <= maximumDistance &&
+          _editDistanceAtMost(word, term, maximumDistance));
+      if (foundTypo) {
+        matched++;
+        if (matched >= minimumMatched) return matched / queryTerms.length;
+      }
+    }
+    return matched / queryTerms.length;
+  }
+
+  static bool _editDistanceAtMost(String left, String right, int maximum) {
+    if (left == right) return true;
+    if ((left.length - right.length).abs() > maximum) return false;
+    var previous = List<int>.generate(right.length + 1, (index) => index);
+    for (var i = 1; i <= left.length; i++) {
+      final current = List<int>.filled(right.length + 1, maximum + 1);
+      current[0] = i;
+      var rowMinimum = current[0];
+      for (var j = 1; j <= right.length; j++) {
+        final substitution =
+            left.codeUnitAt(i - 1) == right.codeUnitAt(j - 1) ? 0 : 1;
+        current[j] = <int>[
+          current[j - 1] + 1,
+          previous[j] + 1,
+          previous[j - 1] + substitution,
+        ].reduce((a, b) => a < b ? a : b);
+        if (current[j] < rowMinimum) rowMinimum = current[j];
+      }
+      if (rowMinimum > maximum) return false;
+      previous = current;
+    }
+    return previous[right.length] <= maximum;
   }
 
   static List<SubtitleSearchCue> parse(
@@ -361,6 +510,12 @@ class SubtitleSearchService {
     }
     _indexes[accountId] = List<SubtitleSearchCue>.unmodifiable(cues);
   }
+}
+
+class _ScoredCue {
+  const _ScoredCue({required this.cue, required this.score});
+  final SubtitleSearchCue cue;
+  final double score;
 }
 
 class _MediaFile {

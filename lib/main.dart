@@ -2733,7 +2733,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         break;
       case InterfaceExperienceMode.theater:
         icon = Icons.theaters_rounded;
-        detail = 'Customize the private cinema lobby, lighting, ambience, countdown and pre-show experience.';
+        detail = 'Customize the private theater room experience, ambience and pre-show presentation. Room names and playback status are managed in Theater Rooms.';
         break;
     }
     return Card(
@@ -5023,7 +5023,7 @@ void _showGlobalMore() {
       onDialogueSearch: () {
         Navigator.of(sheetContext).pop();
         push(const DialogueSearchScreen(),
-            routeName: '/app/page/dialogue-search');
+            routeName: '/app/media/identify');
       },
       onGroupRecommendations: () {
         Navigator.of(sheetContext).pop();
@@ -5476,7 +5476,7 @@ class _MoreActionsSheet extends StatelessWidget {
             [
               _MoreChoice('Virtual Store', 'Explore your owned media catalog', Icons.storefront_outlined, onVirtualStore),
               _MoreChoice('Virtual Kiosk', 'Self-service browsing for your library', Icons.point_of_sale_outlined, onKiosk),
-              _MoreChoice('Private Theater', 'Create a free at-home screening', Icons.theaters_outlined, onTheater),
+              _MoreChoice('Private Theater', 'Manage rooms and current playback', Icons.theaters_outlined, onTheater),
               _MoreChoice('Disc & Box Set Collections', 'Browse multi-disc editions and TV-special sets', Icons.album_outlined, onCollections),
               _MoreChoice('Media Experience', 'Open disc menus, scenes, audio and bonus features', Icons.slow_motion_video_rounded, onMediaExperience),
             ],
@@ -5541,8 +5541,8 @@ class _MoreActionsSheet extends StatelessWidget {
               onHistoryCalendar),
           _moreCard(
               Icons.subtitles_rounded,
-              'Search Dialogue',
-              'Find scenes from indexed movie and episode subtitles',
+              'Identify Movie or Show',
+              'Find a title from remembered dialogue, a scene, or a description',
               onDialogueSearch),
           _moreCard(
               Icons.how_to_vote_rounded,
@@ -5926,6 +5926,13 @@ class _HomeScreenState extends State<HomeScreen>
                 MaterialPageRoute<void>(
                   settings: const RouteSettings(name: '/app/music/identify'),
                   builder: (_) => const SongIdentificationScreen(),
+                ),
+              ),
+              onIdentifyMedia: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  settings: const RouteSettings(name: '/app/media/identify'),
+                  builder: (_) => const DialogueSearchScreen(),
                 ),
               ),
               onWrapped: () => Navigator.push(

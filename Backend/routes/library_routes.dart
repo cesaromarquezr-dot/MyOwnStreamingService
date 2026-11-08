@@ -21,10 +21,12 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../middleware/authentication.dart';
+import '../config.dart';
 import '../arm/media_rights_policy.dart';
 import '../database/database.dart';
 import '../services/group_recommendation_service.dart';
 import '../services/subtitle_search_service.dart';
+import '../services/open_subtitles_service.dart';
 import '../supabase_store.dart';
 
 class LibraryRoutes {
@@ -41,6 +43,8 @@ class LibraryRoutes {
   static const String _membershipPath = '/api/v1/library/membership';
   static const String _subtitleIndexPath = '/api/v1/library/subtitles/index';
   static const String _subtitleSearchPath = '/api/v1/library/subtitles/search';
+  static const String _openSubtitlesPath = '/api/v1/library/subtitles/opensubtitles';
+  static const String _openSubtitlesStatusPath = '/api/v1/library/subtitles/opensubtitles/status';
 
   // Membership overrides live outside the media scanner's index, so a full
   // scan or server restart cannot resurrect a removed item. Writes are queued
@@ -60,15 +64,21 @@ class LibraryRoutes {
   final AuthenticationMiddleware authentication;
   final SupabaseStore store;
   final SubtitleSearchService subtitleSearchService;
+  final OpenSubtitlesService openSubtitlesService;
   final GroupRecommendationService groupRecommendationService;
 
   LibraryRoutes({
     required this.authentication,
     SupabaseStore? store,
     SubtitleSearchService? subtitleSearchService,
+    OpenSubtitlesService? openSubtitlesService,
     GroupRecommendationService? groupRecommendationService,
   })  : store = store ?? SupabaseStore.instance,
         subtitleSearchService = subtitleSearchService ?? SubtitleSearchService(),
+        openSubtitlesService = openSubtitlesService ?? OpenSubtitlesService(
+          apiKey: AppConfig.openSubtitlesApiKey,
+          userAgent: AppConfig.openSubtitlesUserAgent,
+        ),
         groupRecommendationService = groupRecommendationService ??
             GroupRecommendationService(Database.instance);
 
@@ -103,6 +113,35 @@ class LibraryRoutes {
     final path = request.uri.path;
 
     try {
+      if (request.method == 'GET' && path == _openSubtitlesStatusPath) {
+        await _json(request.response, HttpStatus.ok, <String, dynamic>{
+          'success': true,
+          ...openSubtitlesService.status(),
+        });
+        return;
+      }
+
+      if (request.method == 'GET' && path == _openSubtitlesPath) {
+        final query = request.uri.queryParameters['q']?.trim();
+        final tmdbId = request.uri.queryParameters['tmdb_id']?.trim();
+        final type = request.uri.queryParameters['type']?.trim() ?? 'all';
+        final languages = request.uri.queryParameters['languages']?.trim() ?? 'en,es';
+        final year = int.tryParse(request.uri.queryParameters['year'] ?? '');
+        final result = await openSubtitlesService.search(
+          query: query,
+          tmdbId: tmdbId,
+          type: type,
+          languages: languages,
+          year: year,
+        );
+        await _json(
+          request.response,
+          result['configured'] == false ? HttpStatus.serviceUnavailable : HttpStatus.ok,
+          result,
+        );
+        return;
+      }
+
       if (request.method == 'POST' && path == _subtitleIndexPath) {
         final root = _mediaRoot();
         if (!await root.exists()) {
@@ -650,6 +689,19 @@ class LibraryRoutes {
         <String, dynamic>{
           'success': false,
           'error': 'Library route not found.',
+        },
+      );
+    } on OpenSubtitlesUpstreamException catch (error, stackTrace) {
+      stderr.writeln('OpenSubtitles request failed: ${error.statusCode}');
+      stderr.writeln(stackTrace);
+      await _json(
+        request.response,
+        error.statusCode == HttpStatus.gatewayTimeout
+            ? HttpStatus.gatewayTimeout
+            : HttpStatus.badGateway,
+        <String, dynamic>{
+          'success': false,
+          'error': 'OpenSubtitles is temporarily unavailable. Try again later.',
         },
       );
     } on FormatException catch (error) {

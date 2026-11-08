@@ -32,7 +32,7 @@ extension InterfaceExperienceModeLabel on InterfaceExperienceMode {
       case InterfaceExperienceMode.redbox:
         return 'A streamlined, remote-friendly kiosk for browsing and playing titles already in your library. No checkout or payment.';
       case InterfaceExperienceMode.theater:
-        return 'A private home-cinema lobby for choosing an owned movie or TV special and starting a movie night. No tickets or paid showtimes.';
+        return 'A private multi-room theater dashboard with live playback status, named rooms, and direct access to your listening lounge. No tickets or paid showtimes.';
     }
   }
 

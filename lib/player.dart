@@ -17,6 +17,7 @@ import 'playback_interruption_bridge.dart';
 import 'playback_queue_store.dart';
 import 'profile_content_safety.dart';
 import 'core/services/original_language_defaults.dart';
+import 'stores/theater_store.dart';
 
 
 class PlayerScreen extends StatefulWidget {
@@ -24,11 +25,13 @@ class PlayerScreen extends StatefulWidget {
 
   /// Optional absolute start offset used when tuning into a scheduled My TV program.
   final int? initialPositionSeconds;
+  final String? theaterRoomId;
 
   const PlayerScreen({
     super.key,
     required this.media,
     this.initialPositionSeconds,
+    this.theaterRoomId,
   });
 
   @override
@@ -65,6 +68,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   final DateTime _qoeStartedAt = DateTime.now();
   bool _qoeReadyLogged = false;
   bool _initialScheduledSeekApplied = false;
+  String? _lastTheaterStatus;
+  DateTime? _lastTheaterProgressSync;
 
   bool get _usesAdaptivePlayback {
     final value = widget.media.playbackUrl?.trim() ?? '';
@@ -100,11 +105,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
         PlaybackInterruptionBridge.attach(
           owner: this,
           title: widget.media.title,
+          roomId: widget.theaterRoomId,
           pause: _pauseYoutubeVideo,
           resume: _playYoutubeVideo,
           savePosition: () {
             AppController.instance.updatePlaybackProgress(widget.media.id, position);
             unawaited(_syncIndependentPlaybackSession());
+          },
+          stop: () {
+            _pauseYoutubeVideo();
+            _updateTheaterRoomStatus('stopped');
+            if (mounted) Navigator.of(context).maybePop();
           },
         );
       }
@@ -342,9 +353,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     if (value.playerState == PlayerState.playing) {
       _startControlsTimer();
+      _updateTheaterRoomStatus('previewing');
+    } else if (value.playerState == PlayerState.paused) {
+      _updateTheaterRoomStatus('paused');
     }
 
     if (value.playerState == PlayerState.ended && !videoFinished) {
+      _updateTheaterRoomStatus('completed');
       unawaited(_recordQoe('completed'));
       finishVideo();
     }
@@ -370,6 +385,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
             .toDouble();
 
     xrayPlaybackPosition.value = state.position;
+    if (youtubeController!.value.playerState == PlayerState.playing) {
+      _updateTheaterRoomStatus('previewing', state.position.inSeconds.toDouble());
+    }
 
     if ((position - normalizedPosition).abs() > 0.005) {
       position = normalizedPosition;
@@ -386,6 +404,30 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  void _updateTheaterRoomStatus(String status, [double? positionSeconds]) {
+    final roomId = widget.theaterRoomId;
+    if (roomId == null || roomId.isEmpty) return;
+    final now = DateTime.now();
+    if (_lastTheaterStatus == status && positionSeconds == null) return;
+    if (_lastTheaterStatus == status &&
+        positionSeconds != null &&
+        _lastTheaterProgressSync != null &&
+        now.difference(_lastTheaterProgressSync!) < const Duration(seconds: 15)) {
+      return;
+    }
+    _lastTheaterStatus = status;
+    if (positionSeconds != null) _lastTheaterProgressSync = now;
+    unawaited(TheaterStore.instance.updatePlaybackState(
+      roomId: roomId,
+      mediaId: widget.media.id,
+      status: status,
+      positionSeconds: positionSeconds ??
+          (widget.media.runtimeMinutes == null
+              ? null
+              : position * widget.media.runtimeMinutes! * 60),
+    ));
+  }
+
   @override
 
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
@@ -395,6 +437,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
     PlaybackInterruptionBridge.detach(this);
 
     unawaited(_syncIndependentPlaybackSession(state: 'stopped'));
+    if (widget.theaterRoomId != null && _lastTheaterStatus != 'completed') {
+      _updateTheaterRoomStatus('stopped');
+    }
     _playbackSessionId = null;
 
     youtubeVideoStateSubscription?.cancel();
@@ -1044,6 +1089,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return AdaptiveStreamingPlayer(
         media: widget.media,
         initialPositionSeconds: widget.initialPositionSeconds,
+        theaterRoomId: widget.theaterRoomId,
       );
     }
     final controller = AppController.instance;

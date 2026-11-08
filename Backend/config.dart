@@ -33,6 +33,9 @@ static String get youtubeApiKey => Platform.environment['YOUTUBE_API_KEY']?.trim
 static String get musixmatchApiKey => Platform.environment['MUSIXMATCH_API_KEY']?.trim() ?? '';
 /// Backend-only AudD token for song recognition from a short microphone sample.
 static String get auddApiToken => Platform.environment['AUDD_API_TOKEN']?.trim() ?? '';
+/// OpenSubtitles application API key. Backend-only; never expose to Flutter.
+static String get openSubtitlesApiKey => Platform.environment['OPENSUBTITLES_API_KEY']?.trim() ?? '';
+static String get openSubtitlesUserAgent => Platform.environment['OPENSUBTITLES_USER_AGENT']?.trim() ?? 'MyOwnStreamingService/1.0';
 static String get paypalClientId => Platform.environment['PAYPAL_CLIENT_ID']?.trim() ?? '';
 static String get paypalClientSecret => Platform.environment['PAYPAL_CLIENT_SECRET']?.trim() ?? '';
 static String get paypalBaseUrl => Platform.environment['PAYPAL_BASE_URL']?.trim() ?? 'https://api-m.sandbox.paypal.com';
