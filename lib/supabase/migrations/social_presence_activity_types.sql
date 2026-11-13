@@ -21,7 +21,7 @@ BEGIN
     ADD CONSTRAINT social_profile_presence_activity_type_allowed_check
     CHECK (
       activity_type IS NULL OR activity_type IN (
-        'watching', 'listening', 'shopping', 'ordering_food', 'planning_marathon'
+        'watching', 'listening', 'browsing', 'shopping', 'ordering_food', 'planning_marathon'
       )
     );
 END $$;

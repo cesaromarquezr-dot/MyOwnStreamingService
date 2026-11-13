@@ -844,6 +844,7 @@ class OwnedAlbumDetailsScreen extends StatefulWidget {
     required this.localTracks,
     this.isOwned = true,
     this.resolveSpotifyMetadata = true,
+    this.onPlayLocalTrack,
   });
 
   final MediaItem? media;
@@ -856,6 +857,7 @@ class OwnedAlbumDetailsScreen extends StatefulWidget {
   final bool isOwned;
   /// Set false if the caller has already attempted the same catalog lookup.
   final bool resolveSpotifyMetadata;
+  final ValueChanged<Map<String, dynamic>>? onPlayLocalTrack;
 
   @override
   State<OwnedAlbumDetailsScreen> createState() => _OwnedAlbumDetailsScreenState();
@@ -948,6 +950,7 @@ class _OwnedAlbumDetailsScreenState extends State<OwnedAlbumDetailsScreen> {
               localMedia: media,
               localArtistName: artistName,
               localTracks: widget.localTracks,
+              onPlayLocalTrack: widget.onPlayLocalTrack,
             );
           }
           // Never make the local library details disappear while the catalog
@@ -961,6 +964,7 @@ class _OwnedAlbumDetailsScreenState extends State<OwnedAlbumDetailsScreen> {
             localTracks: widget.localTracks,
             isOwned: widget.isOwned,
             lookupPending: snapshot.connectionState != ConnectionState.done,
+            onPlayLocalTrack: widget.onPlayLocalTrack,
           );
         },
       );
@@ -975,6 +979,7 @@ class _OwnedAlbumLocalDetailsScreen extends StatelessWidget {
     required this.localTracks,
     this.isOwned = true,
     this.lookupPending = false,
+    this.onPlayLocalTrack,
   });
 
   final MediaItem? media;
@@ -984,6 +989,7 @@ class _OwnedAlbumLocalDetailsScreen extends StatelessWidget {
   final List<Map<String, dynamic>> localTracks;
   final bool isOwned;
   final bool lookupPending;
+  final ValueChanged<Map<String, dynamic>>? onPlayLocalTrack;
 
   String _durationLabel(dynamic value) {
     final milliseconds = int.tryParse(value?.toString() ?? '') ?? 0;
@@ -1079,6 +1085,19 @@ class _OwnedAlbumLocalDetailsScreen extends StatelessWidget {
               ListTile(
                 dense: true,
                 contentPadding: EdgeInsets.zero,
+                onTap: onPlayLocalTrack != null &&
+                        (localTracks[index]['audioUrl']?.toString().trim().isNotEmpty ?? false)
+                    ? () => onPlayLocalTrack!(localTracks[index])
+                    : null,
+                trailing: onPlayLocalTrack == null
+                    ? null
+                    : IconButton(
+                        tooltip: 'Play from this album',
+                        icon: const Icon(Icons.play_arrow_rounded),
+                        onPressed: (localTracks[index]['audioUrl']?.toString().trim().isNotEmpty ?? false)
+                            ? () => onPlayLocalTrack!(localTracks[index])
+                            : null,
+                      ),
                 leading: SizedBox(width: 28, child: Center(child: Text(
                   (localTracks[index]['trackNumber'] ?? (index + 1)).toString(),
                   style: const TextStyle(color: Colors.white54, fontSize: 11),

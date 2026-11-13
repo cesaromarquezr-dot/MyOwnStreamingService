@@ -18,6 +18,8 @@ import 'playback_queue_store.dart';
 import 'profile_content_safety.dart';
 import 'core/services/original_language_defaults.dart';
 import 'stores/theater_store.dart';
+import 'core/services/recent_playback_store.dart';
+import 'presence/account_profile_presence_service.dart';
 
 
 class PlayerScreen extends StatefulWidget {
@@ -26,12 +28,18 @@ class PlayerScreen extends StatefulWidget {
   /// Optional absolute start offset used when tuning into a scheduled My TV program.
   final int? initialPositionSeconds;
   final String? theaterRoomId;
+  final String? wrappedContextType;
+  final String? wrappedContextId;
+  final String? wrappedContextTitle;
 
   const PlayerScreen({
     super.key,
     required this.media,
     this.initialPositionSeconds,
     this.theaterRoomId,
+    this.wrappedContextType,
+    this.wrappedContextId,
+    this.wrappedContextTitle,
   });
 
   @override
@@ -58,6 +66,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   String? selectedSubtitle;
 
   String? _playbackSessionId;
+  late final String? _playbackProfileId;
+  bool _profileChangedDuringPlayback = false;
   YoutubePlayerController? youtubeController;
   bool youtubePlayerReady = false;
   bool youtubeUrlInvalid = false;
@@ -87,6 +97,27 @@ class _PlayerScreenState extends State<PlayerScreen> {
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
+    _playbackProfileId = AppController.instance.currentProfile?.id;
+    AppController.instance.addListener(_onAppProfileChanged);
+    unawaited(RecentPlaybackStore.recordMedia(
+      media: widget.media,
+      profileId: _playbackProfileId,
+      api: AppController.instance.backendApi,
+    ));
+    final activeProfile = AppController.instance.currentProfile;
+    if (activeProfile != null) {
+      final matchingRooms = TheaterStore.instance.rooms.where(
+        (room) => room.id == widget.theaterRoomId,
+      );
+      final roomName = widget.theaterRoomId == null
+          ? 'Now Playing'
+          : (matchingRooms.isEmpty ? 'Private Theater' : matchingRooms.first.name);
+      AccountProfilePresenceService.instance.start(
+        profileId: activeProfile.id,
+        activityType: 'watching',
+        activityText: roomName,
+      );
+    }
     musicWasPlayingBeforeVideo =
         MusicPlaybackController.instance.pauseForVideo();
 
@@ -109,7 +140,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
           pause: _pauseYoutubeVideo,
           resume: _playYoutubeVideo,
           savePosition: () {
-            AppController.instance.updatePlaybackProgress(widget.media.id, position);
+            _savePlaybackProgress(position);
             unawaited(_syncIndependentPlaybackSession());
           },
           stop: () {
@@ -126,27 +157,56 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _startControlsTimer();
   }
 
+  bool get _canWritePlaybackProgress =>
+      !_profileChangedDuringPlayback &&
+      _playbackProfileId == AppController.instance.currentProfile?.id;
+
+  void _onAppProfileChanged() {
+    if (_playbackProfileId == AppController.instance.currentProfile?.id ||
+        _profileChangedDuringPlayback) {
+      return;
+    }
+    _profileChangedDuringPlayback = true;
+    youtubeController?.pauseVideo();
+    controlsTimer?.cancel();
+    if (mounted) setState(() => controlsVisible = true);
+  }
+
+  void _savePlaybackProgress(
+    double progress, {
+    int? positionSeconds,
+    int? durationSeconds,
+  }) {
+    if (!_canWritePlaybackProgress) return;
+    AppController.instance.updatePlaybackProgress(
+      widget.media.id,
+      progress,
+      positionSeconds: positionSeconds,
+      durationSeconds: durationSeconds,
+    );
+  }
+
   Future<void> _recordQoe(String event, {int? valueMs}) =>
       PlaybackQoeTelemetry.record(
         event: event,
         mediaId: widget.media.id,
         sessionId: _qoeSessionId,
-        profileId: AppController.instance.currentProfile?.id,
+        profileId: _playbackProfileId,
         valueMs: valueMs,
       );
 
   Future<void> _loadStreamingExperiencePreferences() async {
     final preferences = await StreamingExperiencePreferences.load(
-      profileId: AppController.instance.currentProfile?.id,
+      profileId: _playbackProfileId,
     );
-    if (!mounted) return;
+    if (!mounted || !_canWritePlaybackProgress) return;
 
     final originalLanguage =
         OriginalLanguageDefaults.resolveForMedia(widget.media);
     final audioTracks = widget.media.audioTracks;
     final subtitleTracks = widget.media.subtitles;
     final savedTracks = await PlaybackTrackSelectionStore.load(
-      profileId: AppController.instance.currentProfile?.id ?? 'default',
+      profileId: _playbackProfileId ?? 'default',
       mediaId: widget.media.id,
     );
     if (!mounted) return;
@@ -191,7 +251,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final controller = AppController.instance;
     final profile = controller.currentProfile;
     final api = controller.backendApi;
-    if (profile == null || !api.isAuthenticated) return;
+    if (profile == null || profile.id != _playbackProfileId || !api.isAuthenticated) return;
     try {
       final deviceId = await controller.ensureDeviceId();
       final result = await api.createPlaybackSession(
@@ -204,6 +264,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _playbackSessionId = result['session'] is Map
           ? (result['session'] as Map)['id']?.toString()
           : null;
+      if (!_canWritePlaybackProgress) {
+        await _syncIndependentPlaybackSession(state: 'stopped');
+        return;
+      }
       await _syncIndependentPlaybackSession(state: 'playing');
     } catch (_) {
       // Playback remains local if the optional session telemetry is unavailable.
@@ -346,8 +410,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (widget.initialPositionSeconds != null && !_initialScheduledSeekApplied) {
         _initialScheduledSeekApplied = true;
         unawaited(_seekYoutubeBySeconds(widget.initialPositionSeconds!.clamp(0, 24 * 60 * 60)));
-      } else if (position > 0.0 && position < 1.0) {
-        _seekYoutubeByNormalizedPosition(position);
+      } else {
+        final savedSeconds = AppController.instance.playbackPositionSeconds[widget.media.id];
+        final savedDuration = AppController.instance.playbackDurationSeconds[widget.media.id];
+        if (savedSeconds != null && savedSeconds > 0 && savedDuration != null && savedDuration > 0) {
+          unawaited(_restoreSavedPlaybackPosition(savedSeconds));
+        } else if (position > 0.0 && position < 1.0) {
+          _seekYoutubeByNormalizedPosition(position);
+        }
       }
     }
 
@@ -392,9 +462,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if ((position - normalizedPosition).abs() > 0.005) {
       position = normalizedPosition;
 
-      AppController.instance.updatePlaybackProgress(
-        widget.media.id,
+      _savePlaybackProgress(
         normalizedPosition,
+        positionSeconds: state.position.inSeconds,
+        durationSeconds: duration.round(),
       );
       unawaited(_syncIndependentPlaybackSession());
 
@@ -435,6 +506,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     autoplayTimer?.cancel();
     controlsTimer?.cancel();
     PlaybackInterruptionBridge.detach(this);
+    AppController.instance.removeListener(_onAppProfileChanged);
 
     unawaited(_syncIndependentPlaybackSession(state: 'stopped'));
     if (widget.theaterRoomId != null && _lastTheaterStatus != 'completed') {
@@ -445,8 +517,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
     youtubeVideoStateSubscription?.cancel();
     youtubeController?.close();
     xrayPlaybackPosition.dispose();
-    if (musicWasPlayingBeforeVideo) {
+    if (musicWasPlayingBeforeVideo && _canWritePlaybackProgress) {
       MusicPlaybackController.instance.resumeAfterVideo();
+    }
+    final profileId = _canWritePlaybackProgress ? _playbackProfileId : null;
+    if (profileId != null) {
+      final musicIsActive = MusicPlaybackController.instance.isPlaying;
+      AccountProfilePresenceService.instance.updateActivity(
+        activityType: musicIsActive ? 'listening' : 'browsing',
+        activityText: musicIsActive ? 'Listening Lounge' : 'Browsing',
+      );
     }
 
     super.dispose();
@@ -551,7 +631,25 @@ class _PlayerScreenState extends State<PlayerScreen> {
     await controller.seekTo(
       seconds: seconds,
     );
+    _savePlaybackProgress(
+      normalizedPosition.clamp(0.0, 1.0).toDouble(),
+      positionSeconds: seconds.round(),
+      durationSeconds: duration.round(),
+    );
     unawaited(_recordQoe('seek', valueMs: (seconds * 1000).round()));
+  }
+
+  Future<void> _restoreSavedPlaybackPosition(int savedSeconds) async {
+    final controller = youtubeController;
+    if (controller == null || savedSeconds <= 0) return;
+    try {
+      final duration = await controller.duration;
+      if (duration <= 0) return;
+      final target = savedSeconds.clamp(0, duration.round()).toDouble();
+      await controller.seekTo(seconds: target);
+    } catch (_) {
+      // Resume is best-effort; playback must continue if the provider rejects a seek.
+    }
   }
 
   /// Performs `_seekYoutubeBySeconds` for this feature. Update this documentation when its contract changes.
@@ -615,12 +713,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       position = newPosition;
     });
 
-    final controller = AppController.instance;
-
-    controller.updatePlaybackProgress(
-      widget.media.id,
-      newPosition,
-    );
+    _savePlaybackProgress(newPosition);
     unawaited(_syncIndependentPlaybackSession());
 
     _seekYoutubeByNormalizedPosition(
@@ -653,10 +746,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     final controller = AppController.instance;
 
-    controller.updatePlaybackProgress(
-      widget.media.id,
-      1.0,
-    );
+    _savePlaybackProgress(1.0);
     unawaited(_syncIndependentPlaybackSession(state: 'completed'));
 
     controller.finishWatching(
@@ -953,7 +1043,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (!mounted) return;
     setState(() => selectedAudio = value);
     await PlaybackTrackSelectionStore.save(
-      profileId: AppController.instance.currentProfile?.id ?? 'default',
+      profileId: _playbackProfileId ?? 'default',
       mediaId: widget.media.id,
       kind: 'audio',
       value: value,
@@ -968,7 +1058,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       subtitlesEnabled = value != null;
     });
     await PlaybackTrackSelectionStore.save(
-      profileId: AppController.instance.currentProfile?.id ?? 'default',
+      profileId: _playbackProfileId ?? 'default',
       mediaId: widget.media.id,
       kind: 'subtitle',
       value: value ?? '',
@@ -1090,6 +1180,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
         media: widget.media,
         initialPositionSeconds: widget.initialPositionSeconds,
         theaterRoomId: widget.theaterRoomId,
+        wrappedContextType: widget.wrappedContextType,
+        wrappedContextId: widget.wrappedContextId,
+        wrappedContextTitle: widget.wrappedContextTitle,
       );
     }
     final controller = AppController.instance;

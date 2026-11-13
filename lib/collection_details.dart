@@ -598,7 +598,7 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
                   CatalogPosterImage(media: item, fit: fit),
               fallbackIcon: Icons.movie_outlined,
               onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                builder: (_) => MediaDetailsScreen(media: item),
+                builder: (_) => MediaDetailsScreen(media: item, wrappedContextType: 'collection', wrappedContextId: collection.id, wrappedContextTitle: collection.name),
               )),
             ))
         .toList(growable: false);
@@ -632,6 +632,9 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
             MaterialPageRoute(
               builder: (_) => MediaDetailsScreen(
                 media: media,
+                wrappedContextType: 'collection',
+                wrappedContextId: collection.id,
+                wrappedContextTitle: collection.name,
               ),
             ),
           );
@@ -717,6 +720,9 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
             MaterialPageRoute(
               builder: (_) => MediaDetailsScreen(
                 media: media,
+                wrappedContextType: 'collection',
+                wrappedContextId: collection.id,
+                wrappedContextTitle: collection.name,
               ),
             ),
           );
@@ -803,6 +809,9 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
         settings: const RouteSettings(name: '/app/player'),
         builder: (_) => PlayerScreen(
           media: media[index],
+          wrappedContextType: 'collection',
+          wrappedContextId: collection.id,
+          wrappedContextTitle: collection.name,
         ),
       ),
     );

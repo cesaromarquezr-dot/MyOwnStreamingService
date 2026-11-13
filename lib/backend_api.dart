@@ -20,6 +20,7 @@ part 'backend_api_parts/collaboration.dart';
 part 'backend_api_parts/devices.dart';
 part 'backend_api_parts/personal_experience.dart';
 part 'backend_api_parts/owned_experience.dart';
+part 'backend_api_parts/social_presence.dart';
 part 'backend_api_parts/support.dart';
 
 /// Implements the `BackendApiException` class for this feature or UI component.

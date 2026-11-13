@@ -15,10 +15,12 @@ class VirtualTheater3DScene extends StatefulWidget {
     super.key,
     required this.posterMedia,
     required this.onPosterSelected,
+    this.playbackActive = false,
   });
 
   final List<MediaItem> posterMedia;
   final ValueChanged<MediaItem> onPosterSelected;
+  final bool playbackActive;
 
   @override
   State<VirtualTheater3DScene> createState() => _VirtualTheater3DSceneState();
@@ -37,6 +39,7 @@ class _VirtualTheater3DSceneState extends State<VirtualTheater3DScene> {
   double _pitch = -.04;
   double _walkX = 0;
   double _walkZ = -6.4;
+  bool _cinemaMode = false;
 
   static const double _roomWidth = 22;
   static const double _roomDepth = 22;
@@ -44,6 +47,7 @@ class _VirtualTheater3DSceneState extends State<VirtualTheater3DScene> {
   @override
   void initState() {
     super.initState();
+    _cinemaMode = widget.playbackActive;
     _refreshPosters();
     _buildAuditorium();
   }
@@ -51,6 +55,9 @@ class _VirtualTheater3DSceneState extends State<VirtualTheater3DScene> {
   @override
   void didUpdateWidget(covariant VirtualTheater3DScene oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.playbackActive != widget.playbackActive) {
+      _cinemaMode = widget.playbackActive;
+    }
     final oldIds = oldWidget.posterMedia.map((item) => item.id).join('|');
     final newIds = widget.posterMedia.map((item) => item.id).join('|');
     if (oldIds != newIds) _refreshPosters();
@@ -270,6 +277,19 @@ class _VirtualTheater3DSceneState extends State<VirtualTheater3DScene> {
     });
   }
 
+  void _chooseViewingPosition(String position) {
+    setState(() {
+      _yaw = 0;
+      _pitch = -.04;
+      _walkX = 0;
+      _walkZ = switch (position) {
+        'Front' => 5.8,
+        'Rear' => -8.2,
+        _ => -1.3,
+      };
+    });
+  }
+
   @override
   void dispose() {
     for (final controller in _posterTextureControllers) {
@@ -338,6 +358,42 @@ class _VirtualTheater3DSceneState extends State<VirtualTheater3DScene> {
                       style: TextStyle(color: Colors.white70))
                   : const CircularProgressIndicator(),
             ),
+          if (_cinemaMode)
+            const Positioned.fill(
+              child: IgnorePointer(child: ColoredBox(color: Color(0x33000000))),
+            ),
+          Positioned(
+            left: 12,
+            top: 52,
+            right: 12,
+            child: Align(
+              alignment: Alignment.topRight,
+              child: Material(
+                color: Colors.black.withValues(alpha: .62),
+                borderRadius: BorderRadius.circular(20),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  child: Wrap(
+                    spacing: 3,
+                    children: [
+                      for (final position in const ['Front', 'Middle', 'Rear'])
+                        TextButton(
+                          onPressed: () => _chooseViewingPosition(position),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                          ),
+                          child: Text(position,
+                              style: const TextStyle(fontSize: 10)),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
           Positioned(
             left: 12,
             top: 12,
@@ -362,6 +418,19 @@ class _VirtualTheater3DSceneState extends State<VirtualTheater3DScene> {
                   visualDensity: VisualDensity.compact,
                   onPressed: _resetView,
                   icon: const Icon(Icons.center_focus_strong_rounded, size: 17),
+                ),
+                const SizedBox(width: 4),
+                IconButton.filledTonal(
+                  tooltip: _cinemaMode
+                      ? 'Turn lobby lights back on'
+                      : 'Dim auditorium lights',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => setState(() => _cinemaMode = !_cinemaMode),
+                  icon: Icon(
+                      _cinemaMode
+                          ? Icons.lightbulb_rounded
+                          : Icons.lightbulb_outline_rounded,
+                      size: 17),
                 ),
               ],
             ),

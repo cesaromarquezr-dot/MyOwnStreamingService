@@ -791,6 +791,9 @@ class AdaptiveStreamingPlayer extends StatefulWidget {
   final String? activityLabel;
   final int? initialPositionSeconds;
   final String? theaterRoomId;
+  final String? wrappedContextType;
+  final String? wrappedContextId;
+  final String? wrappedContextTitle;
 
   const AdaptiveStreamingPlayer({
     super.key,
@@ -798,6 +801,9 @@ class AdaptiveStreamingPlayer extends StatefulWidget {
     this.activityLabel,
     this.initialPositionSeconds,
     this.theaterRoomId,
+    this.wrappedContextType,
+    this.wrappedContextId,
+    this.wrappedContextTitle,
   });
 
   @override
@@ -817,6 +823,7 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
   bool _readyLogged = false;
   bool _errorLogged = false;
   bool _completedLogged = false;
+  bool _wrappedPlayRecorded = false;
   bool _wasBuffering = false;
   DateTime? _lastPlaybackWallSample;
   int _unreportedWatchMs = 0;
@@ -827,13 +834,49 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
   String? _error;
   String? _backendSessionId;
   String? _lastTheaterStatus;
+  late final String? _playbackProfileId;
+  bool _profileChangedDuringPlayback = false;
   StreamingExperiencePreferences _preferences =
       StreamingExperiencePreferences();
-  String? get _profileId => AppController.instance.currentProfile?.id;
+  String? get _profileId => _playbackProfileId;
+
+  bool get _canWritePlaybackProgress =>
+      !_profileChangedDuringPlayback &&
+      _playbackProfileId == AppController.instance.currentProfile?.id;
+
+  void _onAppProfileChanged() {
+    if (_playbackProfileId == AppController.instance.currentProfile?.id ||
+        _profileChangedDuringPlayback) {
+      return;
+    }
+    _profileChangedDuringPlayback = true;
+    final player = _controller;
+    if (player != null && player.value.isInitialized) {
+      unawaited(player.pause());
+      unawaited(_syncBackendSession(state: 'paused'));
+    }
+    _updateTheaterRoomStatus('paused');
+  }
+
+  void _savePlaybackProgress(
+    double progress, {
+    int? positionSeconds,
+    int? durationSeconds,
+  }) {
+    if (!_canWritePlaybackProgress) return;
+    AppController.instance.updatePlaybackProgress(
+      widget.media.id,
+      progress,
+      positionSeconds: positionSeconds,
+      durationSeconds: durationSeconds,
+    );
+  }
 
   @override
   void initState() {
     super.initState();
+    _playbackProfileId = AppController.instance.currentProfile?.id;
+    AppController.instance.addListener(_onAppProfileChanged);
     _startedAt = DateTime.now();
     _sessionId = '${widget.media.id}_${DateTime.now().microsecondsSinceEpoch}';
     unawaited(_initialize());
@@ -844,6 +887,13 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
     _preferences =
         await StreamingExperiencePreferences.load(profileId: _profileId);
     if (!mounted) return;
+    if (!_canWritePlaybackProgress) {
+      setState(() {
+        _loading = false;
+        _error = 'Playback stopped because the active profile changed.';
+      });
+      return;
+    }
     final rawUrl = widget.media.playbackUrl?.trim() ?? '';
     final uri = Uri.tryParse(rawUrl);
     if (uri == null ||
@@ -902,8 +952,11 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
                     duration.inMilliseconds)
                 .clamp(0.0, 1.0)
                 .toDouble();
-            AppController.instance
-                .updatePlaybackProgress(widget.media.id, normalized);
+            _savePlaybackProgress(
+              normalized,
+              positionSeconds: player.value.position.inSeconds,
+              durationSeconds: duration.inSeconds,
+            );
           }
           unawaited(_syncBackendSession());
         },
@@ -922,12 +975,24 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
         final offset = Duration(seconds: seconds);
         if (offset < player.value.duration) await player.seekTo(offset);
       } else {
-        final resume = AppController.instance.getPlaybackProgress(widget.media.id);
-        if (resume > 0 && player.value.duration > Duration.zero) {
-          final offset = Duration(
-              milliseconds:
-                  (player.value.duration.inMilliseconds * resume).round());
-          if (offset < player.value.duration) await player.seekTo(offset);
+        final app = AppController.instance;
+        final savedSeconds = app.playbackPositionSeconds[widget.media.id];
+        final savedDuration = app.playbackDurationSeconds[widget.media.id];
+        if (savedSeconds != null && savedSeconds > 0 &&
+            savedDuration != null && savedDuration > 0 &&
+            player.value.duration > Duration.zero) {
+          final offset = Duration(seconds: savedSeconds);
+          await player.seekTo(offset > player.value.duration
+              ? player.value.duration
+              : offset);
+        } else {
+          final resume = app.getPlaybackProgress(widget.media.id);
+          if (resume > 0 && player.value.duration > Duration.zero) {
+            final offset = Duration(
+                milliseconds:
+                    (player.value.duration.inMilliseconds * resume).round());
+            if (offset < player.value.duration) await player.seekTo(offset);
+          }
         }
       }
       setState(() => _loading = false);
@@ -1078,7 +1143,20 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
   void _onPlayerChanged() {
     final player = _controller;
     if (player == null || !player.value.isInitialized) return;
+    if (!_canWritePlaybackProgress) {
+      if (player.value.isPlaying) unawaited(player.pause());
+      return;
+    }
     final value = player.value;
+    if (value.isPlaying && !value.isBuffering && !_wrappedPlayRecorded) {
+      _wrappedPlayRecorded = true;
+      unawaited(AppController.instance.recordWrappedMediaPlayback(
+        widget.media,
+        contextType: widget.wrappedContextType,
+        contextId: widget.wrappedContextId,
+        contextTitle: widget.wrappedContextTitle,
+      ));
+    }
     _trackWatchTime(value);
     if (value.hasError) {
       _updateTheaterRoomStatus('error', value.position.inSeconds.toDouble());
@@ -1128,8 +1206,12 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
         !_completedLogged) {
       _completedLogged = true;
       unawaited(_record('completed'));
-      AppController.instance.updatePlaybackProgress(widget.media.id, 1.0);
-      AppController.instance.markWatched(widget.media);
+      _savePlaybackProgress(
+        1.0,
+        positionSeconds: value.duration.inSeconds,
+        durationSeconds: value.duration.inSeconds,
+      );
+      if (_canWritePlaybackProgress) AppController.instance.markWatched(widget.media);
       unawaited(_syncBackendSession(state: 'completed'));
     } else if (value.duration > Duration.zero) {
       final normalized =
@@ -1143,8 +1225,11 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
         _lastProgressSync = now;
         // Keep Continue Watching progress locally, while the separate heartbeat
         // sends backend updates at the selected Eco/Balanced/Cinema cadence.
-        AppController.instance
-            .updatePlaybackProgress(widget.media.id, normalized);
+        _savePlaybackProgress(
+          normalized,
+          positionSeconds: value.position.inSeconds,
+          durationSeconds: value.duration.inSeconds,
+        );
       }
     }
     final now = DateTime.now();
@@ -1226,6 +1311,7 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
   @override
   void dispose() {
     PlaybackInterruptionBridge.detach(this);
+    AppController.instance.removeListener(_onAppProfileChanged);
     _syncTimer?.cancel();
     _flushWatchTime();
     if (_lastTheaterStatus != null && _lastTheaterStatus != 'completed') {
@@ -1238,13 +1324,15 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
               DateTime.now().difference(_bufferStartedAt!).inMilliseconds));
     }
     if (player != null) {
-      if (player.value.isInitialized && player.value.duration > Duration.zero) {
-        AppController.instance.updatePlaybackProgress(
-          widget.media.id,
+      if (_canWritePlaybackProgress && player.value.isInitialized &&
+          player.value.duration > Duration.zero) {
+        _savePlaybackProgress(
           (player.value.position.inMilliseconds /
                   player.value.duration.inMilliseconds)
               .clamp(0.0, 1.0)
               .toDouble(),
+          positionSeconds: player.value.position.inSeconds,
+          durationSeconds: player.value.duration.inSeconds,
         );
       }
       unawaited(_syncBackendSession(state: 'stopped'));

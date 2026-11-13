@@ -33,7 +33,8 @@ class TMDBTitleRecommendationsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selectedMood = CinematicRecommendationMood.byKey(selectedMoodKey ?? '');
-    final hasTitleRecommendations = recommendations.isNotEmpty || loading;
+    final hasTitleRecommendations =
+        recommendations.isNotEmpty || loading || moodOptionsEnabled;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -62,12 +63,20 @@ class TMDBTitleRecommendationsSection extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           const Text(
-            'Personalized movie and TV discovery',
-            style: TextStyle(color: Colors.white60, fontSize: 12),
+            'Uses title similarity, genre, studio/network, cast, popularity, your library and profile preferences. Shared-profile activity is included only when sharing is enabled; mood picks use the mood you select.',
+            style: TextStyle(color: Colors.white60, fontSize: 12, height: 1.35),
           ),
           const SizedBox(height: 12),
           if (recommendations.isEmpty && loading)
             const _RecommendationLoading(message: 'Finding movies and shows you may enjoy…')
+          else if (recommendations.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 18),
+              child: Text(
+                'No matches in this category yet. Try another recommendation type.',
+                style: TextStyle(color: Colors.white60, fontSize: 13),
+              ),
+            )
           else
             _RecommendationCarousel(
               recommendations: recommendations,
@@ -196,14 +205,15 @@ class _RecommendationCarousel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return HomeArrowRail(
-      height: 294,
+      height: 326,
       itemCount: recommendations.length,
       separatorExtent: 12,
       padding: const EdgeInsets.symmetric(horizontal: 48),
       itemBuilder: (context, index) {
         final item = recommendations[index];
         final poster = item.posterUrl;
-          return SizedBox(
+        final yearLabel = item.releaseYear == null ? '' : ' · ${item.releaseYear}';
+        return SizedBox(
             width: 142,
             child: Material(
               color: const Color(0xFF17171C),
@@ -220,7 +230,7 @@ class _RecommendationCarousel extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8),
                         child: SizedBox(
                           width: double.infinity,
-                          height: 178,
+                          height: 156,
                           child: poster == null
                               ? _PosterFallback(title: item.title)
                               : Image.network(
@@ -245,7 +255,7 @@ class _RecommendationCarousel extends StatelessWidget {
                       ),
                       const SizedBox(height: 5),
                       Text(
-                        '${item.mediaTypeLabel}${item.releaseYear == null ? '' : ' · ${item.releaseYear}'}',
+                        '${item.mediaTypeLabel}$yearLabel',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -253,6 +263,47 @@ class _RecommendationCarousel extends StatelessWidget {
                           fontSize: 11,
                         ),
                       ),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: item.isOwned
+                              ? const Color(0x2239C879)
+                              : const Color(0x22FF8A65),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: item.isOwned
+                                ? const Color(0xAA39C879)
+                                : const Color(0xAAFF8A65),
+                          ),
+                        ),
+                        child: Text(
+                          item.isOwned ? 'IN YOUR LIBRARY' : 'NOT OWNED',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: item.isOwned
+                                ? const Color(0xFF8BE0AD)
+                                : const Color(0xFFFFB19A),
+                            fontSize: 8,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: .35,
+                          ),
+                        ),
+                      ),
+                      if ((item.recommendationReason ?? '').trim().isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          item.recommendationReason!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 9,
+                            height: 1.15,
+                          ),
+                        ),
+                      ],
                       const Spacer(),
                       if (item.voteAverage != null && item.voteAverage! > 0)
                         Row(

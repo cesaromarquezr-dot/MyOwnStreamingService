@@ -6,8 +6,11 @@ import '../app_core.dart';
 import '../catalog_poster_image.dart';
 import '../data/theater_repository.dart';
 import '../details.dart';
+import '../group_watch.dart';
 import '../models/theater_models.dart';
 import '../music.dart';
+import '../presence/account_profile_presence_service.dart';
+import '../widgets/account_profile_presence_strip.dart';
 import '../playback_interruption_bridge.dart';
 import '../stores/theater_store.dart';
 import '../widgets/virtual_theater_3d_scene.dart';
@@ -32,7 +35,17 @@ class _TheaterHomeScreenState extends State<TheaterHomeScreen> {
   void initState() {
     super.initState();
     _store.addListener(_refresh);
-    unawaited(_store.load(AppController.instance.currentProfile?.id));
+    unawaited(_store.load(AppController.instance.currentProfile?.id).then((_) {
+      _syncPresenceActivity();
+    }));
+    final profile = AppController.instance.currentProfile;
+    if (profile != null) {
+      AccountProfilePresenceService.instance.start(
+        profileId: profile.id,
+        activityType: 'browsing',
+        activityText: 'Private Theater',
+      );
+    }
     _roomRefreshTimer = Timer.periodic(const Duration(seconds: 12), (_) {
       unawaited(_store.refreshRemoteSessions());
     });
@@ -47,7 +60,32 @@ class _TheaterHomeScreenState extends State<TheaterHomeScreen> {
   }
 
   void _refresh() {
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+      _syncPresenceActivity();
+    }
+  }
+
+  void _syncPresenceActivity() {
+    final profile = AppController.instance.currentProfile;
+    if (profile == null) return;
+    for (final room in _store.rooms) {
+      final session = _store.sessionForRoom(room.id);
+      if (session == null) continue;
+      if (session.status == 'playing' || session.status == 'previewing') {
+        AccountProfilePresenceService.instance.start(
+          profileId: profile.id,
+          activityType: 'watching',
+          activityText: room.name,
+        );
+        return;
+      }
+    }
+    AccountProfilePresenceService.instance.start(
+      profileId: profile.id,
+      activityType: 'browsing',
+      activityText: 'Private Theater',
+    );
   }
 
   List<MediaItem> get _library {
@@ -274,6 +312,136 @@ class _TheaterHomeScreenState extends State<TheaterHomeScreen> {
     );
   }
 
+  Future<void> _startGroupWatch(MediaItem media) async {
+    final profileId = AppController.instance.currentProfile?.id;
+    if (profileId == null || profileId.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select a profile before starting a shared session.')),
+      );
+      return;
+    }
+    try {
+      final session = await AppController.instance.createBackendGroupWatchSession(
+        media,
+        profileId: profileId,
+      );
+      if (!mounted) return;
+      await Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => GroupWatchScreen(media: media, sessionId: session.id),
+      ));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not start shared viewing: ${error.toString().replaceFirst('Exception: ', '')}')),
+      );
+    }
+  }
+
+  String? _watchingProfileName(TheaterRoom room) {
+    final matches = AccountProfilePresenceService.instance.activeProfiles.where(
+      (profile) => profile.activityType == 'watching' &&
+          profile.activityText?.trim().toLowerCase() == room.name.trim().toLowerCase(),
+    );
+    return matches.isEmpty ? null : matches.first.name;
+  }
+
+  Widget _buildPosterLobby(List<MediaItem> library) {
+    final featured = library.where((media) =>
+        media.imageUrl?.trim().isNotEmpty == true).take(12).toList(growable: false);
+    if (featured.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          const Icon(Icons.local_movies_rounded, color: Color(0xFFE4B66B)),
+          const SizedBox(width: 8),
+          Expanded(child: Text('Theater lobby · Featured posters', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900))),
+        ]),
+        const SizedBox(height: 9),
+        SizedBox(
+          height: 166,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: featured.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 9),
+            itemBuilder: (context, index) {
+              final media = featured[index];
+              return SizedBox(
+                width: 104,
+                child: InkWell(
+                  onTap: () => _chooseRoomForMedia(media),
+                  borderRadius: BorderRadius.circular(9),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(9), child: CatalogPosterImage(media: media, fit: BoxFit.cover))),
+                      const SizedBox(height: 5),
+                      Text(media.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800)),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNowPlayingBoard(List<MediaItem> library) {
+    final active = _store.rooms.where((room) {
+      final session = _store.sessionForRoom(room.id);
+      return session != null &&
+          (session.status == 'playing' || session.status == 'previewing' || session.status == 'paused');
+    }).toList(growable: false);
+    return Card(
+      color: const Color(0xFF171B24),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(children: [Icon(Icons.live_tv_rounded, color: Color(0xFF3BCB83)), SizedBox(width: 8), Text('NOW PLAYING · PRIVATE ROOMS', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.0))]),
+            const SizedBox(height: 8),
+            if (active.isEmpty)
+              const Text('No private room is playing right now. Choose a poster and assign it to a room.', style: TextStyle(color: Colors.white60, fontSize: 12))
+            else
+              for (final room in active)
+                Builder(builder: (context) {
+                  final session = _store.sessionForRoom(room.id)!;
+                  final matching = library.where((item) => item.id == session.mediaId);
+                  final media = matching.isEmpty ? null : matching.first;
+                  final profileName = _watchingProfileName(room);
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: SizedBox(
+                      width: 42,
+                      height: 58,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: media == null
+                            ? const ColoredBox(color: Color(0xFF303746), child: Icon(Icons.movie_rounded))
+                            : CatalogPosterImage(media: media, fit: BoxFit.cover),
+                      ),
+                    ),
+                    title: Text(session.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    subtitle: Text(profileName == null
+                        ? '${room.name} · ${session.status.toUpperCase()}'
+                        : '${room.name} ($profileName) is ${session.status == 'paused' ? 'paused' : 'watching'}',
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                    trailing: media == null ? null : IconButton(
+                      tooltip: 'Watch together',
+                      onPressed: () => _startGroupWatch(media),
+                      icon: const Icon(Icons.groups_rounded),
+                    ),
+                  );
+                }),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final library = _library;
@@ -317,6 +485,11 @@ class _TheaterHomeScreenState extends State<TheaterHomeScreen> {
                 VirtualTheater3DScene(
                   posterMedia: library.take(8).toList(growable: false),
                   onPosterSelected: _chooseRoomForMedia,
+                  playbackActive: _store.rooms.any((room) {
+                    final session = _store.sessionForRoom(room.id);
+                    return session != null &&
+                        (session.status == 'playing' || session.status == 'previewing');
+                  }),
                 ),
                 const SizedBox(height: 12),
                 Text('Look around your auditorium', style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w900)),
@@ -327,7 +500,13 @@ class _TheaterHomeScreenState extends State<TheaterHomeScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 10),
+          const AccountProfilePresenceStrip(theaterStyle: true),
+          const SizedBox(height: 12),
+          _buildNowPlayingBoard(library),
+          const SizedBox(height: 18),
+          _buildPosterLobby(library),
+          const SizedBox(height: 18),
           Row(
             children: [
               Expanded(child: Text('All posters', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900))),
@@ -447,6 +626,7 @@ class _TheaterHomeScreenState extends State<TheaterHomeScreen> {
                 room: room,
                 session: session,
                 media: media,
+                watchingProfileName: _watchingProfileName(room),
                 onSelect: () => _openRoomPicker(room),
                 onOpen: session == null || media == null
                     ? null
@@ -477,6 +657,7 @@ class _TheaterRoomCard extends StatelessWidget {
     required this.room,
     required this.session,
     required this.media,
+    required this.watchingProfileName,
     required this.onSelect,
     required this.onOpen,
     required this.onStop,
@@ -487,6 +668,7 @@ class _TheaterRoomCard extends StatelessWidget {
   final TheaterRoom room;
   final TheaterSession? session;
   final MediaItem? media;
+  final String? watchingProfileName;
   final VoidCallback onSelect;
   final VoidCallback? onOpen;
   final VoidCallback? onStop;
@@ -538,7 +720,19 @@ class _TheaterRoomCard extends StatelessWidget {
                 else
                   const ColoredBox(color: Color(0xFF252B38), child: Center(child: Icon(Icons.weekend_rounded, size: 42, color: Colors.white54))),
                 const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black26, Colors.black87]))),
-                Positioned(left: 12, right: 42, bottom: 10, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(room.name.toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 1.2)), if (current) Text(_statusLabel(session?.status), style: TextStyle(color: _statusColor(session?.status), fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1.1))])),
+                Positioned(
+                  left: 12,
+                  right: 42,
+                  bottom: 10,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(room.name.toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+                      if (current) Text(_statusLabel(session?.status), style: TextStyle(color: _statusColor(session?.status), fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1.1)),
+                      if (watchingProfileName != null) Text('(${watchingProfileName!}) is watching', style: const TextStyle(color: Color(0xFF8CF0B1), fontSize: 9, fontWeight: FontWeight.w800)),
+                    ],
+                  ),
+                ),
                 Positioned(right: 4, top: 4, child: IconButton(onPressed: onMenu, tooltip: 'Room options', icon: const Icon(Icons.more_vert_rounded, color: Colors.white))),
               ],
             ),

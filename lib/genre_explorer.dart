@@ -243,7 +243,7 @@ class GenreResultsScreen extends StatelessWidget {
                   title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
                   subtitle: Text('${item.releaseYear ?? ''}${item.genres.isEmpty ? '' : ' · ${item.genres.join(' / ')}'}'),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                    builder: (_) => MediaDetailsScreen(media: item),
+                    builder: (_) => MediaDetailsScreen(media: item, wrappedContextType: 'genre', wrappedContextId: genre.toLowerCase(), wrappedContextTitle: genre),
                   )),
                 );
               },

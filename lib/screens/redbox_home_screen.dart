@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_core.dart';
 import '../catalog_poster_image.dart';
 import '../details.dart';
-import '../models/media_case_style.dart';
-import '../widgets/media_experience_tools.dart';
 import '../music.dart';
+import '../presence/account_profile_presence_service.dart';
+import '../widgets/account_profile_presence_strip.dart';
 import 'collections_screen.dart';
 import 'theater_home_screen.dart';
 import 'virtual_store_screen.dart';
@@ -35,6 +36,14 @@ class _RedboxHomeScreenState extends State<RedboxHomeScreen> {
   void initState() {
     super.initState();
     _loadDisplayMode();
+    final profile = AppController.instance.currentProfile;
+    if (profile != null) {
+      AccountProfilePresenceService.instance.start(
+        profileId: profile.id,
+        activityType: 'browsing',
+        activityText: 'Kiosk',
+      );
+    }
   }
 
   Future<void> _loadDisplayMode() async {
@@ -109,10 +118,6 @@ class _RedboxHomeScreenState extends State<RedboxHomeScreen> {
     final movies = _sorted(matching.where((media) => !_isMusic(media) && !_isSeries(media)).toList());
     final series = _sorted(matching.where(_isSeries).toList());
     final albums = _sorted(matching.where(_isMusic).toList());
-    final dvds = _sorted(matching.where((media) => MediaCaseStyle.canonicalFormat(media.displayCaseFormat) == 'DVD').toList());
-    final bluRays = _sorted(matching.where((media) => MediaCaseStyle.canonicalFormat(media.displayCaseFormat) == 'Blu-ray').toList());
-    final ultraHd = _sorted(matching.where((media) => MediaCaseStyle.canonicalFormat(media.displayCaseFormat) == '4K Ultra HD').toList());
-    final cds = _sorted(matching.where((media) => MediaCaseStyle.canonicalFormat(media.displayCaseFormat) == 'Audio CD').toList());
     final continueWatching = _sorted(matching.where((media) {
       final progress = AppController.instance.getPlaybackProgress(media.id);
       return progress > 0 && progress < .96 && !_isMusic(media);
@@ -124,10 +129,6 @@ class _RedboxHomeScreenState extends State<RedboxHomeScreen> {
       _KioskCategory(id: 'movies', title: 'Movies', subtitle: '${movies.length} titles', icon: Icons.local_movies_rounded, media: movies),
       _KioskCategory(id: 'series', title: 'TV Shows', subtitle: '${series.length} shows & episodes', icon: Icons.live_tv_rounded, media: series),
       _KioskCategory(id: 'music', title: 'Music & Albums', subtitle: '${albums.length} albums and tracks', icon: Icons.album_rounded, media: albums),
-      _KioskCategory(id: 'dvd', title: 'DVD', subtitle: '${dvds.length} DVD titles', icon: Icons.album_outlined, media: dvds),
-      _KioskCategory(id: 'bluray', title: 'Blu-ray', subtitle: '${bluRays.length} Blu-ray titles', icon: Icons.album_rounded, media: bluRays),
-      _KioskCategory(id: '4k', title: '4K Ultra HD', subtitle: '${ultraHd.length} UHD titles', icon: Icons.high_quality_rounded, media: ultraHd),
-      _KioskCategory(id: 'cd', title: 'Music CDs', subtitle: '${cds.length} Audio CDs', icon: Icons.disc_full_rounded, media: cds),
       _KioskCategory(id: 'continue', title: 'Continue Watching', subtitle: '${continueWatching.length} in progress', icon: Icons.play_circle_outline_rounded, media: continueWatching),
       _KioskCategory(id: 'new', title: 'New to Your Library', subtitle: 'Recently added titles', icon: Icons.fiber_new_rounded, media: recent),
       _KioskCategory(id: 'recent', title: 'Browse All', subtitle: '${matching.length} owned items', icon: Icons.grid_view_rounded, media: matching),
@@ -143,10 +144,6 @@ class _RedboxHomeScreenState extends State<RedboxHomeScreen> {
             'movies' => movies,
             'series' => series,
             'music' => albums,
-            'dvd' => dvds,
-            'bluray' => bluRays,
-            '4k' => ultraHd,
-            'cd' => cds,
             'continue' => continueWatching,
             'new' => recent.take(16).toList(growable: false),
             'recent' => matching,
@@ -195,7 +192,9 @@ class _RedboxHomeScreenState extends State<RedboxHomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _KioskTopper(dayMode: _dayMode, titleCount: all.length),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
+                      AccountProfilePresenceStrip(dayMode: _dayMode),
+                      const SizedBox(height: 6),
                       TextField(
                         controller: _searchController,
                         onChanged: (value) => setState(() {
@@ -312,8 +311,6 @@ class _RedboxHomeScreenState extends State<RedboxHomeScreen> {
                       ),
                       const SizedBox(height: 12),
                       _LocalCatalogNotice(dayMode: _dayMode),
-                      const SizedBox(height: 14),
-                      MediaExperienceTools(compact: true, showHeading: true),
                       if (_activeMenu != 'all' && query.isEmpty) ...[
                         const SizedBox(height: 14),
                         Row(
@@ -571,56 +568,147 @@ class _FeaturedMedia extends StatelessWidget {
       );
 }
 
-class _PosterRailSliver extends StatelessWidget {
+class _PosterRailSliver extends StatefulWidget {
   const _PosterRailSliver({required this.title, required this.items, required this.onTap});
   final String title;
   final List<MediaItem> items;
   final ValueChanged<MediaItem> onTap;
 
   @override
+  State<_PosterRailSliver> createState() => _PosterRailSliverState();
+}
+
+class _PosterRailSliverState extends State<_PosterRailSliver> {
+  final ScrollController _scrollController = ScrollController();
+  bool _canGoBack = false;
+  bool _canGoNext = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_updateArrowState);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateArrowState());
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_updateArrowState);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _updateArrowState() {
+    if (!_scrollController.hasClients || !mounted) return;
+    final position = _scrollController.position;
+    final back = position.pixels > 2;
+    final next = position.pixels < position.maxScrollExtent - 2;
+    if (back != _canGoBack || next != _canGoNext) {
+      setState(() {
+        _canGoBack = back;
+        _canGoNext = next;
+      });
+    }
+  }
+
+  void _move(int direction) {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    final distance = (position.viewportDimension * .78).clamp(180.0, 520.0);
+    final target = (position.pixels + direction * distance)
+        .clamp(0.0, position.maxScrollExtent)
+        .toDouble();
+    _scrollController.animateTo(
+      target,
+      duration: const Duration(milliseconds: 360),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  KeyEventResult _handleArrowKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      _move(-1);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      _move(1);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  @override
   Widget build(BuildContext context) => SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 9),
-                child: Text(title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
-              ),
-              SizedBox(
-                height: 178,
-                child: ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  scrollDirection: Axis.horizontal,
-                  itemCount: items.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 10),
-                  itemBuilder: (context, index) {
-                    final media = items[index];
-                    return SizedBox(
-                      width: 112,
-                      child: InkWell(
-                        onTap: () => onTap(media),
-                        borderRadius: BorderRadius.circular(10),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(9),
-                                child: SizedBox(width: double.infinity, child: CatalogPosterImage(media: media, fit: BoxFit.cover)),
-                              ),
-                            ),
-                            const SizedBox(height: 5),
-                            Text(media.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
-                          ],
+        child: Focus(
+          onKeyEvent: _handleArrowKey,
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 12, 9),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          widget.title,
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
                         ),
                       ),
-                    );
-                  },
+                      IconButton(
+                        tooltip: 'Back',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: _canGoBack ? () => _move(-1) : null,
+                        icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 17),
+                      ),
+                      IconButton(
+                        tooltip: 'Next',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: _canGoNext && widget.items.length > 3 ? () => _move(1) : null,
+                        icon: const Icon(Icons.arrow_forward_ios_rounded, size: 17),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                SizedBox(
+                  height: 178,
+                  child: ListView.separated(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    scrollDirection: Axis.horizontal,
+                    itemCount: widget.items.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 10),
+                    itemBuilder: (context, index) {
+                      final media = widget.items[index];
+                      return SizedBox(
+                        width: 112,
+                        child: InkWell(
+                          onTap: () => widget.onTap(media),
+                          borderRadius: BorderRadius.circular(10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(9),
+                                  child: SizedBox(
+                                    width: double.infinity,
+                                    child: CatalogPosterImage(media: media, fit: BoxFit.cover),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Text(media.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );

@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import '../../app_core.dart';
 
 /// Live title metadata and credits from TMDB.
@@ -686,6 +688,18 @@ class CinematicTitleMetadataService {
       revenue: _positiveIntOrNull(details['revenue']),
       runtimeMinutes: runtime,
       genres: genres,
+      genreIds: genreRows
+          .map((row) => _toInt(row['id']))
+          .whereType<int>()
+          .toList(growable: false),
+      companies: <CinematicCompanyCredit>[
+        ..._listOfMaps(details['production_companies'])
+            .map((row) => CinematicCompanyCredit.fromJson(row)),
+        ..._listOfMaps(details['networks'])
+            .map((row) => CinematicCompanyCredit.fromJson(row, isNetwork: true)),
+      ]
+          .where((company) => company.id > 0 && company.name.isNotEmpty)
+          .toList(growable: false),
       keywords: keywords,
       posterPaths: posterPaths,
       backdropPaths: backdropPaths,
@@ -770,6 +784,214 @@ class CinematicTitleMetadataService {
       if (output.length >= limit) break;
     }
     return List<CinematicTitleRecommendation>.unmodifiable(output);
+  }
+
+  /// Builds the metadata-backed recommendation groups used by Home. All discovery
+  /// requests are scoped to the source media type (movie or TV) and use TMDB
+  /// metadata IDs rather than guessing company or performer names.
+  static Future<Map<String, List<CinematicTitleRecommendation>>>
+      lookupPersonalizedRecommendationGroups({
+    required CinematicTitleMetadata source,
+    int limit = 24,
+  }) async {
+    if (!isConfigured || source.providerId <= 0 || limit <= 0) {
+      return const <String, List<CinematicTitleRecommendation>>{};
+    }
+
+    final similar = await lookupRecommendations(
+      providerId: source.providerId,
+      isTv: source.isTv,
+      limit: limit,
+    );
+    final similarWithReasons = similar
+        .map((item) => item.withContext(
+              reason: 'Because you watched ${source.title}.',
+            ))
+        .toList(growable: false);
+
+    final path = source.isTv ? '/discover/tv' : '/discover/movie';
+    final commonQuery = <String, String>{
+      'page': '1',
+      'include_adult': 'false',
+      'sort_by': 'popularity.desc',
+      'vote_count.gte': '5',
+    };
+
+    Future<List<CinematicTitleRecommendation>> discover({
+      required String filterKey,
+      required String filterValue,
+      required String reason,
+    }) async {
+      if (filterValue.trim().isEmpty) {
+        return const <CinematicTitleRecommendation>[];
+      }
+      try {
+        final payload = await _get(path, <String, String>{
+          ...commonQuery,
+          filterKey: filterValue,
+        });
+        final seen = <int>{source.providerId};
+        final output = <CinematicTitleRecommendation>[];
+        for (final row in _listOfMaps(payload['results'])) {
+          if (row['adult'] == true) continue;
+          final item = CinematicTitleRecommendation.fromJson(
+            row,
+            isTv: source.isTv,
+          );
+          if (item.providerId <= 0 ||
+              item.title.isEmpty ||
+              !seen.add(item.providerId)) {
+            continue;
+          }
+          output.add(item.withContext(reason: reason));
+          if (output.length >= limit) break;
+        }
+        return output;
+      } catch (_) {
+        // A missing/unsupported metadata facet should not hide other groups.
+        return const <CinematicTitleRecommendation>[];
+      }
+    }
+
+    final genreIds = source.genreIds.toSet().toList(growable: false);
+    final genreNames = source.genres.take(3).join(', ');
+    final genreResults = genreIds.isEmpty
+        ? const <CinematicTitleRecommendation>[]
+        : await discover(
+            filterKey: 'with_genres',
+            // TMDB uses a pipe as OR; include titles matching any genre
+            // shared by the source rather than requiring every genre at once.
+            filterValue: genreIds.join('|'),
+            reason: genreNames.isEmpty
+                ? 'Shares genre metadata with ${source.title}.'
+                : 'Because you watched ${source.title}: shares $genreNames genres.',
+          );
+
+    final networkRows = source.companies
+        .where((company) => company.isNetwork && company.id > 0)
+        .take(4)
+        .toList(growable: false);
+    final productionCompanyRows = source.companies
+        .where((company) => !company.isNetwork)
+        .take(4)
+        .toList(growable: false);
+    final companyFilter = productionCompanyRows
+        .map((company) => company.id)
+        .where((id) => id > 0)
+        .join('|');
+    final companyNames = productionCompanyRows
+        .map((company) => company.name)
+        .where((name) => name.isNotEmpty)
+        .join(', ');
+    final companyResults = await Future.wait(<Future<List<CinematicTitleRecommendation>>>[
+      if (companyFilter.isNotEmpty)
+        discover(
+          filterKey: 'with_companies',
+          filterValue: companyFilter,
+          reason: companyNames.isEmpty
+              ? 'Shares a production company with ${source.title}.'
+              : 'Because you watched ${source.title}: from $companyNames.',
+        ),
+      ...networkRows.map((network) => discover(
+            filterKey: 'with_networks',
+            // TMDB documents with_networks as a single integer filter, so
+            // query each source network separately and merge the results.
+            filterValue: network.id.toString(),
+            reason: 'Because you watched ${source.title}: from ${network.name}.',
+          )),
+    ]);
+    final companyAndNetworkResults = _mergeRecommendationGroups(
+      companyResults,
+      limit,
+      combineReasons: true,
+    );
+
+    final actorCredits = source.castCredits
+        .where((credit) => credit.personId != null && credit.name.isNotEmpty)
+        .take(5)
+        .toList(growable: false);
+    final actorGroups = await Future.wait(actorCredits.map((credit) async {
+      final credits = await lookupPersonCredits(
+        personId: credit.personId!,
+        limit: limit * 2,
+      );
+      return credits
+          .where((item) =>
+              item.isTv == source.isTv && item.providerId != source.providerId)
+          .take(limit)
+          .map((item) => item.withContext(
+                reason: 'You saw ${credit.name} in ${source.title}.',
+              ))
+          .toList(growable: false);
+    }));
+    final actorResults = _mergeRecommendationGroups(
+      actorGroups,
+      limit,
+      combineReasons: true,
+    );
+
+    final allResults = _mergeRecommendationGroups(
+      <List<CinematicTitleRecommendation>>[
+        similarWithReasons,
+        genreResults,
+        companyAndNetworkResults,
+        actorResults,
+      ],
+      limit * 2,
+      combineReasons: true,
+    );
+
+    return <String, List<CinematicTitleRecommendation>>{
+      'similar': List<CinematicTitleRecommendation>.unmodifiable(similarWithReasons),
+      'genre': List<CinematicTitleRecommendation>.unmodifiable(genreResults),
+      'company': List<CinematicTitleRecommendation>.unmodifiable(companyAndNetworkResults),
+      'actors': List<CinematicTitleRecommendation>.unmodifiable(actorResults),
+      'all': List<CinematicTitleRecommendation>.unmodifiable(allResults),
+    };
+  }
+
+  static List<CinematicTitleRecommendation> _mergeRecommendationGroups(
+    List<List<CinematicTitleRecommendation>> groups,
+    int limit, {
+    bool combineReasons = false,
+  }) {
+    final byId = <String, CinematicTitleRecommendation>{};
+    final reasonSets = <String, LinkedHashSet<String>>{};
+    for (final group in groups) {
+      for (final item in group) {
+        final key = '${item.isTv ? 'tv' : 'movie'}:${item.providerId}';
+        final existing = byId[key];
+        if (existing == null) {
+          byId[key] = item;
+          reasonSets[key] = LinkedHashSet<String>()
+            ..addAll(item.recommendationReason == null
+                ? const <String>[]
+                : <String>[item.recommendationReason!]);
+        } else if (combineReasons && item.recommendationReason != null) {
+          reasonSets.putIfAbsent(key, () => LinkedHashSet<String>())
+            .add(item.recommendationReason!);
+        }
+      }
+    }
+    final results = <CinematicTitleRecommendation>[];
+    for (final entry in byId.entries) {
+      final reasons = reasonSets[entry.key]?.toList(growable: false) ?? const <String>[];
+      final item = combineReasons && reasons.length > 1
+          ? entry.value.withContext(
+              reason: 'Matches ${reasons.length} signals: ${reasons.join(' ')}',
+            )
+          : entry.value;
+      results.add(item);
+    }
+    results.sort((a, b) {
+      final bySignals = (reasonSets[b.isTv ? 'tv:${b.providerId}' : 'movie:${b.providerId}']?.length ?? 0)
+          .compareTo(reasonSets[a.isTv ? 'tv:${a.providerId}' : 'movie:${a.providerId}']?.length ?? 0);
+      if (bySignals != 0) return bySignals;
+      final byVotes = (b.voteCount ?? 0).compareTo(a.voteCount ?? 0);
+      if (byVotes != 0) return byVotes;
+      return (b.voteAverage ?? 0).compareTo(a.voteAverage ?? 0);
+    });
+    return results.take(limit).toList(growable: false);
   }
 
   /// Returns a person's combined movie and TV credits from TMDB.
@@ -1614,6 +1836,8 @@ class CinematicTitleMetadata {
     required this.revenue,
     required this.runtimeMinutes,
     required this.genres,
+    this.genreIds = const <int>[],
+    this.companies = const <CinematicCompanyCredit>[],
     required this.keywords,
     required this.posterPaths,
     required this.backdropPaths,
@@ -1655,6 +1879,8 @@ class CinematicTitleMetadata {
   final int? revenue;
   final int? runtimeMinutes;
   final List<String> genres;
+  final List<int> genreIds;
+  final List<CinematicCompanyCredit> companies;
   final List<String> keywords;
   final List<String> posterPaths;
   final List<String> backdropPaths;
@@ -1688,6 +1914,28 @@ class CinematicTitleMetadata {
       ? null
       : CinematicTitleMetadataService.imageUrl(logoPaths.first,
           size: 'original');
+}
+
+/// A production company (movie) or network (TV) used for studio/network discovery.
+class CinematicCompanyCredit {
+  const CinematicCompanyCredit({
+    required this.id,
+    required this.name,
+    this.isNetwork = false,
+  });
+
+  final int id;
+  final String name;
+  final bool isNetwork;
+
+  factory CinematicCompanyCredit.fromJson(
+    Map<String, dynamic> row, {
+    bool isNetwork = false,
+  }) => CinematicCompanyCredit(
+        id: CinematicTitleMetadataService._toInt(row['id']) ?? 0,
+        name: row['name']?.toString().trim() ?? '',
+        isNetwork: isNetwork,
+      );
 }
 
 /// A verified cast credit returned by TMDB for one exact movie or TV title.
@@ -1767,6 +2015,9 @@ class CinematicTitleRecommendation {
     required this.releaseDate,
     required this.voteAverage,
     required this.voteCount,
+    this.recommendationReason,
+    this.isOwned = false,
+    this.localMedia,
   });
 
   final int providerId;
@@ -1779,6 +2030,51 @@ class CinematicTitleRecommendation {
   final String? releaseDate;
   final double? voteAverage;
   final int? voteCount;
+  final String? recommendationReason;
+  final bool isOwned;
+  final MediaItem? localMedia;
+
+  factory CinematicTitleRecommendation.fromMediaItem(
+    MediaItem media, {
+    required bool isOwned,
+    String? reason,
+  }) => CinematicTitleRecommendation(
+        providerId: int.tryParse(media.id) ?? 0,
+        title: media.title,
+        isTv: media.isSeries,
+        overview: media.description ?? '',
+        posterPath: media.imageUrl?.trim().startsWith('http') == true
+            ? media.imageUrl
+            : null,
+        backdropPath: null,
+        releaseDate: media.releaseYear == null
+            ? null
+            : '${media.releaseYear}-01-01',
+        voteAverage: media.rating,
+        voteCount: null,
+        recommendationReason: reason,
+        isOwned: isOwned,
+        localMedia: media,
+      );
+
+  CinematicTitleRecommendation withContext({
+    String? reason,
+    bool? owned,
+  }) => CinematicTitleRecommendation(
+        providerId: providerId,
+        title: title,
+        isTv: isTv,
+        countryOfOrigin: countryOfOrigin,
+        overview: overview,
+        posterPath: posterPath,
+        backdropPath: backdropPath,
+        releaseDate: releaseDate,
+        voteAverage: voteAverage,
+        voteCount: voteCount,
+        recommendationReason: reason ?? recommendationReason,
+        isOwned: owned ?? isOwned,
+        localMedia: localMedia,
+      );
 
   int? get releaseYear {
     final value = releaseDate?.trim() ?? '';
@@ -1788,10 +2084,14 @@ class CinematicTitleRecommendation {
 
   String get mediaTypeLabel => isTv ? 'TV show' : 'Movie';
 
-  String? get posterUrl => CinematicTitleMetadataService.imageUrl(
-        posterPath,
-        size: 'w342',
-      );
+  String? get posterUrl {
+    final localArtwork = localMedia?.imageUrl?.trim() ?? '';
+    if (localArtwork.startsWith('https://') ||
+        localArtwork.startsWith('http://')) {
+      return localArtwork;
+    }
+    return CinematicTitleMetadataService.imageUrl(posterPath, size: 'w342');
+  }
 
   String? get backdropUrl => CinematicTitleMetadataService.imageUrl(
         backdropPath,

@@ -251,12 +251,12 @@ class _WatchHistoryCalendarScreenState
         padding: const EdgeInsets.all(16),
         children: [
           const UniversalText(
-            'Your completed entertainment, by day',
+            'Your playback activity, by day',
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 4),
           const UniversalText(
-            'This calendar uses this profile’s locally saved completion history. Partial plays are not included.',
+            'This calendar uses this profile’s locally saved playback-start history, including movies, episodes and music.',
             style: TextStyle(color: Colors.white60),
           ),
           const SizedBox(height: 14),
@@ -453,7 +453,7 @@ class _WatchHistoryCalendarScreenState
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),
                 child: UniversalText(
-                  'No completed activity recorded for this day.',
+                  'No playback activity recorded for this day.',
                   style: TextStyle(color: Colors.white60),
                 ),
               )

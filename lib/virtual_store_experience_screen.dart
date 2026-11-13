@@ -11,6 +11,7 @@ import 'interface_experience.dart';
 import 'models/media_case_style.dart';
 import 'models/media_collection_models.dart';
 import 'music.dart';
+import 'music_catalog_screen.dart';
 import 'screens/collection_details_screen.dart';
 import 'screens/virtual_store_catalog_computer_screen.dart';
 import 'screens/theater_home_screen.dart';
@@ -45,6 +46,8 @@ class _VirtualStoreExperienceScreenState
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _collectionsKey = GlobalKey();
   final GlobalKey _playlistsKey = GlobalKey();
+  final GlobalKey _walkwayKey = GlobalKey();
+  final TextEditingController _storeFinderController = TextEditingController();
   final MusicLibraryStore _music = MusicLibraryStore.instance;
   final CollectionStore _collections = CollectionStore.instance;
 
@@ -52,6 +55,7 @@ class _VirtualStoreExperienceScreenState
   int _selectedMediaIndex = 0;
   bool _shelfOpen = false;
   String? _selectedMediaId;
+  String? _guidedMediaId;
 
   VirtualStoreDesign? get _design => widget.config.activeStore;
 
@@ -71,12 +75,595 @@ class _VirtualStoreExperienceScreenState
     _music.removeListener(_refresh);
     _collections.removeListener(_refresh);
     _navigationFocus.dispose();
+    _storeFinderController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
   void _refresh() {
     if (mounted) setState(() {});
+  }
+
+  String _employeeNormalize(String value) => value
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+      .trim()
+      .replaceAll(RegExp(r'\s+'), ' ');
+
+  bool _employeeQueryMentions(String query, String candidate) {
+    final normalizedQuery = _employeeNormalize(query);
+    final normalizedCandidate = _employeeNormalize(candidate);
+    if (normalizedCandidate.length < 2 || normalizedQuery.isEmpty) return false;
+    return normalizedQuery == normalizedCandidate ||
+        normalizedQuery.contains(normalizedCandidate);
+  }
+
+  List<MusicTrack> get _allStoreTracks {
+    final byId = <String, MusicTrack>{
+      for (final track in _music.tracks) track.id: track,
+      ..._music.catalogTracks,
+    };
+    return byId.values.toList(growable: false);
+  }
+
+  String _employeeCollectionLocation() {
+    final placement = _design?.collectionGalleryPlacement ?? 'Back wall';
+    switch (placement.toLowerCase()) {
+      case 'back wall':
+        return 'the Collection Gallery at the back of the store';
+      case 'front display':
+        return 'the Collection Gallery near the entrance';
+      default:
+        return 'the Collection Gallery on the center island';
+    }
+  }
+
+  StoreAisle? _employeeAisleForMedia(MediaItem media) {
+    final design = _design;
+    if (design == null) return null;
+    for (final aisle in design.aisles) {
+      final foundInMainShelf = _resolveRule(
+        filterType: aisle.filterType,
+        filterValue: aisle.filterValue,
+        mediaIds: aisle.mediaIds,
+      ).any((item) => item.id == media.id);
+      final foundInSubShelf = aisle.shelves.any((shelf) => _resolveRule(
+            filterType: shelf.filterType,
+            filterValue: shelf.filterValue,
+            mediaIds: shelf.mediaIds,
+          ).any((item) => item.id == media.id));
+      if (foundInMainShelf || foundInSubShelf) return aisle;
+    }
+    return null;
+  }
+
+  String _employeeMediaLocation(MediaItem media) {
+    final physical = CollectionRepository().fromLibrary().where(
+      (collection) => collection.items.any((item) => item.id == media.id),
+    );
+    if (physical.isNotEmpty) {
+      final box = physical.first;
+      final aisle = _employeeAisleForMedia(media);
+      final aisleNote = aisle == null ? '' : ' It is also indexed in the ${aisle.name} aisle.';
+      return 'You can find it in the physical collection box "${box.title}" in ${_employeeCollectionLocation()}.$aisleNote';
+    }
+
+    final curated = _design?.curatedCollections.where(
+      (collection) => collection.mediaIds.contains(media.id),
+    ).toList(growable: false) ?? const <StoreCuratedCollection>[];
+    final aisle = _employeeAisleForMedia(media);
+    if (aisle != null) {
+      final collectionNote = curated.isEmpty
+          ? ''
+          : ' It is also included in the digital collection "${curated.first.title}".';
+      return 'You can find it in the ${aisle.name} aisle.$collectionNote';
+    }
+    if (curated.isNotEmpty) {
+      return 'It is in the digital collection "${curated.first.title}" in the Curated Collections area.';
+    }
+
+    final type = _employeeNormalize(media.type);
+    if (type.contains('music') || type.contains('album') || type.contains('song') || type.contains('track')) {
+      return 'You can find it in the Music & Albums section.';
+    }
+    if (type.contains('tv') || type.contains('show') || type.contains('series') || type.contains('episode')) {
+      return 'You can find it in the TV Shows section.';
+    }
+    return 'You can find it in the Movies & Films section.';
+  }
+
+  bool _employeeIsMovie(MediaItem media) {
+    final type = _employeeNormalize(media.type);
+    return type.contains('movie') || type.contains('film') ||
+        type.contains('documentary') || type.contains('concert film');
+  }
+
+  bool _employeeIsShow(MediaItem media) {
+    final type = _employeeNormalize(media.type);
+    return type.contains('tv') || type.contains('show') ||
+        type.contains('series') || type.contains('episode') ||
+        type.contains('special');
+  }
+
+  String _employeeAvailabilityNote(MediaItem media) {
+    final format = MediaCaseStyle.canonicalFormat(media.displayCaseFormat);
+    final caseNote = format == 'Digital / not recorded'
+        ? 'It is listed as digital media, so there is no confirmed physical case on the shelf.'
+        : 'Its catalogued case format is $format.';
+    final playable = media.playbackUrl?.trim().isNotEmpty == true;
+    final playbackNote = playable
+        ? 'Its playback stream is connected, so you can open it and play it.'
+        : 'The library record exists, but a playable stream is not connected yet.';
+    return '$caseNote $playbackNote';
+  }
+
+  String _employeeInventorySummary(List<MediaItem> owned, List<MusicTrack> tracks) {
+    final movies = owned.where(_employeeIsMovie).length;
+    final shows = owned.where(_employeeIsShow).length;
+    final albums = tracks
+        .map((track) => track.album.trim())
+        .where((album) => album.isNotEmpty)
+        .toSet()
+        .length;
+    final songs = tracks.length;
+    final boxes = CollectionRepository().fromLibrary().length;
+    final playlistCount = _playlists.length;
+    return 'I checked this profile: $movies movies, $shows TV titles, $albums indexed music albums, $songs indexed tracks, $boxes physical collection boxes, and $playlistCount playlists are listed. The catalog computer can show you the full lists.';
+  }
+
+  String _employeeFormatInventory(List<MediaItem> owned, String requestedFormat) {
+    final matching = owned.where((media) =>
+        MediaCaseStyle.canonicalFormat(media.displayCaseFormat)
+            .toLowerCase() == requestedFormat.toLowerCase()).toList(growable: false);
+    if (matching.isEmpty) {
+      return 'I checked the owned library and do not see any titles marked as $requestedFormat yet. The catalog computer can show the available formats; imported physical media will appear here after it is added and indexed.';
+    }
+    return 'Yes. I found ${matching.length} owned title${matching.length == 1 ? '' : 's'} marked as $requestedFormat. They are arranged in their configured movie or TV aisles. Ask me for a title and I can check its exact shelf location.';
+  }
+
+  String _employeeCategoryLocation(String category) {
+    final matchingAisles = <String>[];
+    for (final aisle in _design?.aisles ?? const <StoreAisle>[]) {
+      final items = _resolveRule(
+        filterType: aisle.filterType,
+        filterValue: aisle.filterValue,
+        mediaIds: aisle.mediaIds,
+      );
+      final categoryItems = items.where((item) {
+        if (category == 'Movies') return _employeeIsMovie(item);
+        if (category == 'TV Shows') return _employeeIsShow(item);
+        return false;
+      });
+      if (categoryItems.isNotEmpty) matchingAisles.add(aisle.name);
+    }
+    if (matchingAisles.isNotEmpty) {
+      return 'You can browse $category in ${matchingAisles.join(', ')}. Those are the configured aisles with matching titles.';
+    }
+    if (category == 'Music & CDs') {
+      return 'The Music & CDs area and Listening Lounge are near the front of the store. Albums and playlists are shown there when their tracks are indexed.';
+    }
+    if (category == 'TV Shows') {
+      return 'The TV Shows section is in the configured show aisles. I do not see a dedicated populated aisle in the current store layout yet.';
+    }
+    return 'The Movies & Films section is in the configured movie aisles. I do not see a dedicated populated movie aisle in the current store layout yet.';
+  }
+
+  String _employeeReply(String question) {
+    final controller = AppController.instance;
+    final profile = controller.currentProfile;
+    final query = _employeeNormalize(question);
+    final allAccessible = controller.library
+        .where((item) => item.isAccessibleTo(profile))
+        .toList(growable: false);
+    final owned = _ownedLibrary;
+    final tracks = _allStoreTracks;
+    final playlists = _playlists;
+
+    if (RegExp(r'^(hi|hello|hey|good morning|good afternoon|good evening)$')
+        .hasMatch(query)) {
+      return 'Hello! Welcome in. I can check movies, TV shows, music, collections and playlists, then tell you where to find them.';
+    }
+    if (query.contains('thank')) {
+      return 'You are very welcome! Let me know if you would like directions to another aisle or want me to check another title.';
+    }
+    if (query.contains('where is the catalog computer') ||
+        query.contains('where is the computer')) {
+      return 'The Catalog Computer is at the information counter near the entrance. You can search the owned library there by title, genre, person, artist or format.';
+    }
+    if (query.contains('where is the theater') ||
+        query.contains('theater corridor')) {
+      return 'The Theater Corridor leads to the private rooms and poster displays. Follow the theater signs from the main store floor.';
+    }
+    if (query.contains('where is the collection gallery') ||
+        query.contains('where are the collection boxes')) {
+      return 'The Collection Gallery is ${_employeeCollectionLocation()}. The boxes are grouped by their collection or release name.';
+    }
+    if (query.contains('where is the coming soon') ||
+        query.contains('coming soon section')) {
+      return 'The Coming Soon area belongs with the featured and new-release displays near the entrance. Treat those entries as previews; they are not playable library titles until you add and index them.';
+    }
+    if (query.contains('is the store open') || query.contains('store hours')) {
+      return 'This is your personal virtual media store, so there are no physical opening hours. It is available whenever the app and your media server are online.';
+    }
+
+    // A track title is a stronger match than its album or artist name.
+    final trackMatches = tracks.where((track) =>
+        _employeeQueryMentions(query, track.title)).toList(growable: false)
+      ..sort((a, b) => b.title.length.compareTo(a.title.length));
+    if (trackMatches.isNotEmpty) {
+      final track = trackMatches.first;
+      final containingPlaylists = playlists.where(
+        (playlist) => playlist.trackIds.contains(track.id),
+      ).toList(growable: false);
+      final album = track.album.trim().isEmpty
+          ? 'an album that is not named in the track metadata'
+          : 'the album "${track.album}"';
+      final asksPlaylist = query.contains('playlist');
+      final location = containingPlaylists.isEmpty
+          ? 'You can find it in Music & CDs, with $album.'
+          : 'You can find it in Music & CDs, with $album. It is also in the "${containingPlaylists.first.name}" playlist display near the entrance.';
+      final playlistStatus = asksPlaylist && containingPlaylists.isEmpty
+          ? ' I do not see this track assigned to one of your playlists yet.'
+          : '';
+      if (track.audioUrl?.trim().isNotEmpty == true) {
+        return 'Yes, we have "${track.title}" by ${track.artist}. $location$playlistStatus The audio file is indexed and ready to play.';
+      }
+      return 'I found "${track.title}" by ${track.artist} in the music catalog. $location$playlistStatus I can see the listing, but there is no playable audio file indexed for it yet. Add a copy you are entitled to use and import the audio file to make it playable.';
+    }
+
+    // If the question names an album rather than a song, locate its tracks.
+    final albumMatches = tracks.where((track) =>
+        _employeeQueryMentions(query, track.album)).toList(growable: false);
+    if (albumMatches.isNotEmpty) {
+      final albumName = albumMatches.first.album;
+      final albumTracks = albumMatches.where((track) =>
+          track.album == albumName).toList(growable: false);
+      final playableCount = albumTracks.where((track) =>
+          track.audioUrl?.trim().isNotEmpty == true).length;
+      final playlistMatches = playlists.where((entry) => entry.trackIds.any(
+        (id) => albumTracks.any((track) => track.id == id),
+      )).toList(growable: false);
+      final playlistNote = playlistMatches.isEmpty
+          ? ''
+          : ' Some of its tracks are also in "${playlistMatches.first.name}" in the Listening Lounge playlist display near the entrance.';
+      final playbackNote = playableCount == albumTracks.length
+          ? 'All indexed tracks have playable audio.'
+          : '$playableCount of ${albumTracks.length} indexed tracks have playable audio.';
+      return 'Yes, I found the album "$albumName" in Music & CDs with ${albumTracks.length} indexed tracks. $playbackNote$playlistNote I can only confirm a physical CD case when the library has physical-disc information for it.';
+    }
+
+    // If a visitor asks for an artist, list the albums represented in the catalog.
+    final artistMatches = tracks.where((track) =>
+        _employeeQueryMentions(query, track.artist)).toList(growable: false);
+    if (artistMatches.isNotEmpty) {
+      final artist = artistMatches.first.artist;
+      final albums = artistMatches.map((track) => track.album.trim())
+          .where((album) => album.isNotEmpty).toSet().toList()..sort();
+      final albumText = albums.isEmpty ? 'track listings' : albums.map((a) => '"$a"').join(', ');
+      return 'Yes, I found ${artistMatches.length} indexed tracks by $artist in Music & CDs. The catalog includes $albumText. The Listening Lounge is near the entrance.';
+    }
+
+    // A direct playlist question should identify the named playlist first.
+    for (final playlist in playlists) {
+      if (_employeeQueryMentions(query, playlist.name)) {
+        final trackCount = _tracksForPlaylist(playlist).length;
+        final kind = playlist.isSmart ? 'smart playlist' : 'playlist';
+        return 'Yes, we have the $kind "${playlist.name}" with $trackCount indexed tracks. Its display is in the Listening Lounge playlist area near the entrance. You can open it from the Listening Lounge display.';
+      }
+    }
+
+    // Search owned titles before anything that is merely present in metadata.
+    final mediaMatches = owned.where((media) =>
+        _employeeQueryMentions(query, media.title) ||
+        (media.originalTitle?.isNotEmpty == true &&
+            _employeeQueryMentions(query, media.originalTitle!)))
+        .toList(growable: false)
+      ..sort((a, b) => b.title.length.compareTo(a.title.length));
+    if (mediaMatches.isNotEmpty) {
+      final media = mediaMatches.first;
+      final location = _employeeMediaLocation(media);
+      final formatNote = _employeeAvailabilityNote(media);
+      return 'Yes, we have "${media.title}" in this profile\'s owned library. $location $formatNote';
+    }
+
+    // Physical and curated collection names can be requested directly.
+    final physicalCollections = CollectionRepository().fromLibrary();
+    for (final collection in physicalCollections) {
+      if (_employeeQueryMentions(query, collection.title)) {
+        return 'Yes, we have the physical collection box "${collection.title}" in ${_employeeCollectionLocation()}. It contains ${collection.itemCount} indexed items. You can open the box from the Collection Gallery to browse its contents.';
+      }
+    }
+    for (final collection in _design?.curatedCollections ?? const <StoreCuratedCollection>[]) {
+      if (_employeeQueryMentions(query, collection.title)) {
+        final count = owned.where((item) => collection.mediaIds.contains(item.id)).length;
+        return 'Yes, the digital collection "${collection.title}" is available in the Curated Collections area. It contains $count owned titles.';
+      }
+    }
+
+    // Search profile-accessible metadata separately from owned/playable media.
+    final notOwnedMatches = allAccessible.where((media) =>
+        _employeeQueryMentions(query, media.title)).toList(growable: false);
+    if (notOwnedMatches.isNotEmpty) {
+      final item = notOwnedMatches.first;
+      return 'I found "${item.title}" in the app catalog, but it is not in this profile\'s owned library, so it is not available to play here yet. To add it, obtain a copy from a legitimate source and import it into your library. For a physical DVD, Blu-ray, 4K disc or CD, use your supported ripping/import workflow where permitted. Once the file is imported and indexed, I can help you find it on the shelves.';
+    }
+
+    // Helpful discovery questions that do not name a particular title.
+    if (query.contains('new release') || query.contains('recently added') ||
+        query.contains('what is new') || query.contains('whats new') || query.contains('what s new')) {
+      final recent = owned.toList()
+        ..sort((a, b) => b.addedAt.compareTo(a.addedAt));
+      if (recent.isEmpty) {
+        return 'There are no newly added owned titles to feature yet. Import media into your library and the New Releases display can pick it up.';
+      }
+      final titles = recent.take(5).map((item) => '"${item.title}"').join(', ');
+      return 'The latest additions I can see are $titles. They are featured in the New Releases display near the entrance; ask me for any title and I can check its exact aisle.';
+    }
+    if (query.contains('genre') || query.contains('categories')) {
+      final genres = <String>{};
+      for (final media in owned) {
+        genres.addAll(media.genres.where((genre) => genre.trim().isNotEmpty));
+        if (media.primaryGenre?.trim().isNotEmpty == true) {
+          genres.add(media.primaryGenre!.trim());
+        }
+      }
+      if (genres.isEmpty) {
+        return 'I do not see genre tags in the owned catalog yet. Once your titles have genre metadata, I can direct you to the matching aisles.';
+      }
+      final genreNames = genres.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      return 'The store has these genres represented in your library: ${genreNames.join(', ')}. The Browse by Genre displays use the genre tags on your titles.';
+    }
+    if (query.contains('recommend') || query.contains('suggest something') ||
+        query.contains('surprise me')) {
+      final candidates = owned.where((media) {
+        if (query.contains('show') || query.contains('series')) return _employeeIsShow(media);
+        if (query.contains('movie') || query.contains('film')) return _employeeIsMovie(media);
+        return _employeeIsMovie(media) || _employeeIsShow(media);
+      }).toList()
+        ..sort((a, b) {
+          final score = (b.userRatingStars ?? b.rating ?? 0.0)
+              .compareTo(a.userRatingStars ?? a.rating ?? 0.0);
+          return score != 0 ? score : b.addedAt.compareTo(a.addedAt);
+        });
+      if (candidates.isEmpty) {
+        return 'I do not have enough owned titles of that type to make a recommendation yet. Add more movies or shows and I can suggest something from your shelves.';
+      }
+      final suggestions = candidates.take(3).map((media) =>
+          '"${media.title}" (${_employeeMediaLocation(media)})').join(' ');
+      return 'Certainly! Based on the titles and ratings in this library, I would suggest: $suggestions Tell me which one you would like to inspect.';
+    }
+
+    // General inventory / department / format questions.
+    final asksInventory = query.contains('what do you have') ||
+        query.contains('what is available') || query.contains('what available') ||
+        query.contains('inventory') || query.contains('in stock') ||
+        query.contains('how many titles') || query == 'what do you have';
+    if (asksInventory) return _employeeInventorySummary(owned, tracks);
+
+    if (query.contains('4k') || query.contains('ultra hd')) {
+      return _employeeFormatInventory(owned, '4K Ultra HD');
+    }
+    if (query.contains('blu ray') || query.contains('bluray')) {
+      return _employeeFormatInventory(owned, 'Blu-ray');
+    }
+    if (query.contains('dvd')) return _employeeFormatInventory(owned, 'DVD');
+    if (query.contains('steelbook')) return _employeeFormatInventory(owned, 'Steelbook');
+    if (query.contains('cd')) return _employeeFormatInventory(owned, 'Audio CD');
+
+    final asksWhere = query.contains('where') || query.contains('find');
+    if (query.contains('movie') || query.contains('movies') || query.contains('film')) {
+      if (asksWhere || query.contains('what') || query.contains('have')) {
+        return _employeeCategoryLocation('Movies');
+      }
+    }
+    if (query.contains('show') || query.contains('shows') ||
+        query.contains('series') || query.contains('television')) {
+      if (asksWhere || query.contains('what') || query.contains('have')) {
+        return _employeeCategoryLocation('TV Shows');
+      }
+    }
+    if (query.contains('music') || query.contains('album') ||
+        query.contains('song') || query.contains('cd')) {
+      if (asksWhere || query.contains('what') || query.contains('have')) {
+        return '${_employeeCategoryLocation('Music & CDs')} I can see ${tracks.length} indexed tracks across ${tracks.map((track) => track.album.trim()).where((album) => album.isNotEmpty).toSet().length} albums.';
+      }
+    }
+    if (query.contains('collection') || query.contains('box set')) {
+      final boxes = physicalCollections.length;
+      return boxes == 0
+          ? 'I do not see any physical collection boxes indexed yet. When you import a multi-disc or boxed release with its collection information, it can appear in the Collection Gallery at ${_employeeCollectionLocation()}.'
+          : 'We have $boxes physical collection box${boxes == 1 ? '' : 'es'} in the Collection Gallery at ${_employeeCollectionLocation()}. Ask me for a collection name and I can check its contents.';
+    }
+    if (query.contains('playlist')) {
+      return playlists.isEmpty
+          ? 'I do not see any playlists indexed for this profile yet. Create or import a playlist and I can direct you to it.'
+          : 'We have ${playlists.length} playlists in the Listening Lounge display near the entrance. Ask me for a playlist name and I can check its tracks.';
+    }
+
+    return 'Sorry, I cannot find that title in the store catalog or indexed music. It may not have been added to this library yet. To make it available, obtain a copy from a legitimate source and import it. For DVDs, Blu-rays, 4K discs or CDs, use the supported disc-import/ripping workflow where permitted. After the media file and its metadata are indexed, I can tell you its aisle, collection box or playlist location.';
+  }
+
+  MediaItem? _employeeQueryMatch(String question) {
+    final query = _employeeNormalize(question);
+    final matches = _storePosterLibrary.where((media) {
+      final title = _employeeNormalize(media.title);
+      final original = _employeeNormalize(media.originalTitle ?? '');
+      return (title.length >= 2 && query.contains(title)) ||
+          (original.length >= 2 && query.contains(original));
+    }).toList(growable: false)
+      ..sort((a, b) => b.title.length.compareTo(a.title.length));
+    if (matches.isNotEmpty) return matches.first;
+
+    // A song request should guide the visitor to its album's physical CD
+    // display, rather than leaving the employee's answer without a location.
+    final trackMatches = _allStoreTracks.where((track) {
+      final title = _employeeNormalize(track.title);
+      return title.length >= 2 && query.contains(title);
+    }).toList(growable: false)
+      ..sort((a, b) => b.title.length.compareTo(a.title.length));
+    if (trackMatches.isEmpty) return null;
+    final albumTitle = _employeeNormalize(trackMatches.first.album);
+    final albums = _storePosterLibrary.where((media) =>
+        media.id.startsWith('store-album:') &&
+        _employeeNormalize(media.title) == albumTitle).toList(growable: false);
+    return albums.isEmpty ? null : albums.first;
+  }
+
+  Future<void> _openStoreEmployee() async {
+    final inputController = TextEditingController();
+    MediaItem? guideTarget;
+    final messages = <({String text, bool visitor})>[
+      (
+        text: 'Welcome in! I can help you find movies, TV shows, albums, songs, collections and playlists. Ask me what we have or where something is, and I will check the store system.',
+        visitor: false,
+      ),
+    ];
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          void sendQuestion([String? suggested]) {
+            final question = (suggested ?? inputController.text).trim();
+            if (question.isEmpty) return;
+            setDialogState(() {
+              messages.add((text: question, visitor: true));
+              messages.add((text: 'Let me check the store system...', visitor: false));
+              guideTarget = _employeeQueryMatch(question);
+            });
+            inputController.clear();
+            unawaited(Future<void>.delayed(const Duration(milliseconds: 350), () {
+              if (!dialogContext.mounted) return;
+              setDialogState(() {
+                messages.add((text: _employeeReply(question), visitor: false));
+              });
+            }));
+          }
+
+          final sampleTitle = _ownedLibrary.isEmpty ? 'a movie' : _ownedLibrary.first.title;
+          return AlertDialog(
+            title: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: Color(_design?.accentColor ?? 0xFFFFC107),
+                  foregroundColor: Colors.black,
+                  child: const Icon(Icons.support_agent_rounded),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Ask the store employee'),
+                      Text('Catalog desk · Here to help', style: TextStyle(fontSize: 11, color: Colors.white60, fontWeight: FontWeight.normal)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: 520,
+              height: 430,
+              child: Column(
+                children: [
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: messages.length,
+                      itemBuilder: (context, index) {
+                        final message = messages[index];
+                        return Align(
+                          alignment: message.visitor ? Alignment.centerRight : Alignment.centerLeft,
+                          child: Container(
+                            constraints: const BoxConstraints(maxWidth: 420),
+                            margin: const EdgeInsets.symmetric(vertical: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                            decoration: BoxDecoration(
+                              color: message.visitor
+                                  ? Theme.of(context).colorScheme.primaryContainer
+                                  : Theme.of(context).colorScheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Text(message.text),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        ActionChip(
+                          label: const Text('Find my music'),
+                          onPressed: () => sendQuestion('Where can I find my music albums?'),
+                        ),
+                        ActionChip(
+                          label: const Text('Find a movie'),
+                          onPressed: () => sendQuestion('Do you have $sampleTitle?'),
+                        ),
+                        ActionChip(
+                          label: const Text('Find a collection'),
+                          onPressed: () => sendQuestion('Where are my collection boxes?'),
+                        ),
+                        ActionChip(
+                          label: const Text('Check inventory'),
+                          onPressed: () => sendQuestion('What do you have in the store?'),
+                        ),
+                        ActionChip(
+                          label: const Text('Find playlists'),
+                          onPressed: () => sendQuestion('Where are my playlists?'),
+                        ),
+                        if (guideTarget != null)
+                          ActionChip(
+                            avatar: const Icon(Icons.directions_walk_rounded, size: 16),
+                            label: Text('Guide me to ${guideTarget!.title}', overflow: TextOverflow.ellipsis),
+                            onPressed: () {
+                              final target = guideTarget!;
+                              Navigator.pop(dialogContext);
+                              _focusMediaInStore(target);
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextField(
+                controller: inputController,
+                textInputAction: TextInputAction.send,
+                decoration: const InputDecoration(
+                  hintText: 'Ask for a title, artist, album, collection or playlist...',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                onSubmitted: (_) => sendQuestion(),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text('Close'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: () => sendQuestion(),
+                    icon: const Icon(Icons.send_rounded, size: 17),
+                    label: const Text('Ask'),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    inputController.dispose();
   }
 
   List<MediaItem> get _ownedLibrary {
@@ -87,6 +674,53 @@ class _VirtualStoreExperienceScreenState
         .toList(growable: false);
   }
 
+  /// The physical store's artwork source combines owned video media with
+  /// album-level artwork derived from this profile's indexed music tracks.
+  /// Synthetic album cards are display-only and are never added to the library.
+  List<MediaItem> get _storePosterLibrary {
+    final items = _ownedLibrary.toList();
+    final existingAlbumTitles = items
+        .where((item) => item.type.toLowerCase().contains('album'))
+        .map((item) => item.title.trim().toLowerCase())
+        .where((title) => title.isNotEmpty)
+        .toSet();
+    final albumByKey = <String, MusicTrack>{};
+    for (final track in _music.tracks) {
+      final album = track.album.trim();
+      final artwork = track.artworkUrl?.trim() ?? '';
+      if (album.isEmpty || artwork.isEmpty || track.catalogOnly) continue;
+      final key = '${track.artist.trim().toLowerCase()}|${album.toLowerCase()}';
+      albumByKey.putIfAbsent(key, () => track);
+    }
+    final sortedAlbums = albumByKey.values.toList()
+      ..sort((left, right) {
+        final leftGenre = left.allGenreTags.isEmpty ? '' : left.allGenreTags.first.toLowerCase();
+        final rightGenre = right.allGenreTags.isEmpty ? '' : right.allGenreTags.first.toLowerCase();
+        final genreOrder = leftGenre.compareTo(rightGenre);
+        if (genreOrder != 0) return genreOrder;
+        final artistOrder = left.artist.toLowerCase().compareTo(right.artist.toLowerCase());
+        if (artistOrder != 0) return artistOrder;
+        return left.album.toLowerCase().compareTo(right.album.toLowerCase());
+      });
+    for (final track in sortedAlbums) {
+      final album = track.album.trim();
+      if (existingAlbumTitles.contains(album.toLowerCase())) continue;
+      items.add(MediaItem(
+        id: 'store-album:${track.id}',
+        title: album,
+        type: 'album',
+        imageUrl: track.artworkUrl,
+        description: 'Album by ${track.artist}',
+        genres: track.allGenreTags,
+        primaryGenre: track.allGenreTags.isEmpty ? null : track.allGenreTags.first,
+        casePresentationFormat: 'Audio CD',
+        addedAt: track.modifiedAt,
+      ));
+      existingAlbumTitles.add(album.toLowerCase());
+    }
+    return items;
+  }
+
   List<String> get _zoneLabels {
     final aisles = _design?.aisles ?? const <StoreAisle>[];
     return <String>[
@@ -95,6 +729,7 @@ class _VirtualStoreExperienceScreenState
       'Listening Lounge',
       'Catalog Computer',
       'Theater Corridor',
+      'Entrance & Featured Displays',
     ];
   }
 
@@ -281,6 +916,118 @@ class _VirtualStoreExperienceScreenState
     }
   }
 
+  void _focusMediaInStore(MediaItem media) {
+    final design = _design;
+    if (design == null) return;
+    final aisle = _employeeAisleForMedia(media);
+    var nextZone = _safeZoneIndex;
+    if (aisle != null) {
+      final aisleIndex = design.aisles.indexOf(aisle);
+      if (aisleIndex >= 0) nextZone = aisleIndex;
+    } else {
+      final type = _employeeNormalize(media.type);
+      if (media.id.startsWith('store-album:') || type.contains('music') ||
+          type.contains('album') || type.contains('song') || type.contains('track')) {
+        nextZone = design.aisles.length + 1;
+      }
+    }
+    setState(() {
+      _guidedMediaId = media.id;
+      _zoneIndex = nextZone;
+      _shelfOpen = false;
+      _selectedMediaId = media.id;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final targetContext = _walkwayKey.currentContext;
+      if (targetContext != null) {
+        Scrollable.ensureVisible(
+          targetContext,
+          duration: _motionDuration,
+          curve: Curves.easeInOut,
+          alignment: .25,
+        );
+      }
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Finding ${media.title} in the store…')),
+    );
+  }
+
+  Widget _buildStoreFinder(VirtualStoreDesign design) {
+    final query = _storeFinderController.text.trim().toLowerCase();
+    final matches = query.length < 2
+        ? const <MediaItem>[]
+        : _storePosterLibrary.where((media) =>
+            media.title.toLowerCase().contains(query) ||
+            (media.originalTitle?.toLowerCase().contains(query) ?? false))
+            .take(5).toList(growable: false);
+    return Card(
+      color: Color(design.shelfColor).withValues(alpha: .94),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(children: [
+              Icon(Icons.location_searching_rounded),
+              SizedBox(width: 8),
+              Expanded(child: Text('Find a title in the store', style: TextStyle(fontWeight: FontWeight.w900))),
+            ]),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _storeFinderController,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: 'Search your movies, shows or albums…',
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: _storeFinderController.text.isEmpty ? null : IconButton(
+                  tooltip: 'Clear search',
+                  onPressed: () => setState(() {
+                    _storeFinderController.clear();
+                    _guidedMediaId = null;
+                  }),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+                isDense: true,
+                filled: true,
+                fillColor: Colors.black.withValues(alpha: .12),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            if (query.length >= 2 && matches.isEmpty)
+              const Padding(
+                padding: EdgeInsets.only(top: 10),
+                child: Text('No matching owned title or indexed album was found.', style: TextStyle(color: Colors.white70, fontSize: 12)),
+              ),
+            for (final media in matches)
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: SizedBox(
+                  width: 34,
+                  height: 46,
+                  child: ClipRRect(borderRadius: BorderRadius.circular(5), child: CatalogPosterImage(media: media, fit: BoxFit.cover)),
+                ),
+                title: Text(media.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text(media.type, maxLines: 1, overflow: TextOverflow.ellipsis),
+                trailing: const Icon(Icons.directions_walk_rounded),
+                onTap: () => _focusMediaInStore(media),
+              ),
+            if (_guidedMediaId != null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => setState(() => _guidedMediaId = null),
+                  icon: const Icon(Icons.close_rounded, size: 15),
+                  label: const Text('Clear shelf guidance'),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Duration get _motionDuration {
     final design = _design;
     final level = design?.animationLevel ?? 'full';
@@ -339,8 +1086,15 @@ class _VirtualStoreExperienceScreenState
   Future<void> _inspectSelectedMedia() async {
     final media = _selectedMedia;
     if (media == null) return;
+    await _inspectMedia(media);
+  }
+
+  Future<void> _inspectMedia(MediaItem media) async {
+    if (!mounted) return;
     final format = MediaCaseStyle.canonicalFormat(media.displayCaseFormat);
-    if (format == 'Digital / not recorded') {
+    final isAlbum = media.id.startsWith('store-album:') ||
+        media.type.toLowerCase().contains('album');
+    if (format == 'Digital / not recorded' && !isAlbum) {
       _openMediaDetails(media);
       return;
     }
@@ -348,7 +1102,47 @@ class _VirtualStoreExperienceScreenState
       context,
       media: media,
       animationLevel: _design?.animationLevel ?? 'full',
-      onOpenTitle: () => _openMediaDetails(media),
+      onOpenTitle: () {
+        if (isAlbum) {
+          final sourceId = media.id.startsWith('store-album:')
+              ? media.id.substring('store-album:'.length)
+              : '';
+          final artistNames = media.music.map((value) => value.trim().toLowerCase()).toSet();
+          final sourceTracks = _music.tracks.where((track) {
+            final sameAlbum = track.album.trim().toLowerCase() ==
+                media.title.trim().toLowerCase();
+            final artistMatches = artistNames.isEmpty ||
+                artistNames.contains(track.artist.trim().toLowerCase());
+            final selectedSource = sourceId.isNotEmpty && track.id == sourceId;
+            return !track.catalogOnly &&
+                (selectedSource || (sameAlbum && artistMatches));
+          }).toList(growable: false);
+          final leadTrack = sourceTracks.isEmpty ? null : sourceTracks.first;
+          final localRows = sourceTracks.asMap().entries.map((entry) =>
+              <String, dynamic>{
+                'title': entry.value.title,
+                'artist': entry.value.artist,
+                'durationMs': entry.value.duration.inMilliseconds,
+                'trackNumber': entry.key + 1,
+                'artworkUrl': entry.value.artworkUrl,
+              }).toList(growable: false);
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => OwnedAlbumDetailsScreen(
+                media: media,
+                albumTitle: media.title,
+                artistName: leadTrack?.artist ?? media.music.join(', '),
+                artworkUrl: media.imageUrl,
+                localTracks: localRows,
+                isOwned: sourceTracks.isNotEmpty ||
+                    AppController.instance.isOwned(media.id),
+              ),
+            ),
+          );
+        } else {
+          _openMediaDetails(media);
+        }
+      },
     );
   }
 
@@ -545,7 +1339,17 @@ class _VirtualStoreExperienceScreenState
             onPressed: _showControls,
             icon: const Icon(Icons.keyboard_alt_outlined),
           ),
+          IconButton(
+            tooltip: 'Ask the store employee',
+            onPressed: _openStoreEmployee,
+            icon: const Icon(Icons.support_agent_rounded),
+          ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _openStoreEmployee,
+        icon: const Icon(Icons.support_agent_rounded),
+        label: const Text('Ask employee'),
       ),
       body: Focus(
         focusNode: _navigationFocus,
@@ -562,6 +1366,8 @@ class _VirtualStoreExperienceScreenState
                 design: design,
                 posterMedia: posters,
               ),
+              const SizedBox(height: 12),
+              _buildStoreFinder(design),
               const SizedBox(height: 18),
               _buildNewReleaseWall(design),
               const SizedBox(height: 18),
@@ -842,10 +1648,14 @@ class _VirtualStoreExperienceScreenState
     VirtualStoreDesign design,
     List<String> zones,
   ) {
-    return VirtualStore3DScene(
+    final sceneMedia = _storePosterLibrary;
+    return KeyedSubtree(
+      key: _walkwayKey,
+      child: VirtualStore3DScene(
       design: design,
       aisles: design.aisles,
-      posterMedia: _ownedLibrary,
+      posterMedia: sceneMedia,
+      focusedMediaId: _guidedMediaId,
       activeZoneIndex: _safeZoneIndex,
       zoneLabels: zones,
       onZoneChanged: (next) => setState(() {
@@ -856,6 +1666,9 @@ class _VirtualStoreExperienceScreenState
       }),
       onComputerSelected: () => Navigator.of(context).push(
         MaterialPageRoute<void>(builder: (_) => const VirtualStoreCatalogComputerScreen()),
+      ),
+      onEmployeeSelected: _openStoreEmployee,
+      onMediaSelected: (media) => unawaited(_inspectMedia(media)),
       ),
     );
   }
@@ -1176,10 +1989,21 @@ class _VirtualStoreExperienceScreenState
               const SizedBox(height: 6),
               const Text('Search your collection by movie, show, DVD, Blu-ray, 4K Ultra HD, CD, album or track. Ask the computer for a suggestion by mood, runtime or favorites.', style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.4)),
               const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const VirtualStoreCatalogComputerScreen())),
-                icon: const Icon(Icons.search_rounded),
-                label: const Text('Use catalog computer'),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton.icon(
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const VirtualStoreCatalogComputerScreen())),
+                    icon: const Icon(Icons.search_rounded),
+                    label: const Text('Use catalog computer'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _openStoreEmployee,
+                    icon: const Icon(Icons.support_agent_rounded),
+                    label: const Text('Ask the employee'),
+                  ),
+                ],
               ),
             ],
           ),

@@ -17,6 +17,7 @@ import 'localization.dart';
 import 'profile_username.dart';
 import 'artwork_selection_store.dart';
 import 'core/services/cinematic_title_metadata_service.dart';
+import 'core/services/profile_pin_service.dart';
 import 'energy_saver.dart';
 import 'media_artwork_auto_resolver.dart';
 
@@ -98,6 +99,58 @@ String? _profileArtworkSource(String? raw, {String tmdbSize = 'w500'}) {
 bool _isRemoteProfileArtwork(String? value) {
   final source = value?.trim() ?? '';
   return source.startsWith('https://') || source.startsWith('http://');
+}
+
+/// Builds a mixed, account-library artwork pool for profile selection and
+/// creation. Only artwork already present in this account's catalog/music
+/// library is used; titles are never hardcoded or fetched as random posters.
+List<_ProfileBackdropItem> _collectProfileBackdropItems() {
+  final items = <_ProfileBackdropItem>[];
+  final seenUrls = <String>{};
+  final controller = AppController.instance;
+
+  for (final media in controller.library) {
+    final type = media.type.trim().toLowerCase().replaceAll('_', ' ');
+    final isMusic = type.contains('music') ||
+        type.contains('album') ||
+        type.contains('song') ||
+        type.contains('track') ||
+        type.contains('audio');
+    final isMovie = type.contains('movie') || type.contains('film');
+    final isShow = type.contains('show') ||
+        type.contains('series') ||
+        type == 'tv' ||
+        type.contains('television') ||
+        type.contains('episode') ||
+        type.contains('special');
+    if (!isMusic && !isMovie && !isShow) continue;
+    final url = _profileArtworkSource(media.imageUrl);
+    if (url == null || !_isRemoteProfileArtwork(url) || !seenUrls.add(url)) {
+      continue;
+    }
+    items.add(_ProfileBackdropItem(
+      title: media.title,
+      type: isMusic
+          ? 'ALBUM'
+          : isMovie
+              ? 'MOVIE'
+              : 'SERIES',
+      imageUrl: url,
+    ));
+  }
+
+  for (final track in MusicLibraryStore.instance.tracks) {
+    final url = _profileArtworkSource(track.artworkUrl);
+    if (url == null || !_isRemoteProfileArtwork(url) || !seenUrls.add(url)) {
+      continue;
+    }
+    items.add(_ProfileBackdropItem(
+      title: track.album.trim().isEmpty ? track.title : track.album,
+      type: 'ALBUM',
+      imageUrl: url,
+    ));
+  }
+  return items;
 }
 
 /// ============================================================
@@ -244,16 +297,35 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
   }
 
   /// Opens the unified Music, Movies, and Shows achievements for a profile.
-  void _showAchievements(Profile profile) {
-    AppController.instance.switchProfile(profile.id);
+  Future<void> _showAchievements(Profile profile) async {
+    final controller = AppController.instance;
+    if (profile.governance.profilePinEnabled) {
+      final unlocked = await ProfilePinService.requestUnlock(
+        context,
+        accountId: controller.currentAccount?.id ?? 'local',
+        profileId: profile.id,
+        profileName: profile.name,
+      );
+      if (!unlocked || !mounted) return;
+    }
+    controller.switchProfile(profile.id);
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const AchievementsScreen()),
     );
   }
 
   /// Performs `_selectProfile` for this feature. Update this documentation when its contract changes.
-  void _selectProfile(Profile profile) {
+  Future<void> _selectProfile(Profile profile) async {
     final controller = AppController.instance;
+    if (profile.governance.profilePinEnabled) {
+      final unlocked = await ProfilePinService.requestUnlock(
+        context,
+        accountId: controller.currentAccount?.id ?? 'local',
+        profileId: profile.id,
+        profileName: profile.name,
+      );
+      if (!unlocked || !mounted) return;
+    }
     controller.switchProfile(profile.id);
 
     // Device registration is deliberately non-blocking. A selected profile is
@@ -279,49 +351,14 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
   List<_ProfileBackdropItem> _profileBackdropItems() {
     final cached = _cachedProfileBackdropItems;
     if (cached != null) return cached;
-    final items = <_ProfileBackdropItem>[];
-    final seenUrls = <String>{};
-    final controller = AppController.instance;
-
-    for (final media in controller.library) {
-      final type = media.type.trim().toLowerCase();
-      final isScreenMedia = type.contains('movie') ||
-          type.contains('show') ||
-          type.contains('series') ||
-          type == 'tv' ||
-          type.contains('television');
-      final url = (media.imageUrl ?? '').trim();
-      if (!isScreenMedia || !_isUsableArtworkUrl(url) || !seenUrls.add(url)) {
-        continue;
-      }
-      items.add(_ProfileBackdropItem(
-        title: media.title,
-        type: type.contains('movie') ? 'MOVIE' : 'SERIES',
-        imageUrl: url,
-      ));
-    }
-
-    for (final track in MusicLibraryStore.instance.tracks) {
-      final url = (track.artworkUrl ?? '').trim();
-      if (!_isUsableArtworkUrl(url) || !seenUrls.add(url)) continue;
-      items.add(_ProfileBackdropItem(
-        title: track.album.trim().isEmpty ? track.title : track.album,
-        type: 'ALBUM',
-        imageUrl: url,
-      ));
-    }
-
-    // Mix movies, series and albums instead of showing long type-grouped runs.
-    // Cache the shuffle so tapping a tile never changes which artwork its
-    // selected index refers to during a normal rebuild.
+    final items = _collectProfileBackdropItems();
+    // Shuffle the account's real movie, series and album artwork so the
+    // animated backdrop changes across profile-selection visits.
     items.shuffle();
     _cachedProfileBackdropItems =
         List<_ProfileBackdropItem>.unmodifiable(items);
     return _cachedProfileBackdropItems!;
   }
-
-  bool _isUsableArtworkUrl(String url) =>
-      url.startsWith('https://') || url.startsWith('http://');
 
   Widget _buildArtworkSlider(
     List<_ProfileBackdropItem> artwork, {
@@ -2289,6 +2326,7 @@ class _CreateProfileSheetState extends State<CreateProfileSheet> {
   String? _selectedMediaArtworkUrl;
 
   bool _saving = false;
+  List<_ProfileBackdropItem> _posterArtwork = const <_ProfileBackdropItem>[];
 
   int _selectedAvatarIndex = 0;
 
@@ -2300,12 +2338,27 @@ class _CreateProfileSheetState extends State<CreateProfileSheet> {
 
     _nameController = TextEditingController();
     _usernameController = TextEditingController();
+    _refreshPosterArtwork();
+    AppController.instance.addListener(_refreshPosterArtwork);
+    MusicLibraryStore.instance.addListener(_refreshPosterArtwork);
+  }
+
+  void _refreshPosterArtwork() {
+    final next = _collectProfileBackdropItems()..shuffle();
+    if (!mounted) {
+      _posterArtwork = List<_ProfileBackdropItem>.unmodifiable(next);
+      return;
+    }
+    setState(
+        () => _posterArtwork = List<_ProfileBackdropItem>.unmodifiable(next));
   }
 
   @override
 
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
+    AppController.instance.removeListener(_refreshPosterArtwork);
+    MusicLibraryStore.instance.removeListener(_refreshPosterArtwork);
     _nameController.dispose();
     _usernameController.dispose();
     super.dispose();
@@ -2531,6 +2584,10 @@ class _CreateProfileSheetState extends State<CreateProfileSheet> {
                   ),
                 ),
               ),
+              if (_posterArtwork.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                _CreateProfilePosterCarousel(items: _posterArtwork),
+              ],
               const SizedBox(height: 28),
               Center(
                 child: _CreateProfileAvatarPreview(
@@ -2680,6 +2737,124 @@ class _CreateProfileSheetState extends State<CreateProfileSheet> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _CreateProfilePosterCarousel extends StatefulWidget {
+  const _CreateProfilePosterCarousel({required this.items});
+  final List<_ProfileBackdropItem> items;
+
+  @override
+  State<_CreateProfilePosterCarousel> createState() =>
+      _CreateProfilePosterCarouselState();
+}
+
+class _CreateProfilePosterCarouselState
+    extends State<_CreateProfilePosterCarousel> {
+  Timer? _timer;
+  int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _startTimer();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CreateProfilePosterCarousel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_index >= widget.items.length) _index = 0;
+    if (oldWidget.items.length != widget.items.length) _startTimer();
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    if (widget.items.length < 2) return;
+    _timer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted || widget.items.isEmpty) return;
+      setState(() => _index = (_index + 1) % widget.items.length);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.items.isEmpty) return const SizedBox.shrink();
+    final item = widget.items[_index % widget.items.length];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'YOUR LIBRARY, IN MOTION',
+          style: TextStyle(
+              color: Colors.white70,
+              fontSize: 9,
+              letterSpacing: 1.3,
+              fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 132,
+          width: double.infinity,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(15),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 850),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: Stack(
+                key: ValueKey<String>(item.imageUrl),
+                fit: StackFit.expand,
+                children: [
+                  Image.network(item.imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          const ColoredBox(color: Color(0xFF202633))),
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerRight,
+                        end: Alignment.centerLeft,
+                        colors: [Colors.black12, Colors.black87],
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 14,
+                    right: 14,
+                    bottom: 12,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(item.type,
+                            style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 9,
+                                letterSpacing: 1.1,
+                                fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 3),
+                        Text(item.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 15)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

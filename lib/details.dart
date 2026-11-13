@@ -61,11 +61,17 @@ class _EditionSelection {
 class MediaDetailsScreen extends StatefulWidget {
   final MediaItem media;
   final String? theaterRoomId;
+  final String? wrappedContextType;
+  final String? wrappedContextId;
+  final String? wrappedContextTitle;
 
   const MediaDetailsScreen({
     super.key,
     required this.media,
     this.theaterRoomId,
+    this.wrappedContextType,
+    this.wrappedContextId,
+    this.wrappedContextTitle,
   });
 
   @override
@@ -3056,7 +3062,26 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           onOpenMedia: (selectedMedia) {
             Navigator.of(context).push<void>(
               MaterialPageRoute<void>(
-                builder: (_) => MediaDetailsScreen(media: selectedMedia),
+                builder: (_) => MediaDetailsScreen(
+                  media: selectedMedia,
+                  wrappedContextType: switch (kind) {
+                    CatalogEntityKind.company => 'company',
+                    CatalogEntityKind.genre => 'genre',
+                    CatalogEntityKind.character => 'character',
+                    CatalogEntityKind.tag => 'tag',
+                    CatalogEntityKind.person => selectedMedia.actors.any((value) => value.trim().toLowerCase() == name.trim().toLowerCase())
+                        ? 'cast'
+                        : selectedMedia.directors.any((value) => value.trim().toLowerCase() == name.trim().toLowerCase())
+                            ? 'director'
+                            : selectedMedia.writers.any((value) => value.trim().toLowerCase() == name.trim().toLowerCase())
+                                ? 'writer'
+                                : selectedMedia.music.any((value) => value.trim().toLowerCase() == name.trim().toLowerCase())
+                                    ? 'composer'
+                                    : 'person',
+                  },
+                  wrappedContextId: '${kind.name}:${Uri.encodeComponent(name.toLowerCase())}',
+                  wrappedContextTitle: name,
+                ),
               ),
             );
           },
@@ -3758,6 +3783,9 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           return PlayerScreen(
             media: selectedEdition,
             theaterRoomId: widget.theaterRoomId,
+            wrappedContextType: widget.wrappedContextType,
+            wrappedContextId: widget.wrappedContextId,
+            wrappedContextTitle: widget.wrappedContextTitle,
           );
         },
         transitionsBuilder: (

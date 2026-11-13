@@ -490,7 +490,7 @@ create table if not exists public.social_profile_presence (
   last_seen_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   primary key (account_id, profile_id),
-  check (activity_type is null or activity_type in ('watching', 'listening', 'shopping', 'ordering_food', 'planning_marathon'))
+  check (activity_type is null or activity_type in ('watching', 'listening', 'browsing', 'shopping', 'ordering_food', 'planning_marathon'))
 );
 
 create index if not exists social_profile_presence_last_seen_idx
@@ -544,7 +544,7 @@ BEGIN
     ADD CONSTRAINT social_profile_presence_activity_type_allowed_check
     CHECK (
       activity_type IS NULL OR activity_type IN (
-        'watching', 'listening', 'shopping', 'ordering_food', 'planning_marathon'
+        'watching', 'listening', 'browsing', 'shopping', 'ordering_food', 'planning_marathon'
       )
     );
 END $$;

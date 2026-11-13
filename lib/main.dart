@@ -2,6 +2,7 @@
 // Purpose: Implements the main portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -76,6 +77,7 @@ import 'tv_host.dart';
 import 'entertainment_extensions.dart';
 import 'innovation_hub.dart';
 import 'core/services/automatic_backup_service.dart';
+import 'core/services/profile_pin_service.dart';
 import 'library_protection_center.dart';
 import 'media_extras_library.dart';
 import 'profiles_permissions_hub.dart';
@@ -83,6 +85,7 @@ import 'coming_soon_release_screen.dart';
 import 'song_identification_screen.dart';
 import 'watch_history_calendar.dart';
 import 'dialogue_search.dart';
+import 'screens/my_media_hub_screen.dart';
 import 'discovery_center.dart';
 import 'performer_universe.dart';
 import 'personal_media_intelligence_center.dart';
@@ -416,10 +419,18 @@ class _MyStreamingServiceState extends State<MyStreamingService> {
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          ResponsiveScope(
-                            child: _AppPageSurface(
-                              child: ResponsiveAppSurface(
-                                child: child ?? const SizedBox.shrink(),
+                          Shortcuts(
+                            shortcuts: <ShortcutActivator, Intent>{
+                              SingleActivator(LogicalKeyboardKey.gameButtonB):
+                                  const DismissIntent(),
+                            },
+                            child: FocusTraversalGroup(
+                              child: ResponsiveScope(
+                                child: _AppPageSurface(
+                                  child: ResponsiveAppSurface(
+                                    child: child ?? const SizedBox.shrink(),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -5942,6 +5953,13 @@ class _HomeScreenState extends State<HomeScreen>
                   builder: (_) => const MediaWrappedCollectionsScreen(),
                 ),
               ),
+              onMyMediaHub: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  settings: const RouteSettings(name: '/app/page/my-media-hub'),
+                  builder: (_) => const MyMediaHubScreen(),
+                ),
+              ),
             );
 
             return Column(
@@ -9097,7 +9115,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: _ProfileManagementCard(
                 profile: profile,
                 current: controller.currentProfile?.id == profile.id,
-                onSwitch: () {
+                onSwitch: () async {
+                  if (profile.governance.profilePinEnabled) {
+                    final unlocked = await ProfilePinService.requestUnlock(
+                      context,
+                      accountId: controller.currentAccount?.id ?? 'local',
+                      profileId: profile.id,
+                      profileName: profile.name,
+                    );
+                    if (!unlocked || !mounted) return;
+                  }
                   controller.switchProfile(profile.id);
                   setState(() {});
                 },

@@ -377,7 +377,7 @@ class _UniverseFranchiseDetailsScreenState
   void _openMedia(MediaItem item) {
     Navigator.push<void>(
       context,
-      MaterialPageRoute<void>(builder: (_) => MediaDetailsScreen(media: item)),
+      MaterialPageRoute<void>(builder: (_) => MediaDetailsScreen(media: item, wrappedContextType: widget.group.kind.toLowerCase().contains('universe') ? 'universe' : 'franchise', wrappedContextId: widget.group.id, wrappedContextTitle: widget.group.name)),
     );
   }
 

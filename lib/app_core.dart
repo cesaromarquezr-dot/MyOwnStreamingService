@@ -1,3 +1,4 @@
+import 'core/services/playback_progress_sync_service.dart';
 // FILE: `lib/app_core.dart`.
 // Purpose: Implements the app core portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
@@ -22,6 +23,7 @@ import 'core/models/platform_server.dart';
 import 'media_graph_relationship.dart';
 
 import 'backend_api_compatibility.dart';
+
 class MediaMetadataProtection {
   const MediaMetadataProtection._();
 
@@ -236,9 +238,11 @@ class MediaItem {
 
   final String? discMarketCountry;
   final String? originalTitle;
+
   /// ISO-639 language code for the language originally recorded for the work.
   /// This describes the production's original audio, not the story's culture.
   final String? originalLanguage;
+
   /// Production country/countries. This is deliberately separate from the
   /// cultural setting and cultural inspiration fields below.
   final String? countryOfOrigin;
@@ -312,8 +316,10 @@ class MediaItem {
   final List<String> tags;
   final List<String> themes;
   final List<String> tones;
+
   /// Countries/regions represented in the story; never used to infer audio.
   final List<String> culturalSettings;
+
   /// Traditions, folklore, history, or communities that inspired the work.
   /// This is not the production origin and never determines its original audio.
   final List<String> culturalInspirations;
@@ -847,9 +853,9 @@ class MediaItem {
       discRegion: data['discRegion']?.toString(),
       discCollectionId:
           (data['discCollectionId'] ?? data['disc_collection_id'])?.toString(),
-      discCollectionTitle: (data['discCollectionTitle'] ??
-              data['disc_collection_title'])
-          ?.toString(),
+      discCollectionTitle:
+          (data['discCollectionTitle'] ?? data['disc_collection_title'])
+              ?.toString(),
       discNumber: data['discNumber'] is num
           ? (data['discNumber'] as num).toInt()
           : int.tryParse(data['discNumber']?.toString() ?? ''),
@@ -858,15 +864,15 @@ class MediaItem {
       parentMediaId:
           (data['parentMediaId'] ?? data['parent_media_id'])?.toString(),
       physicalReleaseId:
-          (data['physicalReleaseId'] ?? data['physical_release_id'])?.toString(),
+          (data['physicalReleaseId'] ?? data['physical_release_id'])
+              ?.toString(),
       physicalDiscId:
           (data['physicalDiscId'] ?? data['physical_disc_id'])?.toString(),
-      discContentId:
-          (data['discContentId'] ??
-                  data['disc_content_id'] ??
-                  data['contentId'] ??
-                  data['content_id'])
-              ?.toString(),
+      discContentId: (data['discContentId'] ??
+              data['disc_content_id'] ??
+              data['contentId'] ??
+              data['content_id'])
+          ?.toString(),
       discContentPosition: _intValue(
         data['discContentPosition'] ??
             data['disc_content_position'] ??
@@ -1038,8 +1044,10 @@ class MediaItem {
       tags: _stringList(data['tags']),
       themes: _stringList(data['themes']),
       tones: _stringList(data['tones']),
-      culturalSettings: _stringList(data['culturalSettings'] ?? data['cultural_settings']),
-      culturalInspirations: _stringList(data['culturalInspirations'] ?? data['cultural_inspirations']),
+      culturalSettings:
+          _stringList(data['culturalSettings'] ?? data['cultural_settings']),
+      culturalInspirations: _stringList(
+          data['culturalInspirations'] ?? data['cultural_inspirations']),
       studios: _combinedCreditNameList([
         data['studios'],
         data['productionStudios'],
@@ -3106,6 +3114,8 @@ class AppController extends ChangeNotifier {
   final List<GroupWatchSession> groupWatchSessions = <GroupWatchSession>[];
 
   final Map<String, double> playbackProgress = <String, double>{};
+  final Map<String, int> playbackPositionSeconds = <String, int>{};
+  final Map<String, int> playbackDurationSeconds = <String, int>{};
 
   final Map<String, String> nextEpisodes = <String, String>{};
 
@@ -3618,6 +3628,7 @@ class AppController extends ChangeNotifier {
 
   /// Applies backend account data to the local account/profile model.
   void _applyBackendAccount(Map<String, dynamic> accountMap) {
+    final previousProfileId = currentProfile?.id;
     final username = accountMap['username']?.toString() ?? '';
     final accountEmail = accountMap['email']?.toString() ?? '';
     if (username.isEmpty || accountEmail.isEmpty) {
@@ -3675,6 +3686,11 @@ class AppController extends ChangeNotifier {
           accountMap['allowMembersToManageOwnProfiles'] == true,
     );
     currentProfile = profiles.isEmpty ? null : profiles.first;
+    if (previousProfileId != currentProfile?.id) {
+      playbackProgress.clear();
+      playbackPositionSeconds.clear();
+      playbackDurationSeconds.clear();
+    }
     activeProfileIds
       ..clear()
       ..addAll(
@@ -3749,6 +3765,9 @@ class AppController extends ChangeNotifier {
       }());
     }
 
+    if (currentProfile != null) {
+      _restorePlaybackProgressForProfile(currentProfile!.id);
+    }
     unawaited(loadRecommendations());
     unawaited(loadGroupWishlist());
     unawaited(loadGroupRecommendations());
@@ -3768,6 +3787,9 @@ class AppController extends ChangeNotifier {
     }
     _applyBackendAccount(Map<String, dynamic>.from(accountData));
     unawaited(_ensureLibraryMembershipLoaded());
+    if (currentProfile != null) {
+      _restorePlaybackProgressForProfile(currentProfile!.id);
+    }
     notifyListeners();
   }
 
@@ -3792,6 +3814,9 @@ class AppController extends ChangeNotifier {
     }
     _applyBackendAccount(Map<String, dynamic>.from(accountData));
     await _ensureLibraryMembershipLoaded();
+    if (currentProfile != null) {
+      _restorePlaybackProgressForProfile(currentProfile!.id);
+    }
     notifyListeners();
     return response;
   }
@@ -3816,6 +3841,9 @@ class AppController extends ChangeNotifier {
       currentServer = null;
       _pendingServerContext = null;
       activePlaybackSessionId = null;
+      playbackProgress.clear();
+      playbackPositionSeconds.clear();
+      playbackDurationSeconds.clear();
 
       activeProfileIds.clear();
 
@@ -3874,6 +3902,7 @@ class AppController extends ChangeNotifier {
       activeProfileIds
         ..clear()
         ..add(currentProfile!.id);
+      _restorePlaybackProgressForProfile(currentProfile!.id);
     }
 
     notifyListeners();
@@ -3893,6 +3922,9 @@ class AppController extends ChangeNotifier {
     currentProfile = null;
     _loadedLibraryMembershipScope = null;
     _hiddenLibraryMediaIds.clear();
+    playbackProgress.clear();
+    playbackPositionSeconds.clear();
+    playbackDurationSeconds.clear();
 
     activeProfileIds.clear();
 
@@ -4019,6 +4051,25 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Restores profile-scoped playback progress from local and authenticated
+  /// account records. Only title IDs and resume metadata are synchronized.
+  void _restorePlaybackProgressForProfile(String profileId) {
+    if (profileId.trim().isEmpty) return;
+    unawaited(() async {
+      try {
+        final snapshot = await PlaybackProgressSyncService.synchronizeProfile(
+          api: backendApi,
+          profileId: profileId,
+          currentProgress: Map<String, double>.from(playbackProgress),
+        );
+        if (currentProfile?.id != profileId) return;
+        applyPlaybackProgressSnapshot(snapshot);
+      } catch (_) {
+        // Local playback remains available if account sync is offline.
+      }
+    }());
+  }
+
   /// Performs `switchProfile` for this feature. Update this documentation when its contract changes.
   void switchProfile(
     String profileId,
@@ -4040,7 +4091,15 @@ class AppController extends ChangeNotifier {
       return;
     }
 
+    if (currentProfile?.id != profile.id) {
+      // Playback progress is profile-scoped; never expose the previous
+      // profile's resume positions after switching identities.
+      playbackProgress.clear();
+      playbackPositionSeconds.clear();
+      playbackDurationSeconds.clear();
+    }
     currentProfile = profile;
+    _restorePlaybackProgressForProfile(profile.id);
     unawaited(_ensureLibraryMembershipLoaded());
 
     activeProfileIds
@@ -5140,14 +5199,29 @@ class AppController extends ChangeNotifier {
     return playbackProgress[mediaId] ?? 0;
   }
 
+  void applyPlaybackProgressSnapshot(PlaybackProgressSyncSnapshot snapshot) {
+    playbackProgress.addAll(snapshot.progress);
+    playbackPositionSeconds.addAll(snapshot.positionSeconds);
+    playbackDurationSeconds.addAll(snapshot.durationSeconds);
+    notifyListeners();
+  }
+
   /// Performs `updatePlaybackProgress` for this feature. Update this documentation when its contract changes.
   void updatePlaybackProgress(
     String mediaId,
-    double progress,
-  ) {
+    double progress, {
+    int? positionSeconds,
+    int? durationSeconds,
+  }) {
     final clamped = progress.clamp(0.0, 1.0);
 
     playbackProgress[mediaId] = clamped.toDouble();
+    if (positionSeconds != null && positionSeconds >= 0) {
+      playbackPositionSeconds[mediaId] = positionSeconds;
+    }
+    if (durationSeconds != null && durationSeconds > 0) {
+      playbackDurationSeconds[mediaId] = durationSeconds;
+    }
     final profileId = currentProfile?.id;
     if (profileId != null && profileId.isNotEmpty) {
       // Coalesces repeated player progress ticks into one durable pending update
@@ -5161,6 +5235,14 @@ class AppController extends ChangeNotifier {
             progress: clamped.toDouble(),
           )
           .catchError((_) {}));
+      unawaited(PlaybackProgressSyncService.recordLocalProgress(
+        api: backendApi,
+        profileId: profileId,
+        mediaId: mediaId,
+        progress: clamped.toDouble(),
+        positionSeconds: positionSeconds,
+        durationSeconds: durationSeconds,
+      ).catchError((_) {}));
     }
 
     notifyListeners();
@@ -5170,17 +5252,116 @@ class AppController extends ChangeNotifier {
   /// Adds a profile-scoped playback completion event for Wrapped. This is a
   /// compact activity record only: it stores metadata and timestamps, never
   /// media bytes, credentials, or a raw storage path.
-  Future<void> recordWrappedActivity(MediaItem media) =>
+  Future<void> recordWrappedActivity(
+    MediaItem media, {
+    String action = 'completed',
+    String? contextType,
+    String? contextId,
+    String? contextTitle,
+  }) =>
       recordWrappedActivityDetails(
         mediaId: media.id,
         canonicalWorkId: media.canonicalWorkId ?? media.id,
         title: media.title,
         type: media.type,
         genres: media.genres,
+        action: action,
+        contextType: contextType,
+        contextId: contextId,
+        contextTitle: contextTitle,
+        entities: wrappedEntitiesForMedia(media),
       );
 
-  /// Shared recorder used by video completions and completed music tracks.
-  /// Only profile-scoped metadata is kept; files and server paths are not copied.
+  /// Builds verified relationship entities from the imported MediaItem metadata.
+  /// These are the attribution dimensions used by Entertainment Wrapped.
+  List<Map<String, String>> wrappedEntitiesForMedia(MediaItem media) {
+    final output = <Map<String, String>>[];
+    final seen = <String>{};
+    void add(String kind, String? rawName, {String? id}) {
+      final name = rawName?.trim() ?? '';
+      if (name.isEmpty) return;
+      final key = '$kind|${name.toLowerCase()}';
+      if (!seen.add(key)) return;
+      output.add(<String, String>{'type': kind, 'id': id ?? '', 'name': name});
+    }
+
+    void addMany(String kind, Iterable<String> values) {
+      for (final value in values) {
+        add(kind, value);
+      }
+    }
+
+    addMany('genre', media.genres);
+    addMany('cast', media.actors);
+    addMany('director', media.directors);
+    addMany('writer', media.writers);
+    addMany('composer', media.music);
+    addMany('company', media.companies);
+    addMany('studio', media.studios);
+    // Container counts (collections, franchises and universes) are attributed
+    // from the screen/context that launched playback, not merely because a
+    // title happens to carry that metadata. This mirrors album-vs-playlist
+    // attribution for music.
+    addMany('character', media.characters);
+    addMany('tag', <String>[...media.tags, ...media.themes]);
+    // Only production/origin countries belong in Entertainment Wrapped. A
+    // disc's retail/market region is edition metadata, not a country credit.
+    final countries = <String>{
+      if (media.countryOfOrigin?.trim().isNotEmpty == true)
+        ...media.countryOfOrigin!.split(RegExp(r'[,;/|]')),
+    };
+    addMany('country', countries);
+
+    final type = media.type.toLowerCase();
+    if (type.contains('episode') &&
+        media.parentMediaId?.trim().isNotEmpty == true) {
+      MediaItem? parent;
+      for (final candidate in library) {
+        if (candidate.id == media.parentMediaId) {
+          parent = candidate;
+          break;
+        }
+      }
+      if (parent != null) {
+        add('series', parent.title, id: parent.id);
+        addMany('genre', parent.genres);
+        addMany('cast', parent.actors);
+        addMany('director', parent.directors);
+        addMany('writer', parent.writers);
+        addMany('composer', parent.music);
+        addMany('company', parent.companies);
+        addMany('studio', parent.studios);
+        if (parent.countryOfOrigin?.trim().isNotEmpty == true) {
+          addMany('country', parent.countryOfOrigin!.split(RegExp(r'[,;/|]')));
+        }
+      }
+    } else if (type.contains('show') ||
+        type.contains('series') ||
+        type.contains('tv')) {
+      add('series', media.title, id: media.id);
+    }
+    return output;
+  }
+
+  /// A play is recorded when playback actually starts, not only when it reaches
+  /// the credits. This prevents completion-only counting and enables context
+  /// attribution (album vs playlist, collection vs standalone title).
+  Future<void> recordWrappedMediaPlayback(
+    MediaItem media, {
+    String? contextType,
+    String? contextId,
+    String? contextTitle,
+  }) =>
+      recordWrappedActivity(
+        media,
+        action: 'played',
+        contextType: contextType,
+        contextId: contextId,
+        contextTitle: contextTitle,
+      );
+
+  /// Shared recorder for profile-scoped play events. Only metadata is kept;
+  /// media bytes, credentials and filesystem paths are never copied.
   Future<void> recordWrappedActivityDetails({
     required String mediaId,
     String? canonicalWorkId,
@@ -5189,6 +5370,11 @@ class AppController extends ChangeNotifier {
     List<String> genres = const <String>[],
     String? artist,
     String? album,
+    String action = 'completed',
+    String? contextType,
+    String? contextId,
+    String? contextTitle,
+    List<Map<String, String>> entities = const <Map<String, String>>[],
     String? profileIdOverride,
   }) async {
     final profileId = (profileIdOverride ?? currentProfile?.id ?? '').trim();
@@ -5197,6 +5383,65 @@ class AppController extends ChangeNotifier {
     }
 
     try {
+      final eventEntities = <Map<String, String>>[
+        for (final entity in entities)
+          <String, String>{
+            'type': entity['type'] ?? 'other',
+            'id': entity['id'] ?? '',
+            'name': entity['name'] ?? '',
+          },
+      ];
+      final contextName = contextTitle?.trim() ?? '';
+      final normalizedContextType = contextType?.trim().toLowerCase() ?? '';
+      const supportedContextTypes = <String>{
+        'album',
+        'playlist',
+        'collection',
+        'franchise',
+        'universe',
+        'series',
+        'show',
+        'cast',
+        'actor',
+        'actress',
+        'person',
+        'director',
+        'writer',
+        'composer',
+        'company',
+        'studio',
+        'network',
+        'country',
+        'genre',
+        'tag',
+        'character',
+        'artist',
+      };
+      if (contextName.isNotEmpty &&
+          supportedContextTypes.contains(normalizedContextType)) {
+        final contextEntityType = switch (normalizedContextType) {
+          'show' => 'series',
+          'actor' || 'actress' => 'cast',
+          'studio' || 'network' => 'company',
+          _ => normalizedContextType,
+        };
+        eventEntities.add(<String, String>{
+          'type': contextEntityType,
+          'id': contextId?.trim() ?? '',
+          'name': contextName,
+        });
+      }
+      final uniqueEntities = <Map<String, String>>[];
+      final seenEntityKeys = <String>{};
+      for (final entity in eventEntities) {
+        final name = entity['name']?.trim() ?? '';
+        final kind = entity['type']?.trim() ?? 'other';
+        if (name.isEmpty ||
+            !seenEntityKeys.add('$kind|${name.toLowerCase()}')) {
+          continue;
+        }
+        uniqueEntities.add(entity);
+      }
       final prefs = _badgePrefs ?? await SharedPreferences.getInstance();
       _badgePrefs ??= prefs;
       final key = 'moss_wrapped_activity_$profileId';
@@ -5227,8 +5472,15 @@ class AppController extends ChangeNotifier {
         'genres': genres,
         if (artist?.trim().isNotEmpty == true) 'artist': artist!.trim(),
         if (album?.trim().isNotEmpty == true) 'album': album!.trim(),
+        'action': action,
+        if (contextType?.trim().isNotEmpty == true)
+          'contextType': contextType!.trim(),
+        if (contextId?.trim().isNotEmpty == true)
+          'contextId': contextId!.trim(),
+        if (contextTitle?.trim().isNotEmpty == true)
+          'contextTitle': contextTitle!.trim(),
+        'entities': uniqueEntities,
         'occurredAt': occurredAt.toIso8601String(),
-        'action': 'completed',
       });
       if (records.length > 10000) {
         records.removeRange(0, records.length - 10000);
@@ -5246,8 +5498,6 @@ class AppController extends ChangeNotifier {
     if (!isWatched(media.id)) {
       watched.add(media);
       _recordMonthlyWatch(media);
-      unawaited(recordWrappedActivity(media));
-
       _addActivity(
         title: media.title,
         action: 'Watched',
@@ -5265,11 +5515,8 @@ class AppController extends ChangeNotifier {
   void finishWatching(
     MediaItem media,
   ) {
-    final alreadyWatched = isWatched(media.id);
     markWatched(media);
-    if (alreadyWatched) {
-      unawaited(recordWrappedActivity(media));
-    }
+    // Wrapped play counts are written when a playback session starts, not at completion.
   }
 
   // ---------------------------------------------------------------------------
@@ -5356,7 +5603,8 @@ class AppController extends ChangeNotifier {
     if (activeProfileId == null || activeProfileId.isEmpty) {
       recommendations.clear();
       recommendationDetails.clear();
-      recommendationsError = 'Select a profile to load personalized recommendations.';
+      recommendationsError =
+          'Select a profile to load personalized recommendations.';
       recommendationsLoading = false;
       notifyListeners();
       return;
@@ -5381,7 +5629,8 @@ class AppController extends ChangeNotifier {
         for (final item in data) {
           if (item is Map) {
             final envelope = Map<String, dynamic>.from(item);
-            final normalizedMedia = normalizeRecommendationMediaPayload(envelope);
+            final normalizedMedia =
+                normalizeRecommendationMediaPayload(envelope);
             if (normalizedMedia == null) continue;
             final media = MediaItem.fromJson(normalizedMedia);
             if (!isExcludedEntertainmentType(media.type)) {
@@ -7418,8 +7667,10 @@ class AppController extends ChangeNotifier {
     final profileId = profileIdOverride?.trim().isNotEmpty == true
         ? profileIdOverride!.trim()
         : currentProfile?.id.trim() ?? '';
-    if (!backendApi.isAuthenticated || profileId.isEmpty ||
-        title.trim().isEmpty || artist.trim().isEmpty) {
+    if (!backendApi.isAuthenticated ||
+        profileId.isEmpty ||
+        title.trim().isEmpty ||
+        artist.trim().isEmpty) {
       return;
     }
     try {
@@ -7491,6 +7742,8 @@ class AppController extends ChangeNotifier {
     groupWatchSessions.clear();
 
     playbackProgress.clear();
+    playbackPositionSeconds.clear();
+    playbackDurationSeconds.clear();
     nextEpisodes.clear();
     activeProfileIds.clear();
 

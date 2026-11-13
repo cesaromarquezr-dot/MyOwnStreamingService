@@ -30,7 +30,7 @@ where availability is null or availability not in ('active', 'away', 'busy');
 update public.social_profile_presence
 set activity_type = null
 where activity_type is not null
-  and activity_type not in ('watching', 'listening', 'shopping', 'ordering_food', 'planning_marathon');
+  and activity_type not in ('watching', 'listening', 'browsing', 'shopping', 'ordering_food', 'planning_marathon');
 
 update public.social_profile_presence
 set last_seen_at = coalesce(last_seen_at, now()),
@@ -87,7 +87,7 @@ alter table public.social_profile_presence
     check (availability in ('active', 'away', 'busy')),
   add constraint social_profile_presence_activity_type_check
     check (activity_type is null or activity_type in (
-      'watching', 'listening', 'shopping', 'ordering_food', 'planning_marathon'
+      'watching', 'listening', 'browsing', 'shopping', 'ordering_food', 'planning_marathon'
     ));
 
 alter table public.social_profile_presence enable row level security;

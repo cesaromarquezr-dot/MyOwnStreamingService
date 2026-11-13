@@ -2800,7 +2800,7 @@ class SupabaseStore {
       throw ArgumentError('Invalid presence status.');
     }
     if (activityType != null &&
-        !{'watching', 'listening', 'shopping', 'ordering_food', 'planning_marathon'}.contains(activityType)) {
+        !{'watching', 'listening', 'browsing', 'shopping', 'ordering_food', 'planning_marathon'}.contains(activityType)) {
       throw ArgumentError('Invalid activity type.');
     }
     final cleanActivity = activityText?.trim();

@@ -11,6 +11,8 @@ import 'package:video_player/video_player.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'app_core.dart';
 import 'backend_api.dart';
+import 'presence/account_profile_presence_service.dart';
+import 'widgets/account_profile_presence_strip.dart';
 import 'catalog_poster_image.dart' show AlbumArtworkImage;
 import 'music_favorites.dart';
 import 'music_genre_system.dart';
@@ -27,6 +29,7 @@ import 'library_view_modes.dart';
 import 'playback_queue_store.dart';
 import 'user_rating_store.dart';
 import 'rating_system.dart';
+import 'core/services/recent_playback_store.dart';
 
 /// A music track imported from the account's home-server library.
 class MusicTrack {
@@ -1115,14 +1118,33 @@ class MusicPlaybackController extends ChangeNotifier {
   bool _resumeAfterVideo = false;
   bool _advancing = false;
   bool _wrappedCompletionRecordedForCurrentPlayback = false;
+  DateTime? _lastProgressSyncAt;
   String? _playbackProfileId;
+  String _wrappedContextType = 'track';
+  String? _wrappedContextId;
+  String? _wrappedContextTitle;
 
   VideoPlayerController? get videoController => _controller;
   bool get isReady => _controller?.value.isInitialized == true;
+  Duration get currentPosition => _controller?.value.position ?? Duration.zero;
+  Duration get currentDuration => _controller?.value.duration ?? Duration.zero;
 
   /// Starts a server-provided audio stream for a track.
-  Future<void> play(MusicTrack track) async {
+  Future<void> play(
+    MusicTrack track, {
+    String? wrappedContextType,
+    String? wrappedContextId,
+    String? wrappedContextTitle,
+  }) async {
     final profile = AppController.instance.currentProfile;
+    // Queue advancement remains inside the originating album/playlist context.
+    // A direct user play without a container is a standalone track play.
+    if (!_advancing || wrappedContextType != null) {
+      _wrappedContextType = wrappedContextType ?? 'track';
+      _wrappedContextId = wrappedContextId;
+      _wrappedContextTitle = wrappedContextTitle;
+    }
+    if (currentTrack?.id != track.id) _saveCurrentTrackProgress();
     if (profileBlocksExplicitMusic(profile) && track.explicit) {
       return;
     }
@@ -1133,6 +1155,7 @@ class MusicPlaybackController extends ChangeNotifier {
     currentTrack = track;
     _playbackProfileId = profile?.id;
     _wrappedCompletionRecordedForCurrentPlayback = false;
+    _lastProgressSyncAt = null;
     MusicLibraryStore.instance.currentTrackId = track.id;
 
     if (url == null || url.isEmpty) {
@@ -1157,8 +1180,31 @@ class MusicPlaybackController extends ChangeNotifier {
     controller.addListener(_handlePlaybackTick);
     try {
       await controller.initialize();
+      final savedSeconds = AppController.instance.playbackPositionSeconds[track.id];
+      if (savedSeconds != null && savedSeconds > 0 && controller.value.duration > Duration.zero) {
+        final target = Duration(seconds: savedSeconds);
+        await controller.seekTo(target > controller.value.duration
+            ? controller.value.duration
+            : target);
+      }
       await controller.play();
       isPlaying = true;
+      if (profile != null) {
+        AccountProfilePresenceService.instance.start(
+          profileId: profile.id,
+          activityType: 'listening',
+          activityText: 'Listening Lounge',
+        );
+      }
+      unawaited(RecentPlaybackStore.recordTrack(
+        id: track.id,
+        title: track.title,
+        artist: track.artist,
+        album: track.album,
+        artworkUrl: track.artworkUrl,
+        profileId: profile?.id,
+        api: AppController.instance.backendApi,
+      ));
       MusicLibraryStore.instance.recordListen(track.id);
       unawaited(AppController.instance.recordMusicListeningEvent(
         title: track.title,
@@ -1169,6 +1215,34 @@ class MusicPlaybackController extends ChangeNotifier {
         durationSeconds: 0,
         artworkUrl: track.artworkUrl,
         source: 'music-player',
+      ));
+      final wrappedEntities = <Map<String, String>>[
+        {'type': 'artist', 'id': track.artist, 'name': track.artist},
+        for (final artist in track.featuredArtists)
+          if (artist.trim().isNotEmpty)
+            {'type': 'artist', 'id': artist, 'name': artist},
+        for (final genre in track.allGenreTags)
+          if (genre.trim().isNotEmpty)
+            {'type': 'genre', 'id': genre, 'name': genre},
+        if (_wrappedContextType == 'album' && track.album.trim().isNotEmpty)
+          {'type': 'album', 'id': track.album, 'name': track.album},
+        if (_wrappedContextType == 'playlist' && (_wrappedContextTitle?.trim().isNotEmpty ?? false))
+          {'type': 'playlist', 'id': _wrappedContextId ?? _wrappedContextTitle!, 'name': _wrappedContextTitle!},
+      ];
+      unawaited(AppController.instance.recordWrappedActivityDetails(
+        mediaId: track.id,
+        canonicalWorkId: track.id,
+        title: track.title,
+        type: 'song',
+        genres: track.allGenreTags,
+        artist: track.artist,
+        album: track.album,
+        action: 'played',
+        contextType: _wrappedContextType,
+        contextId: _wrappedContextId,
+        contextTitle: _wrappedContextTitle,
+        entities: wrappedEntities,
+        profileIdOverride: profile?.id,
       ));
     } catch (_) {
       isPlaying = false;
@@ -1182,12 +1256,42 @@ class MusicPlaybackController extends ChangeNotifier {
   void _handlePlaybackTick() {
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) return;
-    if (!controller.value.isCompleted || _advancing) return;
+    final value = controller.value;
+    if (_playbackProfileId != AppController.instance.currentProfile?.id) {
+      unawaited(controller.pause());
+      isPlaying = false;
+      notifyListeners();
+      return;
+    }
+    final trackForProgress = currentTrack;
+    if (trackForProgress != null && value.duration > Duration.zero && !value.isCompleted) {
+      final now = DateTime.now();
+      if (_lastProgressSyncAt == null ||
+          now.difference(_lastProgressSyncAt!) >= const Duration(seconds: 12)) {
+        _lastProgressSyncAt = now;
+        final normalized = (value.position.inMilliseconds / value.duration.inMilliseconds)
+            .clamp(0.0, 1.0)
+            .toDouble();
+        AppController.instance.updatePlaybackProgress(
+          trackForProgress.id,
+          normalized,
+          positionSeconds: value.position.inSeconds,
+          durationSeconds: value.duration.inSeconds,
+        );
+      }
+    }
+    if (!value.isCompleted || _advancing) return;
 
     final finishedTrack = currentTrack;
     if (finishedTrack != null &&
         !_wrappedCompletionRecordedForCurrentPlayback) {
       _wrappedCompletionRecordedForCurrentPlayback = true;
+      AppController.instance.updatePlaybackProgress(
+        finishedTrack.id,
+        1.0,
+        positionSeconds: controller.value.duration.inSeconds,
+        durationSeconds: controller.value.duration.inSeconds,
+      );
       unawaited(AppController.instance.recordMusicListeningEvent(
         title: finishedTrack.title,
         artist: finishedTrack.artist,
@@ -1200,16 +1304,7 @@ class MusicPlaybackController extends ChangeNotifier {
         eventType: 'completed',
         profileIdOverride: _playbackProfileId,
       ));
-      unawaited(AppController.instance.recordWrappedActivityDetails(
-        mediaId: finishedTrack.id,
-        canonicalWorkId: finishedTrack.id,
-        title: finishedTrack.title,
-        type: 'song',
-        genres: finishedTrack.allGenreTags,
-        artist: finishedTrack.artist,
-        album: finishedTrack.album,
-        profileIdOverride: _playbackProfileId,
-      ));
+      // Wrapped is recorded once when the track actually starts.
     }
 
     isPlaying = false;
@@ -1305,10 +1400,31 @@ class MusicPlaybackController extends ChangeNotifier {
     }
   }
 
+  void _saveCurrentTrackProgress() {
+    final controller = _controller;
+    final track = currentTrack;
+    if (controller == null || track == null || !controller.value.isInitialized ||
+        controller.value.duration <= Duration.zero ||
+        _playbackProfileId != AppController.instance.currentProfile?.id) {
+      return;
+    }
+    final value = controller.value;
+    final normalized = (value.position.inMilliseconds / value.duration.inMilliseconds)
+        .clamp(0.0, 1.0)
+        .toDouble();
+    AppController.instance.updatePlaybackProgress(
+      track.id,
+      normalized,
+      positionSeconds: value.position.inSeconds,
+      durationSeconds: value.duration.inSeconds,
+    );
+  }
+
   /// Pauses music when a movie/show starts and remembers whether it should resume.
   bool pauseForVideo() {
     _resumeAfterVideo = isPlaying;
     if (isPlaying) {
+      _saveCurrentTrackProgress();
       _controller?.pause();
       isPlaying = false;
       notifyListeners();
@@ -1320,6 +1436,7 @@ class MusicPlaybackController extends ChangeNotifier {
   Future<void> resumeAfterVideo() async {
     if (!_resumeAfterVideo || _controller == null) return;
     _resumeAfterVideo = false;
+    if (_playbackProfileId != AppController.instance.currentProfile?.id) return;
     await _controller!.play();
     isPlaying = true;
     notifyListeners();
@@ -1330,6 +1447,7 @@ class MusicPlaybackController extends ChangeNotifier {
     final controller = _controller;
     if (controller == null || !isReady) return;
     if (controller.value.isPlaying) {
+      _saveCurrentTrackProgress();
       await controller.pause();
       isPlaying = false;
     } else {
@@ -1894,6 +2012,140 @@ class MusicSongDnaScreen extends StatelessWidget {
       );
 }
 
+class MusicPlaylistDetailsScreen extends StatelessWidget {
+  const MusicPlaylistDetailsScreen({super.key, required this.playlistName});
+  final String playlistName;
+
+  @override
+  Widget build(BuildContext context) {
+    final store = MusicLibraryStore.instance;
+    final tracks = (store.playlists[playlistName] ?? const <String>[])
+        .map(store.trackById)
+        .whereType<MusicTrack>()
+        .toList(growable: false);
+    final profile = AppController.instance.currentProfile;
+    return Scaffold(
+      backgroundColor: const Color(0xFF101010),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF101010),
+        title: Text(playlistName, maxLines: 1, overflow: TextOverflow.ellipsis),
+        actions: [
+          IconButton(
+            tooltip: 'Edit playlist songs',
+            icon: const Icon(Icons.edit_rounded),
+            onPressed: () => _editPlaylistFromDetails(context, playlistName),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Row(children: [
+              Expanded(child: Text('${tracks.length} tracks${profile == null ? '' : ' · ${profile.name}'}',
+                  style: const TextStyle(color: Colors.white60))),
+              FilledButton.icon(
+                onPressed: tracks.isEmpty ? null : () {
+                  store.setQueue(tracks, autoAdvance: true);
+                  unawaited(MusicPlaybackController.instance.play(
+                    tracks.first,
+                    wrappedContextType: 'playlist',
+                    wrappedContextId: playlistName,
+                    wrappedContextTitle: playlistName,
+                  ));
+                },
+                icon: const Icon(Icons.play_arrow_rounded),
+                label: const Text('Play playlist'),
+              ),
+            ]),
+          ),
+          Expanded(
+            child: tracks.isEmpty
+                ? const Center(child: Text('This playlist has no available tracks.'))
+                : ListView.builder(
+                    itemCount: tracks.length,
+                    itemBuilder: (context, index) {
+                      final track = tracks[index];
+                      return ListTile(
+                        leading: CircleAvatar(child: Text('${index + 1}')),
+                        title: LocalizedMediaText(track.title),
+                        subtitle: Text('${track.artist} · ${track.album}',
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white60)),
+                        trailing: IconButton(
+                          tooltip: 'Play from this playlist',
+                          icon: const Icon(Icons.play_arrow_rounded),
+                          onPressed: (track.audioUrl?.trim().isNotEmpty ?? false)
+                              ? () => unawaited(MusicPlaybackController.instance.play(
+                                    track,
+                                    wrappedContextType: 'playlist',
+                                    wrappedContextId: playlistName,
+                                    wrappedContextTitle: playlistName,
+                                  ))
+                              : null,
+                        ),
+                        onTap: (track.audioUrl?.trim().isNotEmpty ?? false)
+                            ? () => unawaited(MusicPlaybackController.instance.play(
+                                  track,
+                                  wrappedContextType: 'playlist',
+                                  wrappedContextId: playlistName,
+                                  wrappedContextTitle: playlistName,
+                                ))
+                            : null,
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _editPlaylistFromDetails(BuildContext context, String name) async {
+    final store = MusicLibraryStore.instance;
+    final selected = Set<String>.from(store.playlists[name] ?? const <String>[]);
+    final available = store.tracks;
+    final result = await showDialog<List<String>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: Text('Edit $name'),
+          content: SizedBox(
+            width: 420,
+            height: 420,
+            child: ListView.builder(
+              itemCount: available.length,
+              itemBuilder: (_, index) {
+                final track = available[index];
+                return CheckboxListTile(
+                  value: selected.contains(track.id),
+                  title: Text(track.title),
+                  subtitle: Text('${track.artist} · ${track.album}'),
+                  onChanged: (value) => setDialogState(() {
+                    if (value == true) { selected.add(track.id); } else { selected.remove(track.id); }
+                  }),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, selected.toList()), child: const Text('Save')),
+          ],
+        ),
+      ),
+    );
+    if (result == null) return;
+    final current = List<String>.from(store.playlists[name] ?? const <String>[]);
+    for (final id in current.where((id) => !result.contains(id))) {
+      store.toggleTrackInPlaylist(name, id);
+    }
+    for (final id in result.where((id) => !current.contains(id))) {
+      store.toggleTrackInPlaylist(name, id);
+    }
+  }
+}
+
 class MusicSongRadioScreen extends StatelessWidget {
   const MusicSongRadioScreen({super.key, required this.seed});
   final MusicTrack seed;
@@ -1989,6 +2241,14 @@ class _MusicScreenState extends State<MusicScreen> {
   @override
   void initState() {
     super.initState();
+    final activeProfile = AppController.instance.currentProfile;
+    if (activeProfile != null) {
+      AccountProfilePresenceService.instance.start(
+        profileId: activeProfile.id,
+        activityType: 'listening',
+        activityText: 'Listening Lounge',
+      );
+    }
     // Ensure album catalog examples are available even if Music is the first
     // destination opened after launch (without visiting Home first).
     AppController.instance.ensureDemoPreviewMedia(notify: false);
@@ -2057,6 +2317,12 @@ class _MusicScreenState extends State<MusicScreen> {
                       icon: const Icon(Icons.tune_rounded),
                     ),
                   ],
+                ),
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: AccountProfilePresenceStrip(),
+                  ),
                 ),
                 if (settings.showPlayer && playback.currentTrack != null)
                   SliverToBoxAdapter(child: _buildPlayer(settings)),
@@ -3023,6 +3289,7 @@ class _MusicScreenState extends State<MusicScreen> {
     final localTracks = [
       for (var index = 0; index < albumTracks.length; index++)
         <String, dynamic>{
+          'id': albumTracks[index].id,
           'title': albumTracks[index].title,
           'artist': albumTracks[index].artist,
           'durationMs': albumTracks[index].duration.inMilliseconds,
@@ -3039,8 +3306,35 @@ class _MusicScreenState extends State<MusicScreen> {
         artistName: sourceTrack.artist,
         artworkUrl: sourceTrack.artworkUrl,
         localTracks: localTracks,
+        onPlayLocalTrack: (row) => _playTrackFromAlbum(row, albumTitle, sourceTrack.artist),
       ),
     ));
+  }
+
+  void _playTrackFromAlbum(
+    Map<String, dynamic> row,
+    String albumTitle,
+    String artistName,
+  ) {
+    final id = row['id']?.toString() ?? '';
+    MusicTrack? selected;
+    for (final candidate in MusicLibraryStore.instance.tracks) {
+      if (id.isNotEmpty && candidate.id == id) { selected = candidate; break; }
+      if (candidate.title.trim().toLowerCase() == (row['title']?.toString() ?? '').trim().toLowerCase() &&
+          candidate.album.trim().toLowerCase() == albumTitle.trim().toLowerCase() &&
+          candidate.artist.trim().toLowerCase() == artistName.trim().toLowerCase()) {
+        selected = candidate;
+        break;
+      }
+    }
+    if (selected != null) {
+      unawaited(MusicPlaybackController.instance.play(
+        selected,
+        wrappedContextType: 'album',
+        wrappedContextId: '${albumTitle.trim()}|${artistName.trim()}',
+        wrappedContextTitle: albumTitle,
+      ));
+    }
   }
 
   Widget _nameSection(
@@ -3479,7 +3773,9 @@ class _MusicScreenState extends State<MusicScreen> {
           for (final entry in library.playlists.entries)
             Card(
               child: ListTile(
-                onTap: () => _editPlaylistSongs(entry.key),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => MusicPlaylistDetailsScreen(playlistName: entry.key),
+                )),
                 title: Text(entry.key),
                 subtitle: Text(
                   <String>[

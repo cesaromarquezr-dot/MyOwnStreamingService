@@ -4,6 +4,7 @@ import 'app_core.dart';
 import 'core/models/profile_governance.dart';
 import 'core/services/profile_governance_api.dart';
 import 'localization.dart';
+import 'core/services/profile_pin_service.dart';
 
 /// Account/profile governance screen. Owner authorization is enforced by the
 /// backend; this screen is intentionally only a presentation/editor surface.
@@ -27,6 +28,7 @@ class _ProfileAdministrationScreenState
   bool _saving = false;
   bool _allowMembersToManageOwnProfiles = false;
   bool _isAccountOwner = false;
+  bool _pinConfigured = false;
   String? _error;
 
   @override
@@ -45,6 +47,10 @@ class _ProfileAdministrationScreenState
       _isAccountOwner = capabilities['isAccountOwner'] == true;
       _governance = await api.getGovernance(widget.profile.id);
       widget.profile.governance = _governance;
+      _pinConfigured = await ProfilePinService.hasPin(
+        accountId: AppController.instance.currentAccount?.id ?? 'local',
+        profileId: widget.profile.id,
+      );
     } catch (error) {
       _error = error.toString().replaceFirst('Exception: ', '');
     } finally {
@@ -73,6 +79,20 @@ class _ProfileAdministrationScreenState
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<bool> _configureProfilePin() async {
+    final saved = await ProfilePinService.configureFromDialog(
+      context,
+      accountId: AppController.instance.currentAccount?.id ?? 'local',
+      profileId: widget.profile.id,
+      profileName: widget.profile.name,
+    );
+    if (!mounted) return false;
+    if (saved) {
+      setState(() => _pinConfigured = true);
+    }
+    return saved;
   }
 
   @override
@@ -221,13 +241,32 @@ class _ProfileAdministrationScreenState
                       : (value) => _save(
                           _governance.copyWith(purchasesRestricted: value)),
                 ),
+                ListTile(
+                  leading: const Icon(Icons.password_rounded),
+                  title: const UniversalText('Set or change this profile PIN'),
+                  subtitle: UniversalText(_pinConfigured
+                      ? 'PIN is configured in this device’s secure storage.'
+                      : 'No device PIN is configured yet.'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: _saving ? null : _configureProfilePin,
+                ),
                 SwitchListTile(
                   title: const UniversalText('Require profile PIN protection'),
+                  subtitle: const UniversalText('The profile is locked on this device until its PIN is entered. Configure the PIN on every device that uses this profile.'),
                   value: _governance.profilePinEnabled,
                   onChanged: _saving
                       ? null
-                      : (value) =>
-                          _save(_governance.copyWith(profilePinEnabled: value)),
+                      : (value) async {
+                          if (!value) {
+                            await _save(_governance.copyWith(profilePinEnabled: false));
+                            return;
+                          }
+                          if (!_pinConfigured) {
+                            final configured = await _configureProfilePin();
+                            if (!configured) return;
+                          }
+                          await _save(_governance.copyWith(profilePinEnabled: true));
+                        },
                 ),
               ],
             ),

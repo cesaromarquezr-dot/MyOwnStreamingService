@@ -1,7 +1,10 @@
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'backend_api.dart';
@@ -12,6 +15,7 @@ import 'localization.dart';
 import 'music.dart';
 import 'playback_interruption_bridge.dart';
 import 'profile_content_safety.dart';
+import 'privacy_preferences.dart';
 
 /// Small, profile-scoped record used by My Entertainment Wrapped.
 /// Media bytes and raw server filesystem paths are intentionally never stored.
@@ -25,7 +29,13 @@ class WrappedActivityRecord {
   final String? artist;
   final String? album;
   final List<String> genres;
+  final String action;
+  final String? contextType;
+  final String? contextId;
+  final String? contextTitle;
+  final List<Map<String, String>> entities;
   final DateTime occurredAt;
+  final bool excludedFromWrapped;
 
   const WrappedActivityRecord({
     required this.eventId,
@@ -37,8 +47,40 @@ class WrappedActivityRecord {
     this.artist,
     this.album,
     required this.genres,
+    this.action = 'completed',
+    this.contextType,
+    this.contextId,
+    this.contextTitle,
+    this.entities = const <Map<String, String>>[],
     required this.occurredAt,
+    this.excludedFromWrapped = false,
   });
+
+  WrappedActivityRecord copyWith({
+    String? contextType,
+    String? contextId,
+    String? contextTitle,
+    List<Map<String, String>>? entities,
+    bool? excludedFromWrapped,
+    bool clearContext = false,
+  }) => WrappedActivityRecord(
+    eventId: eventId,
+    profileId: profileId,
+    mediaId: mediaId,
+    canonicalWorkId: canonicalWorkId,
+    title: title,
+    type: type,
+    artist: artist,
+    album: album,
+    genres: genres,
+    action: action,
+    contextType: clearContext ? null : (contextType ?? this.contextType),
+    contextId: clearContext ? null : (contextId ?? this.contextId),
+    contextTitle: clearContext ? null : (contextTitle ?? this.contextTitle),
+    entities: entities ?? this.entities,
+    occurredAt: occurredAt,
+    excludedFromWrapped: excludedFromWrapped ?? this.excludedFromWrapped,
+  );
 
   factory WrappedActivityRecord.fromJson(Map<String, dynamic> json) {
     final rawGenres = json['genres'];
@@ -55,8 +97,24 @@ class WrappedActivityRecord {
       genres: rawGenres is List
           ? rawGenres.map((value) => value.toString()).toList(growable: false)
           : const <String>[],
+      action: json['action']?.toString() ?? 'completed',
+      contextType: json['contextType']?.toString(),
+      contextId: json['contextId']?.toString(),
+      contextTitle: json['contextTitle']?.toString(),
+      entities: json['entities'] is List
+          ? (json['entities'] as List)
+              .whereType<Map>()
+              .map((value) => <String, String>{
+                    'type': value['type']?.toString() ?? 'other',
+                    'id': value['id']?.toString() ?? '',
+                    'name': value['name']?.toString() ?? '',
+                  })
+              .where((value) => value['name']!.trim().isNotEmpty)
+              .toList(growable: false)
+          : const <Map<String, String>>[],
       occurredAt: DateTime.tryParse(json['occurredAt']?.toString() ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
+      excludedFromWrapped: json['excludedFromWrapped'] == true,
     );
   }
 
@@ -70,7 +128,13 @@ class WrappedActivityRecord {
         if (artist != null && artist!.trim().isNotEmpty) 'artist': artist,
         if (album != null && album!.trim().isNotEmpty) 'album': album,
         'genres': genres,
+        'action': action,
+        if (contextType?.trim().isNotEmpty == true) 'contextType': contextType,
+        if (contextId?.trim().isNotEmpty == true) 'contextId': contextId,
+        if (contextTitle?.trim().isNotEmpty == true) 'contextTitle': contextTitle,
+        'entities': entities,
         'occurredAt': occurredAt.toIso8601String(),
+        if (excludedFromWrapped) 'excludedFromWrapped': true,
       };
 }
 
@@ -79,25 +143,61 @@ class WrappedPeriodStats {
   final int playbackCompletions;
   final int uniqueTitles;
   final List<MapEntry<String, int>> topTitles;
+  final List<MapEntry<String, int>> topMovies;
+  final List<MapEntry<String, int>> topEpisodes;
   final List<MapEntry<String, int>> topGenres;
   final List<MapEntry<String, int>> topSongs;
   final List<MapEntry<String, int>> topAlbums;
   final List<MapEntry<String, int>> topArtists;
+  final List<MapEntry<String, int>> topPlaylists;
+  final List<MapEntry<String, int>> topCollections;
+  final List<MapEntry<String, int>> topSeries;
+  final List<MapEntry<String, int>> topCast;
+  final List<MapEntry<String, int>> topPeople;
+  final List<MapEntry<String, int>> topCharacters;
+  final List<MapEntry<String, int>> topTags;
+  final List<MapEntry<String, int>> topDirectors;
+  final List<MapEntry<String, int>> topWriters;
+  final List<MapEntry<String, int>> topCompanies;
+  final List<MapEntry<String, int>> topCountries;
   final int movieCompletions;
   final int showCompletions;
   final int musicCompletions;
+  final int activeDays;
+  final int busiestDayStarts;
+  final DateTime? busiestDay;
+  final double averageStartsPerActiveDay;
+  final List<MapEntry<String, int>> topContexts;
 
   const WrappedPeriodStats({
     required this.playbackCompletions,
     required this.uniqueTitles,
     required this.topTitles,
+    required this.topMovies,
+    required this.topEpisodes,
     required this.topGenres,
     required this.topSongs,
     required this.topAlbums,
     required this.topArtists,
+    required this.topPlaylists,
+    required this.topCollections,
+    required this.topSeries,
+    required this.topCast,
+    required this.topPeople,
+    required this.topCharacters,
+    required this.topTags,
+    required this.topDirectors,
+    required this.topWriters,
+    required this.topCompanies,
+    required this.topCountries,
     required this.movieCompletions,
     required this.showCompletions,
     required this.musicCompletions,
+    required this.activeDays,
+    required this.busiestDayStarts,
+    required this.busiestDay,
+    required this.averageStartsPerActiveDay,
+    required this.topContexts,
   });
 
   factory WrappedPeriodStats.calculate(
@@ -106,14 +206,30 @@ class WrappedPeriodStats {
     int? month,
   }) {
     final events = source.where((event) =>
+        !event.excludedFromWrapped && event.action.toLowerCase() != 'excluded' &&
         event.occurredAt.year == year &&
         (month == null || event.occurredAt.month == month)).toList();
     final titlePlayCounts = <String, int>{};
+    final moviePlayCounts = <String, int>{};
+    final episodePlayCounts = <String, int>{};
     final canonicalWorks = <String>{};
     final genres = <String, int>{};
     final songs = <String, int>{};
     final albums = <String, int>{};
     final artists = <String, int>{};
+    final playlists = <String, int>{};
+    final collections = <String, int>{};
+    final series = <String, int>{};
+    final cast = <String, int>{};
+    final people = <String, int>{};
+    final characters = <String, int>{};
+    final tags = <String, int>{};
+    final directors = <String, int>{};
+    final writers = <String, int>{};
+    final companies = <String, int>{};
+    final countries = <String, int>{};
+    final contextStarts = <String, int>{};
+    final dayStarts = <DateTime, int>{};
     var movies = 0;
     var shows = 0;
     var music = 0;
@@ -121,13 +237,23 @@ class WrappedPeriodStats {
     for (final event in events) {
       final readableTitle = event.title.trim().isEmpty ? 'Unknown title' : event.title.trim();
       titlePlayCounts[readableTitle] = (titlePlayCounts[readableTitle] ?? 0) + 1;
+      final localTime = event.occurredAt.toLocal();
+      final day = DateTime(localTime.year, localTime.month, localTime.day);
+      dayStarts[day] = (dayStarts[day] ?? 0) + 1;
+      final sourceLabel = (event.contextTitle?.trim().isNotEmpty ?? false)
+          ? '${event.contextType ?? 'source'}: ${event.contextTitle}'
+          : 'Direct playback';
+      contextStarts[sourceLabel] = (contextStarts[sourceLabel] ?? 0) + 1;
       final canonicalWork = event.canonicalWorkId.trim().isNotEmpty
           ? event.canonicalWorkId.trim()
           : event.mediaId.trim();
       if (canonicalWork.isNotEmpty) canonicalWorks.add(canonicalWork);
+      final countedGenres = <String>{};
       for (final rawGenre in event.genres) {
         final genre = rawGenre.trim();
-        if (genre.isNotEmpty) genres[genre] = (genres[genre] ?? 0) + 1;
+        if (genre.isNotEmpty && countedGenres.add(genre.toLowerCase())) {
+          genres[genre] = (genres[genre] ?? 0) + 1;
+        }
       }
       final type = event.type.toLowerCase().replaceAll(RegExp(r'[_\- ]'), '');
       final isMusic = type.contains('music') || type == 'song' || type == 'track' || type == 'album';
@@ -139,12 +265,94 @@ class WrappedPeriodStats {
         }
         final album = event.album?.trim() ?? '';
         final artist = event.artist?.trim() ?? '';
-        if (album.isNotEmpty) albums[album] = (albums[album] ?? 0) + 1;
-        if (artist.isNotEmpty) artists[artist] = (artists[artist] ?? 0) + 1;
+        // Album plays are attributed only when playback started from that
+        // album page. Playlist/queue/track-context plays must not inflate it.
+        if (album.isNotEmpty && event.contextType == null && event.action != 'played') {
+          albums[album] = (albums[album] ?? 0) + 1;
+        }
+        if (artist.isNotEmpty && event.entities.isEmpty) {
+          artists[artist] = (artists[artist] ?? 0) + 1;
+        }
       } else if (type.contains('show') || type.contains('series') || type.contains('episode')) {
         shows++;
+        if (type.contains('episode')) {
+          episodePlayCounts[readableTitle] =
+              (episodePlayCounts[readableTitle] ?? 0) + 1;
+        }
       } else if (type.contains('movie') || type.contains('film') || type.contains('documentary') || type.contains('special')) {
         movies++;
+        moviePlayCounts[readableTitle] =
+            (moviePlayCounts[readableTitle] ?? 0) + 1;
+      }
+
+      final countedEntityTargets = <String>{};
+      for (final entity in event.entities) {
+        final kind = (entity['type'] ?? 'other').trim().toLowerCase();
+        final name = (entity['name'] ?? '').trim();
+        if (name.isEmpty) continue;
+        final target = switch (kind) {
+          'playlist' => 'playlist',
+          'album' => 'album',
+          'collection' || 'franchise' || 'universe' => 'collection',
+          'series' || 'show' => 'series',
+          'cast' || 'actor' || 'actress' => 'cast',
+          'person' => 'person',
+          'director' => 'director',
+          'writer' || 'composer' => 'writer',
+          'company' || 'studio' || 'network' => 'company',
+          'country' => 'country',
+          'artist' => 'artist',
+          'character' => 'character',
+          'tag' => 'tag',
+          // Genres are counted from event.genres above, exactly once.
+          'genre' => '',
+          _ => '',
+        };
+        if (target.isEmpty ||
+            !countedEntityTargets.add('$target|${name.toLowerCase()}')) {
+          continue;
+        }
+        switch (target) {
+          case 'playlist':
+            playlists[name] = (playlists[name] ?? 0) + 1;
+            break;
+          case 'album':
+            albums[name] = (albums[name] ?? 0) + 1;
+            break;
+          case 'collection':
+            collections[name] = (collections[name] ?? 0) + 1;
+            break;
+          case 'series':
+            series[name] = (series[name] ?? 0) + 1;
+            break;
+          case 'cast':
+            cast[name] = (cast[name] ?? 0) + 1;
+            break;
+          case 'person':
+            people[name] = (people[name] ?? 0) + 1;
+            break;
+          case 'director':
+            directors[name] = (directors[name] ?? 0) + 1;
+            break;
+          case 'writer':
+            writers[name] = (writers[name] ?? 0) + 1;
+            break;
+          case 'company':
+            companies[name] = (companies[name] ?? 0) + 1;
+            break;
+          case 'country':
+            countries[name] = (countries[name] ?? 0) + 1;
+            break;
+          case 'artist':
+            artists[name] = (artists[name] ?? 0) + 1;
+            break;
+          case 'character':
+            characters[name] = (characters[name] ?? 0) + 1;
+            break;
+          case 'tag':
+            tags[name] = (tags[name] ?? 0) + 1;
+            break;
+        }
       }
     }
 
@@ -161,13 +369,33 @@ class WrappedPeriodStats {
       playbackCompletions: events.length,
       uniqueTitles: canonicalWorks.length,
       topTitles: ranked(titlePlayCounts),
+      topMovies: ranked(moviePlayCounts),
+      topEpisodes: ranked(episodePlayCounts),
       topGenres: ranked(genres),
       topSongs: ranked(songs),
       topAlbums: ranked(albums),
       topArtists: ranked(artists),
+      topPlaylists: ranked(playlists),
+      topCollections: ranked(collections),
+      topSeries: ranked(series),
+      topCast: ranked(cast),
+      topPeople: ranked(people),
+      topCharacters: ranked(characters),
+      topTags: ranked(tags),
+      topDirectors: ranked(directors),
+      topWriters: ranked(writers),
+      topCompanies: ranked(companies),
+      topCountries: ranked(countries),
       movieCompletions: movies,
       showCompletions: shows,
       musicCompletions: music,
+      activeDays: dayStarts.length,
+      busiestDayStarts: dayStarts.values.isEmpty ? 0 : dayStarts.values.reduce((a, b) => a > b ? a : b),
+      busiestDay: dayStarts.isEmpty
+          ? null
+          : dayStarts.entries.reduce((a, b) => a.value >= b.value ? a : b).key,
+      averageStartsPerActiveDay: dayStarts.isEmpty ? 0 : events.length / dayStarts.length,
+      topContexts: ranked(contextStarts),
     );
   }
 }
@@ -180,6 +408,107 @@ class WrappedArchiveStore {
 
   static String eventsKey(String profileId) => 'moss_wrapped_activity_$profileId';
   static String snapshotsKey(String scopeId) => 'moss_wrapped_snapshots_$scopeId';
+  static String auditKey(String profileId) => 'moss_wrapped_correction_audit_$profileId';
+
+  static Future<List<Map<String, dynamic>>> loadCorrectionAudit(String profileId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(auditKey(profileId));
+    if (raw == null) return <Map<String, dynamic>>[];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return <Map<String, dynamic>>[];
+      return decoded.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
+    } catch (_) {
+      return <Map<String, dynamic>>[];
+    }
+  }
+
+  static Future<void> _appendCorrectionAudit({
+    required String profileId,
+    required String operation,
+    required WrappedActivityRecord original,
+    WrappedActivityRecord? updated,
+    String reason = '',
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final entries = await loadCorrectionAudit(profileId);
+    entries.add(<String, dynamic>{
+      'auditId': '${original.eventId}_${DateTime.now().microsecondsSinceEpoch}',
+      'operation': operation,
+      'eventId': original.eventId,
+      'title': original.title,
+      'reason': reason.trim(),
+      'before': original.toJson(),
+      if (updated != null) 'after': updated.toJson(),
+      'changedAt': DateTime.now().toIso8601String(),
+    });
+    if (entries.length > 1000) entries.removeRange(0, entries.length - 1000);
+    await prefs.setString(auditKey(profileId), jsonEncode(entries));
+  }
+
+  static Future<bool> replaceEvent({
+    required String profileId,
+    required WrappedActivityRecord updated,
+    String reason = '',
+  }) async {
+    if (updated.profileId != profileId) return false;
+    final events = await loadEvents(profileId);
+    final index = events.indexWhere((event) => event.eventId == updated.eventId);
+    if (index < 0) return false;
+    final original = events[index];
+    events[index] = updated;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(eventsKey(profileId), jsonEncode(events.map((event) => event.toJson()).toList()));
+    await _appendCorrectionAudit(profileId: profileId, operation: 'updated', original: original, updated: updated, reason: reason);
+    return true;
+  }
+
+  static Future<bool> deleteEvent({
+    required String profileId,
+    required String eventId,
+    String reason = '',
+  }) async {
+    final events = await loadEvents(profileId);
+    final index = events.indexWhere((event) => event.eventId == eventId);
+    if (index < 0) return false;
+    final original = events.removeAt(index);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(eventsKey(profileId), jsonEncode(events.map((event) => event.toJson()).toList()));
+    await _appendCorrectionAudit(profileId: profileId, operation: 'deleted', original: original, reason: reason);
+    return true;
+  }
+
+  /// Restores an event removed from Wrapped, using the preserved audit copy.
+  /// A restore is itself audited so the correction history remains append-only.
+  static Future<bool> restoreDeletedEvent({
+    required String profileId,
+    required String auditId,
+    String reason = 'Restored from correction audit',
+  }) async {
+    final auditEntries = await loadCorrectionAudit(profileId);
+    final auditIndex = auditEntries.indexWhere((entry) =>
+        entry['auditId']?.toString() == auditId &&
+        entry['operation']?.toString() == 'deleted');
+    if (auditIndex < 0) return false;
+    final before = auditEntries[auditIndex]['before'];
+    if (before is! Map) return false;
+    final restored = WrappedActivityRecord.fromJson(Map<String, dynamic>.from(before));
+    if (restored.profileId != profileId || restored.eventId.isEmpty) return false;
+    final events = await loadEvents(profileId);
+    if (events.any((event) => event.eventId == restored.eventId)) return false;
+    events.add(restored);
+    events.sort((a, b) => a.occurredAt.compareTo(b.occurredAt));
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(eventsKey(profileId), jsonEncode(events.map((event) => event.toJson()).toList()));
+    await _appendCorrectionAudit(
+      profileId: profileId,
+      operation: 'restored',
+      original: restored,
+      updated: restored,
+      reason: reason,
+    );
+    return true;
+  }
 
   static Future<List<WrappedActivityRecord>> loadEvents(String profileId) async {
     final prefs = await SharedPreferences.getInstance();
@@ -305,11 +634,29 @@ class WrappedArchiveStore {
       'finalizedAt': finalizedAt.toIso8601String(),
       'playbackCompletions': stats.playbackCompletions,
       'uniqueTitles': stats.uniqueTitles,
+      'activeDays': stats.activeDays,
+      'busiestDayStarts': stats.busiestDayStarts,
+      'busiestDay': stats.busiestDay?.toIso8601String(),
+      'averageStartsPerActiveDay': stats.averageStartsPerActiveDay,
       'topTitles': stats.topTitles.map((entry) => {'title': entry.key, 'count': entry.value}).toList(),
+      'topMovies': stats.topMovies.map((entry) => {'title': entry.key, 'count': entry.value}).toList(),
+      'topEpisodes': stats.topEpisodes.map((entry) => {'title': entry.key, 'count': entry.value}).toList(),
       'topGenres': stats.topGenres.map((entry) => {'genre': entry.key, 'count': entry.value}).toList(),
       'topSongs': stats.topSongs.map((entry) => {'title': entry.key, 'count': entry.value}).toList(),
       'topAlbums': stats.topAlbums.map((entry) => {'album': entry.key, 'count': entry.value}).toList(),
       'topArtists': stats.topArtists.map((entry) => {'artist': entry.key, 'count': entry.value}).toList(),
+      'topPlaylists': stats.topPlaylists.map((entry) => {'title': entry.key, 'count': entry.value}).toList(),
+      'topCollections': stats.topCollections.map((entry) => {'title': entry.key, 'count': entry.value}).toList(),
+      'topSeries': stats.topSeries.map((entry) => {'title': entry.key, 'count': entry.value}).toList(),
+      'topCast': stats.topCast.map((entry) => {'title': entry.key, 'count': entry.value}).toList(),
+      'topPeople': stats.topPeople.map((entry) => {'title': entry.key, 'count': entry.value}).toList(),
+      'topCharacters': stats.topCharacters.map((entry) => {'title': entry.key, 'count': entry.value}).toList(),
+      'topTags': stats.topTags.map((entry) => {'title': entry.key, 'count': entry.value}).toList(),
+      'topDirectors': stats.topDirectors.map((entry) => {'title': entry.key, 'count': entry.value}).toList(),
+      'topWriters': stats.topWriters.map((entry) => {'title': entry.key, 'count': entry.value}).toList(),
+      'topCompanies': stats.topCompanies.map((entry) => {'title': entry.key, 'count': entry.value}).toList(),
+      'topCountries': stats.topCountries.map((entry) => {'title': entry.key, 'count': entry.value}).toList(),
+      'topContexts': stats.topContexts.map((entry) => {'title': entry.key, 'count': entry.value}).toList(),
       'monthlyArchiveKeys': periodType == 'year'
           ? List<String>.generate(
               12,
@@ -330,6 +677,7 @@ class MediaWrappedCollectionsScreen extends StatefulWidget {
 class _MediaWrappedCollectionsScreenState extends State<MediaWrappedCollectionsScreen> {
   bool loading = true;
   bool accountView = false;
+  bool _accountSnapshotsPrivacySafe = true;
   List<WrappedActivityRecord> events = const [];
   List<Map<String, dynamic>> snapshots = const [];
   String? error;
@@ -359,7 +707,21 @@ class _MediaWrappedCollectionsScreenState extends State<MediaWrappedCollectionsS
     setState(() => loading = true);
     try {
       final controller = AppController.instance;
-      final ids = controller.currentAccount?.profiles.map((profile) => profile.id).toList() ?? <String>[];
+      final activeId = controller.currentProfile?.id ?? '';
+      final ids = <String>[];
+      var accountSnapshotsPrivacySafe = true;
+      for (final profile in controller.currentAccount?.profiles ?? <Profile>[]) {
+        if (profile.id == activeId) {
+          ids.add(profile.id);
+          continue;
+        }
+        final privacy = await PrivacyPreferencesStore.load(profileId: profile.id);
+        if (privacy.shareActivity) {
+          ids.add(profile.id);
+        } else {
+          accountSnapshotsPrivacySafe = false;
+        }
+      }
       final loadedEvents = await WrappedArchiveStore.loadScopeEvents(
         scopeId: _scopeId,
         profileIds: ids,
@@ -372,7 +734,8 @@ class _MediaWrappedCollectionsScreenState extends State<MediaWrappedCollectionsS
       if (!mounted) return;
       setState(() {
         events = loadedEvents;
-        snapshots = loadedSnapshots;
+        _accountSnapshotsPrivacySafe = !accountView || accountSnapshotsPrivacySafe;
+        snapshots = accountView && !accountSnapshotsPrivacySafe ? <Map<String, dynamic>>[] : loadedSnapshots;
         error = null;
         loading = false;
       });
@@ -397,6 +760,25 @@ class _MediaWrappedCollectionsScreenState extends State<MediaWrappedCollectionsS
         title: const UniversalText('My Entertainment Wrapped'),
         backgroundColor: const Color(0xFF090909),
         actions: [
+          IconButton(
+            tooltip: 'Entertainment timeline and corrections',
+            onPressed: loading ? null : () async {
+              await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const WrappedTimelineAuditScreen()));
+              if (mounted) _load();
+            },
+            icon: const Icon(Icons.timeline_rounded),
+          ),
+          if (_canViewCombinedAccount)
+            IconButton(
+              tooltip: 'Compare profiles',
+              onPressed: loading ? null : () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const WrappedProfileComparisonScreen())),
+              icon: const Icon(Icons.compare_arrows_rounded),
+            ),
+          IconButton(
+            tooltip: 'Share Wrapped card',
+            onPressed: loading ? null : () => _shareWrappedCard('Complete Entertainment Wrapped', WrappedPeriodStats.calculate(events, year: DateTime.now().year)),
+            icon: const Icon(Icons.ios_share_rounded),
+          ),
           PopupMenuButton<bool>(
             tooltip: 'Change Wrapped scope',
             initialValue: accountView,
@@ -426,16 +808,20 @@ class _MediaWrappedCollectionsScreenState extends State<MediaWrappedCollectionsS
                   Text(
                     accountView
                         ? 'A combined recap from profiles belonging to this signed-in account. It remains private until you choose to share it.'
-                        : 'Your viewing-completion history is grouped by calendar month and year. Archived periods are finalized snapshots.',
+                        : 'Your playback-start history is grouped by calendar month and year. Archived periods are finalized snapshots.',
                     style: const TextStyle(color: Colors.white70, height: 1.4),
                   ),
                   if (error != null) Card(child: Padding(padding: const EdgeInsets.all(12), child: Text(error!))),
                   const SizedBox(height: 16),
+                  _wrappedToolsRow(),
+                  const SizedBox(height: 14),
                   _wrappedPeriodCard('This month · ${_monthName(now.month)} ${now.year}', monthly),
                   const SizedBox(height: 12),
                   _wrappedPeriodCard('This year · ${now.year} (in progress)', yearly),
                   const SizedBox(height: 22),
                   const Text('Wrapped Collections', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                  if (accountView && !_accountSnapshotsPrivacySafe)
+                    const Card(child: Padding(padding: EdgeInsets.all(12), child: Text('Archived account cards are hidden because one or more profiles no longer share activity. This protects older snapshots that do not store per-profile privacy breakdowns.'))),
                   const SizedBox(height: 6),
                   const Text('Closed months and years are archived the next time this screen opens after their period ends. Existing snapshots are not silently rewritten.', style: TextStyle(color: Colors.white60)),
                   const SizedBox(height: 12),
@@ -446,13 +832,92 @@ class _MediaWrappedCollectionsScreenState extends State<MediaWrappedCollectionsS
                   const Card(
                     child: Padding(
                       padding: EdgeInsets.all(14),
-                      child: Text('Data note: play counts are based on completion events recorded by this app on this device. Watch-time minutes are omitted unless a reliable duration record exists. Local archives currently do not sync across devices.', style: TextStyle(color: Colors.white60, height: 1.4)),
+                      child: Text('Data note: play counts are based on playback-start events recorded by this app. Profile history is combined only when that profile shares activity. Watch-time minutes are omitted unless a reliable duration record exists. Local event journals remain device-local.', style: TextStyle(color: Colors.white60, height: 1.4)),
                     ),
                   ),
                 ],
               ),
             ),
     );
+  }
+
+  Widget _wrappedToolsRow() => Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          OutlinedButton.icon(
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const WrappedTimelineAuditScreen())),
+            icon: const Icon(Icons.timeline_rounded),
+            label: const Text('Timeline & audit'),
+          ),
+          if (_canViewCombinedAccount)
+            OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const WrappedProfileComparisonScreen())),
+              icon: const Icon(Icons.compare_arrows_rounded),
+              label: const Text('Compare profiles'),
+            ),
+          OutlinedButton.icon(
+            onPressed: () => _shareWrappedCard('Movie Wrapped', WrappedPeriodStats.calculate(events, year: DateTime.now().year), ranking: 'movies'),
+            icon: const Icon(Icons.movie_outlined),
+            label: const Text('Share movie card'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => _shareWrappedCard('TV Wrapped', WrappedPeriodStats.calculate(events, year: DateTime.now().year), ranking: 'shows'),
+            icon: const Icon(Icons.tv_rounded),
+            label: const Text('Share TV card'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => _shareWrappedCard('Music Wrapped', WrappedPeriodStats.calculate(events, year: DateTime.now().year), ranking: 'music'),
+            icon: const Icon(Icons.music_note_rounded),
+            label: const Text('Share music card'),
+          ),
+        ],
+      );
+
+  Future<void> _shareWrappedCard(
+    String title,
+    WrappedPeriodStats stats, {
+    String ranking = 'all',
+  }) async {
+    final profileName = accountView ? 'My Account' : (_activeProfile?.name ?? 'My Profile');
+    final selections = switch (ranking) {
+      'movies' => stats.topMovies,
+      'shows' => stats.topSeries.isNotEmpty ? stats.topSeries : stats.topEpisodes,
+      'music' => stats.topSongs,
+      _ => stats.topTitles,
+    };
+    final highlights = selections.take(5).map((item) => '${item.key} · ${item.value}').toList();
+    final metrics = <String>[
+      '${stats.playbackCompletions} playback starts',
+      '${stats.uniqueTitles} distinct works',
+      '${stats.activeDays} active days',
+      '${stats.movieCompletions} movies · ${stats.showCompletions} TV · ${stats.musicCompletions} music',
+    ];
+    try {
+      final bytes = await WrappedShareCardRenderer.render(
+        title: title,
+        profileName: profileName,
+        subtitle: 'Entertainment Wrapped ${DateTime.now().year}',
+        metrics: metrics,
+        highlights: highlights.isEmpty ? const ['Your entertainment story is just beginning.'] : highlights,
+      );
+      await SharePlus.instance.share(ShareParams(
+        title: title,
+        text: '$title · $profileName',
+        files: <XFile>[XFile.fromData(Uint8List.fromList(bytes), mimeType: 'image/png')],
+        fileNameOverrides: const <String>['entertainment-wrapped.png'],
+      ));
+    } catch (exception) {
+      try {
+        await SharePlus.instance.share(ShareParams(
+          title: title,
+          text: <String>[title, profileName, ...metrics, 'Highlights:', ...highlights].join('\n'),
+        ));
+      } catch (fallbackError) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not share Wrapped card: $fallbackError')));
+      }
+    }
   }
 
   Widget _wrappedPeriodCard(String title, WrappedPeriodStats stats) => Card(
@@ -462,15 +927,26 @@ class _MediaWrappedCollectionsScreenState extends State<MediaWrappedCollectionsS
             Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             const SizedBox(height: 12),
             Wrap(spacing: 10, runSpacing: 10, children: [
-              _wrappedMetric('Completions', stats.playbackCompletions.toString(), Icons.play_circle_outline),
+              _wrappedMetric('Playback starts', stats.playbackCompletions.toString(), Icons.play_circle_outline),
               _wrappedMetric('Distinct works', stats.uniqueTitles.toString(), Icons.movie_outlined),
               _wrappedMetric('Movies', stats.movieCompletions.toString(), Icons.local_movies_outlined),
               _wrappedMetric('TV', stats.showCompletions.toString(), Icons.live_tv_outlined),
               _wrappedMetric('Music', stats.musicCompletions.toString(), Icons.music_note_rounded),
+              _wrappedMetric('Active days', stats.activeDays.toString(), Icons.calendar_today_rounded),
+              _wrappedMetric('Avg. starts / active day', stats.averageStartsPerActiveDay.toStringAsFixed(1), Icons.insights_rounded),
+              _wrappedMetric('Busiest day starts', stats.busiestDayStarts.toString(), Icons.local_fire_department_rounded),
             ]),
+            if (stats.busiestDay != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Busiest day: ${MaterialLocalizations.of(context).formatMediumDate(stats.busiestDay!)}',
+                  style: const TextStyle(color: Colors.white60),
+                ),
+              ),
             if (stats.topTitles.isNotEmpty) ...[
               const SizedBox(height: 16),
-              const Text('Most revisited works', style: TextStyle(fontWeight: FontWeight.w800)),
+              const Text('Most played works', style: TextStyle(fontWeight: FontWeight.w800)),
               for (var index = 0; index < stats.topTitles.length; index++)
                 ListTile(
                   dense: true,
@@ -485,9 +961,23 @@ class _MediaWrappedCollectionsScreenState extends State<MediaWrappedCollectionsS
               const Text('Top genres', style: TextStyle(fontWeight: FontWeight.w800)),
               Wrap(spacing: 8, runSpacing: 8, children: [for (final item in stats.topGenres) Chip(label: Text('${item.key} · ${item.value}'))]),
             ],
+            _wrappedRanking('Top movies', stats.topMovies),
+            _wrappedRanking('Top episodes', stats.topEpisodes),
             _wrappedRanking('Top songs', stats.topSongs),
-            _wrappedRanking('Top albums', stats.topAlbums),
+            _wrappedRanking('Top albums played from album pages', stats.topAlbums),
             _wrappedRanking('Top artists', stats.topArtists),
+            _wrappedRanking('Top playlists', stats.topPlaylists),
+            _wrappedRanking('Top collections / franchises', stats.topCollections),
+            _wrappedRanking('Top shows / series', stats.topSeries),
+            _wrappedRanking('Top actors & actresses', stats.topCast),
+            _wrappedRanking('Top other credited people', stats.topPeople),
+            _wrappedRanking('Top characters', stats.topCharacters),
+            _wrappedRanking('Top tags / themes', stats.topTags),
+            _wrappedRanking('Top directors', stats.topDirectors),
+            _wrappedRanking('Top writers / composers', stats.topWriters),
+            _wrappedRanking('Top companies / studios', stats.topCompanies),
+            _wrappedRanking('Top production countries', stats.topCountries),
+            _wrappedRanking('Top playback sources', stats.topContexts),
           ]),
         ),
       );
@@ -538,7 +1028,7 @@ class _MediaWrappedCollectionsScreenState extends State<MediaWrappedCollectionsS
       child: ExpansionTile(
         leading: Icon(isYear ? Icons.auto_graph_rounded : Icons.calendar_month_rounded),
         title: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
-        subtitle: Text('${snapshot['playbackCompletions'] ?? 0} completions · ${snapshot['uniqueTitles'] ?? 0} distinct works'),
+        subtitle: Text('${snapshot['playbackCompletions'] ?? 0} plays · ${snapshot['uniqueTitles'] ?? 0} distinct works'),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         children: [
           if (snapshot['topTitles'] is List)
@@ -549,9 +1039,23 @@ class _MediaWrappedCollectionsScreenState extends State<MediaWrappedCollectionsS
                 trailing: Text('${raw['count'] ?? 0}'),
               ),
           for (final bucket in <({String label, String key})>[
+            (label: 'Top movies', key: 'topMovies'),
+            (label: 'Top episodes', key: 'topEpisodes'),
             (label: 'Top songs', key: 'topSongs'),
-            (label: 'Top albums', key: 'topAlbums'),
+            (label: 'Top albums played from album pages', key: 'topAlbums'),
             (label: 'Top artists', key: 'topArtists'),
+            (label: 'Top playlists', key: 'topPlaylists'),
+            (label: 'Top collections / franchises', key: 'topCollections'),
+            (label: 'Top shows / series', key: 'topSeries'),
+            (label: 'Top actors & actresses', key: 'topCast'),
+            (label: 'Top other credited people', key: 'topPeople'),
+            (label: 'Top directors', key: 'topDirectors'),
+            (label: 'Top writers / composers', key: 'topWriters'),
+            (label: 'Top companies / studios', key: 'topCompanies'),
+            (label: 'Top production countries', key: 'topCountries'),
+            (label: 'Top playback sources', key: 'topContexts'),
+            (label: 'Top characters', key: 'topCharacters'),
+            (label: 'Top tags / themes', key: 'topTags'),
           ])
             if (snapshot[bucket.key] is List && (snapshot[bucket.key] as List).isNotEmpty) ...[
               Align(alignment: Alignment.centerLeft, child: Padding(padding: const EdgeInsets.only(top: 8), child: Text(bucket.label, style: const TextStyle(fontWeight: FontWeight.w800)))),
@@ -564,7 +1068,7 @@ class _MediaWrappedCollectionsScreenState extends State<MediaWrappedCollectionsS
               ExpansionTile(
                 leading: const Icon(Icons.calendar_month_rounded),
                 title: Text('${_monthName((monthly['month'] as num?)?.toInt() ?? 1)} ${monthly['year'] ?? ''}'),
-                subtitle: Text('${monthly['playbackCompletions'] ?? 0} completions · ${monthly['uniqueTitles'] ?? 0} distinct works'),
+                subtitle: Text('${monthly['playbackCompletions'] ?? 0} plays · ${monthly['uniqueTitles'] ?? 0} distinct works'),
                 children: [
                   if (monthly['topTitles'] is List)
                     for (final raw in (monthly['topTitles'] as List).whereType<Map>())
@@ -589,6 +1093,581 @@ class _MediaWrappedCollectionsScreenState extends State<MediaWrappedCollectionsS
         'January', 'February', 'March', 'April', 'May', 'June',
         'July', 'August', 'September', 'October', 'November', 'December',
       ][month - 1];
+}
+
+
+/// Chronological playback journal with attribution correction and an audit trail.
+class WrappedTimelineAuditScreen extends StatefulWidget {
+  const WrappedTimelineAuditScreen({super.key});
+
+  @override
+  State<WrappedTimelineAuditScreen> createState() => _WrappedTimelineAuditScreenState();
+}
+
+class _WrappedTimelineAuditScreenState extends State<WrappedTimelineAuditScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabs = TabController(length: 2, vsync: this);
+  final TextEditingController _search = TextEditingController();
+  List<WrappedActivityRecord> _events = const <WrappedActivityRecord>[];
+  List<Map<String, dynamic>> _audit = const <Map<String, dynamic>>[];
+  bool _loading = true;
+  bool _accountView = false;
+  String _filter = 'all';
+  String _periodFilter = 'all';
+  DateTimeRange? _customRange;
+  String? _error;
+
+  String get _profileId => AppController.instance.currentProfile?.id ?? '';
+  bool get _canViewAccount {
+    final profile = AppController.instance.currentProfile;
+    if (profile == null || !profile.governance.isOwnerManaged) return false;
+    return profile.governance.contentLevel == ProfileContentLevel.mature ||
+        profile.governance.contentLevel == ProfileContentLevel.unrestricted;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+    _search.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _tabs.dispose();
+    _search.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final controller = AppController.instance;
+      final ids = <String>[];
+      for (final profile in controller.currentAccount?.profiles ?? <Profile>[]) {
+        if (!_accountView || profile.id == _profileId) {
+          ids.add(profile.id);
+          continue;
+        }
+        final privacy = await PrivacyPreferencesStore.load(profileId: profile.id);
+        if (privacy.shareActivity) ids.add(profile.id);
+      }
+      final events = _accountView && _canViewAccount
+          ? await WrappedArchiveStore.loadScopeEvents(scopeId: 'account_${controller.currentAccount?.id ?? ''}', profileIds: ids)
+          : await WrappedArchiveStore.loadEvents(_profileId);
+      final audit = await WrappedArchiveStore.loadCorrectionAudit(_profileId);
+      if (!mounted) return;
+      setState(() {
+        _events = events..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+        _audit = audit.reversed.toList(growable: false);
+        _loading = false;
+        _error = null;
+      });
+    } catch (exception) {
+      if (!mounted) return;
+      setState(() { _error = exception.toString(); _loading = false; });
+    }
+  }
+
+  List<WrappedActivityRecord> get _visibleEvents {
+    final query = _search.text.trim().toLowerCase();
+    final now = DateTime.now();
+    return _events.where((event) {
+      final type = event.type.toLowerCase();
+      final isMusic = type.contains('song') || type.contains('track') || type.contains('music') || type.contains('album');
+      final isVideo = type.contains('movie') || type.contains('film') || type.contains('show') || type.contains('series') || type.contains('episode');
+      if (_filter == 'music' && !isMusic) return false;
+      if (_filter == 'video' && !isVideo) return false;
+      if (_filter == 'excluded' && !event.excludedFromWrapped) return false;
+      if (_filter == 'included' && event.excludedFromWrapped) return false;
+      final localDate = event.occurredAt.toLocal();
+      switch (_periodFilter) {
+        case '7days':
+          if (localDate.isBefore(now.subtract(const Duration(days: 7)))) return false;
+          break;
+        case '30days':
+          if (localDate.isBefore(now.subtract(const Duration(days: 30)))) return false;
+          break;
+        case 'month':
+          if (localDate.year != now.year || localDate.month != now.month) return false;
+          break;
+        case 'year':
+          if (localDate.year != now.year) return false;
+          break;
+        case 'custom':
+          final range = _customRange;
+          if (range == null) return false;
+          final start = DateTime(range.start.year, range.start.month, range.start.day);
+          final endExclusive = DateTime(range.end.year, range.end.month, range.end.day).add(const Duration(days: 1));
+          if (localDate.isBefore(start) || !localDate.isBefore(endExclusive)) return false;
+          break;
+      }
+      if (query.isEmpty) return true;
+      return <String>[event.title, event.artist ?? '', event.album ?? '', event.contextTitle ?? '', ...event.genres, ...event.entities.map((item) => item['name'] ?? '')]
+          .join(' ').toLowerCase().contains(query);
+    }).toList(growable: false);
+  }
+
+  String _profileName(String id) {
+    for (final profile in AppController.instance.currentAccount?.profiles ?? <Profile>[]) {
+      if (profile.id == id) return profile.name;
+    }
+    return 'Profile';
+  }
+
+  String _sourceLabel(WrappedActivityRecord event) {
+    if (event.contextTitle?.trim().isNotEmpty == true) {
+      return 'Started from ${event.contextType ?? 'collection'} · ${event.contextTitle}';
+    }
+    return 'Direct playback';
+  }
+
+  Future<void> _chooseCustomRange() async {
+    final now = DateTime.now();
+    final selected = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(now.year + 1, 12, 31),
+      initialDateRange: _customRange ?? DateTimeRange(
+        start: DateTime(now.year, now.month, 1),
+        end: DateTime(now.year, now.month, now.day),
+      ),
+    );
+    if (!mounted || selected == null) return;
+    setState(() {
+      _customRange = selected;
+      _periodFilter = 'custom';
+    });
+  }
+
+  Future<void> _exportTimelineCsv() async {
+    String cell(Object? value) {
+      final text = value?.toString() ?? '';
+      final escaped = text.replaceAll('"', '""');
+      return '"$escaped"';
+    }
+    final rows = <String>[
+      <String>['occurred_at', 'profile_id', 'title', 'type', 'artist', 'album', 'source_type', 'source_title', 'genres', 'entities', 'excluded_from_wrapped']
+          .map(cell).join(','),
+      for (final event in _visibleEvents)
+        <Object?>[
+          event.occurredAt.toIso8601String(), event.profileId, event.title,
+          event.type, event.artist, event.album, event.contextType,
+          event.contextTitle, event.genres.join('; '),
+          event.entities.map((entity) => '${entity['type']}: ${entity['name']}').join('; '),
+          event.excludedFromWrapped,
+        ].map(cell).join(','),
+    ];
+    try {
+      await SharePlus.instance.share(ShareParams(
+        title: 'Entertainment Timeline',
+        text: 'Exported ${_visibleEvents.length} filtered playback events.',
+        files: <XFile>[
+          XFile.fromData(Uint8List.fromList(utf8.encode(rows.join('\r\n'))), mimeType: 'text/csv'),
+        ],
+        fileNameOverrides: const <String>['entertainment-timeline.csv'],
+      ));
+    } catch (exception) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not export timeline: $exception')));
+    }
+  }
+
+  Future<void> _restoreDeletedEvent(Map<String, dynamic> entry) async {
+    final auditId = entry['auditId']?.toString() ?? '';
+    if (auditId.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Restore deleted playback event?'),
+        content: Text('Restore “${entry['title'] ?? 'Playback event'}” from the preserved audit copy?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Restore event')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final ok = await WrappedArchiveStore.restoreDeletedEvent(
+      profileId: _profileId,
+      auditId: auditId,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok ? 'Playback event restored.' : 'This event could not be restored or is already present.'),
+    ));
+    await _load();
+  }
+
+  Future<void> _editAttribution(WrappedActivityRecord event) async {
+    if (event.profileId != _profileId) return;
+    const options = <String, String>{
+      '': 'Direct playback (no container)',
+      'album': 'Album',
+      'playlist': 'Playlist',
+      'collection': 'Collection',
+      'franchise': 'Franchise',
+      'universe': 'Cinematic universe',
+      'series': 'Series',
+      'genre': 'Genre',
+      'cast': 'Actor / actress',
+      'director': 'Director',
+      'writer': 'Writer',
+      'company': 'Company / studio',
+      'country': 'Country',
+      'artist': 'Artist',
+    };
+    var selectedType = options.containsKey(event.contextType ?? '') ? (event.contextType ?? '') : '';
+    final name = TextEditingController(text: event.contextTitle ?? '');
+    final reason = TextEditingController();
+    final save = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(builder: (context, setDialogState) => AlertDialog(
+        title: const Text('Correct playback attribution'),
+        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('Change where this play was started. This updates Wrapped counts and records the correction in the audit log.'),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: selectedType,
+            decoration: const InputDecoration(labelText: 'Playback source'),
+            items: options.entries.map((entry) => DropdownMenuItem(value: entry.key, child: Text(entry.value))).toList(),
+            onChanged: (value) => setDialogState(() => selectedType = value ?? ''),
+          ),
+          const SizedBox(height: 10),
+          TextField(controller: name, decoration: const InputDecoration(labelText: 'Source name')),
+          const SizedBox(height: 10),
+          TextField(controller: reason, decoration: const InputDecoration(labelText: 'Why are you correcting this? (optional)'), maxLines: 2),
+        ])),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Save correction')),
+        ],
+      )),
+    );
+    if (save != true || !mounted) { name.dispose(); reason.dispose(); return; }
+    final sourceName = name.text.trim();
+    final nextType = selectedType.isEmpty || sourceName.isEmpty ? null : selectedType;
+    final nextName = nextType == null ? null : sourceName;
+    String normalizeEntityType(String? value) => switch ((value ?? '').toLowerCase()) {
+      'show' => 'series', 'actor' || 'actress' => 'cast', 'studio' || 'network' => 'company', _ => (value ?? '').toLowerCase(),
+    };
+    final oldKind = normalizeEntityType(event.contextType);
+    final retained = event.entities.where((entity) {
+      final sameKind = (entity['type'] ?? '').toLowerCase() == oldKind;
+      final sameName = (entity['name'] ?? '').toLowerCase() == (event.contextTitle ?? '').toLowerCase();
+      return !(oldKind.isNotEmpty && sameKind && sameName);
+    }).toList();
+    if (nextType != null && nextName != null) {
+      retained.add(<String, String>{'type': normalizeEntityType(nextType), 'id': nextName, 'name': nextName});
+    }
+    final updated = event.copyWith(
+      contextType: nextType,
+      contextId: nextType == null ? null : nextName,
+      contextTitle: nextName,
+      entities: retained,
+      clearContext: nextType == null,
+    );
+    final ok = await WrappedArchiveStore.replaceEvent(profileId: _profileId, updated: updated, reason: reason.text);
+    name.dispose();
+    reason.dispose();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ok ? 'Attribution corrected.' : 'This playback event could not be found.')));
+    await _load();
+  }
+
+  Future<void> _toggleExcluded(WrappedActivityRecord event) async {
+    if (event.profileId != _profileId) return;
+    final updated = event.copyWith(excludedFromWrapped: !event.excludedFromWrapped);
+    final ok = await WrappedArchiveStore.replaceEvent(
+      profileId: _profileId,
+      updated: updated,
+      reason: updated.excludedFromWrapped ? 'Excluded from Wrapped by user' : 'Restored to Wrapped by user',
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ok ? (updated.excludedFromWrapped ? 'Excluded from Wrapped.' : 'Restored to Wrapped.') : 'Could not update this event.')));
+    await _load();
+  }
+
+  Future<void> _deleteEvent(WrappedActivityRecord event) async {
+    if (event.profileId != _profileId) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete playback event?'),
+        content: Text('Remove “${event.title}” from this profile’s local Wrapped history? A correction audit entry will be retained.'),
+        actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete event'))],
+      ),
+    );
+    if (confirmed != true) return;
+    final ok = await WrappedArchiveStore.deleteEvent(profileId: _profileId, eventId: event.eventId, reason: 'Deleted by profile owner');
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ok ? 'Playback event deleted.' : 'Could not delete playback event.')));
+    await _load();
+  }
+
+  Widget _auditCard(Map<String, dynamic> entry) {
+    final before = entry['before'] is Map ? Map<String, dynamic>.from(entry['before'] as Map) : <String, dynamic>{};
+    final after = entry['after'] is Map ? Map<String, dynamic>.from(entry['after'] as Map) : <String, dynamic>{};
+    String source(Map<String, dynamic> value) {
+      final type = value['contextType']?.toString();
+      final title = value['contextTitle']?.toString();
+      if (title == null || title.trim().isEmpty) return 'Direct playback';
+      return '${type ?? 'source'} · $title';
+    }
+    final operation = entry['operation']?.toString() ?? 'updated';
+    final detail = switch (operation) {
+      'deleted' => 'Removed event. Previous source: ${source(before)}',
+      'restored' => 'Restored the previously deleted playback event. Source: ${source(after)}',
+      _ => 'From ${source(before)} → ${source(after)}',
+    };
+    return Card(child: ListTile(
+      leading: Icon(operation == 'deleted' ? Icons.delete_outline : operation == 'restored' ? Icons.restore_rounded : Icons.edit_outlined),
+      title: Text('$operation · ${entry['title'] ?? 'Playback event'}'),
+      subtitle: Text('$detail\n${entry['changedAt'] ?? ''}\n${entry['reason'] ?? ''}'),
+      isThreeLine: true,
+      trailing: operation == 'deleted'
+          ? IconButton(
+              tooltip: 'Restore this event',
+              icon: const Icon(Icons.restore_rounded),
+              onPressed: () => _restoreDeletedEvent(entry),
+            )
+          : null,
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: const Text('Entertainment Timeline & Audit'),
+      actions: [
+        if (_canViewAccount) PopupMenuButton<bool>(
+          initialValue: _accountView,
+          onSelected: (value) { setState(() => _accountView = value); _load(); },
+          itemBuilder: (_) => const [PopupMenuItem(value: false, child: Text('This profile')), PopupMenuItem(value: true, child: Text('Shared account activity'))],
+          icon: const Icon(Icons.people_alt_outlined),
+        ),
+        IconButton(onPressed: _loading ? null : _exportTimelineCsv, tooltip: 'Export filtered timeline as CSV', icon: const Icon(Icons.file_download_outlined)),
+        IconButton(onPressed: _loading ? null : _load, icon: const Icon(Icons.refresh_rounded)),
+      ],
+      bottom: TabBar(controller: _tabs, tabs: const [Tab(text: 'Timeline'), Tab(text: 'Correction audit')]),
+    ),
+    body: _loading ? const Center(child: CircularProgressIndicator()) : TabBarView(controller: _tabs, children: [
+      Column(children: [
+        Padding(padding: const EdgeInsets.all(12), child: Column(children: [
+          TextField(controller: _search, decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search titles, people, albums or sources')),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(child: DropdownButtonFormField<String>(
+              initialValue: _periodFilter,
+              decoration: const InputDecoration(labelText: 'Date range', isDense: true),
+              items: const <DropdownMenuItem<String>>[
+                DropdownMenuItem(value: 'all', child: Text('All time')),
+                DropdownMenuItem(value: '7days', child: Text('Last 7 days')),
+                DropdownMenuItem(value: '30days', child: Text('Last 30 days')),
+                DropdownMenuItem(value: 'month', child: Text('This month')),
+                DropdownMenuItem(value: 'year', child: Text('This year')),
+                DropdownMenuItem(value: 'custom', child: Text('Custom range')),
+              ],
+              onChanged: (value) {
+                if (value == 'custom') { _chooseCustomRange(); } else { setState(() => _periodFilter = value ?? 'all'); }
+              },
+            )),
+            const SizedBox(width: 8),
+            IconButton(onPressed: _chooseCustomRange, tooltip: 'Choose custom date range', icon: const Icon(Icons.date_range_rounded)),
+          ]),
+          if (_periodFilter == 'custom' && _customRange != null)
+            Align(alignment: Alignment.centerLeft, child: Text('${MaterialLocalizations.of(context).formatMediumDate(_customRange!.start)} – ${MaterialLocalizations.of(context).formatMediumDate(_customRange!.end)}', style: const TextStyle(color: Colors.white60, fontSize: 12))),
+          const SizedBox(height: 8),
+          SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
+            for (final entry in const <(String, String)>[('all', 'All'), ('video', 'Movies & TV'), ('music', 'Music'), ('included', 'Included'), ('excluded', 'Excluded')])
+              Padding(padding: const EdgeInsets.only(right: 6), child: ChoiceChip(label: Text(entry.$2), selected: _filter == entry.$1, onSelected: (_) => setState(() => _filter = entry.$1))),
+          ])),
+          Align(alignment: Alignment.centerLeft, child: Text(_accountView ? 'Other profiles appear only when they share activity. You can correct or delete only your own events.' : 'Playback starts are shown in newest-first order.')),
+        ])),
+        if (_error != null) Padding(padding: const EdgeInsets.all(12), child: Text(_error!)),
+        Expanded(child: _visibleEvents.isEmpty
+          ? const Center(child: Text('No playback events match this view.'))
+          : ListView.builder(itemCount: _visibleEvents.length, itemBuilder: (context, index) {
+              final event = _visibleEvents[index];
+              final ownEvent = event.profileId == _profileId;
+              final isMusic = event.type.toLowerCase().contains('song') || event.type.toLowerCase().contains('track') || event.type.toLowerCase().contains('music');
+              return Card(margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4), child: ListTile(
+                leading: CircleAvatar(child: Icon(isMusic ? Icons.music_note_rounded : Icons.play_circle_outline_rounded)),
+                title: Text(event.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text('${event.type} · ${_sourceLabel(event)}\n${_profileName(event.profileId)} · ${MaterialLocalizations.of(context).formatMediumDate(event.occurredAt.toLocal())} ${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(event.occurredAt.toLocal()))}${event.excludedFromWrapped ? ' · Excluded from Wrapped' : ''}'),
+                isThreeLine: true,
+                trailing: ownEvent ? PopupMenuButton<String>(
+                  onSelected: (choice) {
+                    if (choice == 'edit') _editAttribution(event);
+                    if (choice == 'exclude') _toggleExcluded(event);
+                    if (choice == 'delete') _deleteEvent(event);
+                  },
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(value: 'edit', child: Text('Correct playback source')),
+                    PopupMenuItem(value: 'exclude', child: Text(event.excludedFromWrapped ? 'Restore to Wrapped' : 'Exclude from Wrapped')),
+                    const PopupMenuItem(value: 'delete', child: Text('Delete event permanently')),
+                  ],
+                ) : const Icon(Icons.lock_outline_rounded),
+              ));
+            })),
+      ]),
+      ListView(padding: const EdgeInsets.all(12), children: [
+        const Text('Corrections and deletions for this profile are recorded locally. Closed monthly/yearly snapshots are immutable and are not recalculated.', style: TextStyle(color: Colors.white70)),
+        if (_audit.isEmpty) const Card(child: ListTile(title: Text('No corrections recorded yet.'))),
+        for (final entry in _audit) _auditCard(entry),
+      ]),
+    ]),
+  );
+}
+
+/// Side-by-side comparison; other profiles must opt into activity sharing.
+class WrappedProfileComparisonScreen extends StatefulWidget {
+  const WrappedProfileComparisonScreen({super.key});
+
+  @override
+  State<WrappedProfileComparisonScreen> createState() => _WrappedProfileComparisonScreenState();
+}
+
+class _WrappedProfileComparisonScreenState extends State<WrappedProfileComparisonScreen> {
+  bool _loading = true;
+  String _period = 'year';
+  List<({Profile profile, WrappedPeriodStats stats})> _rows = const [];
+  int _withheldProfiles = 0;
+
+  bool get _canCompare {
+    final profile = AppController.instance.currentProfile;
+    return profile != null && profile.governance.isOwnerManaged &&
+        (profile.governance.contentLevel == ProfileContentLevel.mature || profile.governance.contentLevel == ProfileContentLevel.unrestricted);
+  }
+
+  @override
+  void initState() { super.initState(); _load(); }
+
+  Future<void> _load() async {
+    if (!_canCompare) {
+      if (mounted) setState(() { _rows = const []; _withheldProfiles = 0; _loading = false; });
+      return;
+    }
+    setState(() => _loading = true);
+    final controller = AppController.instance;
+    final activeId = controller.currentProfile?.id ?? '';
+    final now = DateTime.now();
+    final rows = <({Profile profile, WrappedPeriodStats stats})>[];
+    var withheld = 0;
+    for (final profile in controller.currentAccount?.profiles ?? <Profile>[]) {
+      if (profile.id != activeId) {
+        final privacy = await PrivacyPreferencesStore.load(profileId: profile.id);
+        if (!privacy.shareActivity) { withheld++; continue; }
+      }
+      final events = await WrappedArchiveStore.loadEvents(profile.id);
+      rows.add((
+        profile: profile,
+        stats: WrappedPeriodStats.calculate(
+          events,
+          year: now.year,
+          month: _period == 'month' ? now.month : null,
+        ),
+      ));
+    }
+    if (!mounted) return;
+    setState(() { _rows = rows; _withheldProfiles = withheld; _loading = false; });
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Profile Wrapped Comparison'), actions: [IconButton(onPressed: _loading ? null : _load, icon: const Icon(Icons.refresh_rounded))]),
+    body: !_canCompare
+        ? const Center(child: Padding(padding: EdgeInsets.all(24), child: Text('Profile comparison is available to owner-managed adult or unrestricted profiles.')))
+        : _loading ? const Center(child: CircularProgressIndicator()) : ListView(padding: const EdgeInsets.all(16), children: [
+            DropdownButtonFormField<String>(
+              initialValue: _period,
+              decoration: const InputDecoration(labelText: 'Comparison period'),
+              items: const <DropdownMenuItem<String>>[
+                DropdownMenuItem(value: 'month', child: Text('This month')),
+                DropdownMenuItem(value: 'year', child: Text('This year')),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() => _period = value);
+                _load();
+              },
+            ),
+            const SizedBox(height: 8),
+            Text(_period == 'month'
+                ? 'This month across profiles that have chosen to share their activity.'
+                : 'This year across profiles that have chosen to share their activity.',
+              style: const TextStyle(color: Colors.white70)),
+            if (_withheldProfiles > 0) Padding(padding: const EdgeInsets.only(top: 8), child: Text('$_withheldProfiles profile(s) are not included because activity sharing is off.', style: const TextStyle(color: Colors.white54))),
+            const SizedBox(height: 12),
+            for (final row in _rows) Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(row.profile.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 10),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                _comparisonMetric('Plays', row.stats.playbackCompletions),
+                _comparisonMetric('Movies', row.stats.movieCompletions),
+                _comparisonMetric('TV', row.stats.showCompletions),
+                _comparisonMetric('Music', row.stats.musicCompletions),
+                _comparisonMetric('Active days', row.stats.activeDays),
+              ]),
+              if (row.stats.topTitles.isNotEmpty) ListTile(contentPadding: EdgeInsets.zero, title: const Text('Most played'), subtitle: Text(row.stats.topTitles.first.key), trailing: Text('${row.stats.topTitles.first.value} plays')),
+              if (row.stats.topGenres.isNotEmpty) Text('Favorite genre: ${row.stats.topGenres.first.key}'),
+            ]))),
+          ]),
+  );
+
+  Widget _comparisonMetric(String label, int value) => Chip(label: Text('$label · $value'));
+}
+
+class WrappedShareCardRenderer {
+  static Future<List<int>> render({
+    required String title,
+    required String profileName,
+    required String subtitle,
+    required List<String> metrics,
+    required List<String> highlights,
+  }) async {
+    const width = 1080.0;
+    const height = 1350.0;
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder, const ui.Rect.fromLTWH(0, 0, width, height));
+    final background = ui.Paint()..shader = ui.Gradient.linear(
+      const ui.Offset(0, 0), const ui.Offset(width, height),
+      const [ui.Color(0xFF081A36), ui.Color(0xFF321B4B), ui.Color(0xFF101018)],
+    );
+    canvas.drawRect(const ui.Rect.fromLTWH(0, 0, width, height), background);
+    canvas.drawRRect(ui.RRect.fromRectAndRadius(const ui.Rect.fromLTWH(52, 52, 976, 1246), const ui.Radius.circular(44)), ui.Paint()..color = const ui.Color(0x22FFFFFF));
+    void drawText(String value, double x, double y, double maxWidth, double fontSize, ui.Color color, {bool bold = false}) {
+      final painter = TextPainter(
+        text: TextSpan(text: value, style: TextStyle(color: color, fontSize: fontSize, fontWeight: bold ? FontWeight.w800 : FontWeight.w500, height: 1.18)),
+        textDirection: TextDirection.ltr,
+        maxLines: 3,
+        ellipsis: '…',
+      )..layout(maxWidth: maxWidth);
+      painter.paint(canvas, Offset(x, y));
+    }
+    drawText('MY OWN STREAMING SERVICE', 110, 112, 860, 26, const ui.Color(0xFFB8C8FF), bold: true);
+    drawText(title.toUpperCase(), 110, 190, 860, 72, const ui.Color(0xFFFFFFFF), bold: true);
+    drawText(profileName, 110, 300, 860, 38, const ui.Color(0xFFE4D5FF), bold: true);
+    drawText(subtitle, 110, 354, 860, 30, const ui.Color(0xFFCBD5E1));
+    var y = 450.0;
+    for (final metric in metrics.take(4)) {
+      canvas.drawRRect(ui.RRect.fromRectAndRadius(ui.Rect.fromLTWH(110, y, 860, 86), const ui.Radius.circular(22)), ui.Paint()..color = const ui.Color(0x22FFFFFF));
+      drawText(metric, 145, y + 24, 790, 30, const ui.Color(0xFFFFFFFF), bold: true);
+      y += 98;
+    }
+    y += 14;
+    drawText('YOUR HIGHLIGHTS', 110, y, 860, 30, const ui.Color(0xFFB8C8FF), bold: true);
+    y += 58;
+    for (var index = 0; index < highlights.take(5).length; index++) {
+      drawText('${index + 1}. ${highlights[index]}', 120, y, 840, 30, const ui.Color(0xFFFFFFFF));
+      y += 48;
+    }
+    drawText('A personal recap · Shared by choice', 110, 1240, 860, 22, const ui.Color(0xFFCBD5E1));
+    final image = await recorder.endRecording().toImage(width.toInt(), height.toInt());
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    image.dispose();
+    return data!.buffer.asUint8List();
+  }
 }
 
 
