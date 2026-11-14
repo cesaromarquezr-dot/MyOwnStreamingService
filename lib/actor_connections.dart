@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app_core.dart';
 import 'localization.dart';
@@ -35,12 +35,18 @@ class _ActorConnectionScreenState extends State<ActorConnectionScreen> {
   String? _error;
 
   List<MediaItem> get _works => AppController.instance.library;
-  String _key(String name) => name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  String _key(String name) =>
+      name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
   List<String> _peopleIn(MediaItem item) {
     final seen = <String>{};
     final people = <String>[];
-    for (final raw in <String>[...item.actors, ...item.directors, ...item.writers, ...item.music]) {
+    for (final raw in <String>[
+      ...item.actors,
+      ...item.directors,
+      ...item.writers,
+      ...item.music
+    ]) {
       final name = raw.trim();
       if (name.isNotEmpty && seen.add(_key(name))) people.add(name);
     }
@@ -52,7 +58,8 @@ class _ActorConnectionScreenState extends State<ActorConnectionScreen> {
     for (final work in _works) {
       final people = _peopleIn(work);
       for (final person in people) {
-        final edges = graph.putIfAbsent(_key(person), () => <_ConnectionEdge>[]);
+        final edges =
+            graph.putIfAbsent(_key(person), () => <_ConnectionEdge>[]);
         for (final other in people) {
           if (_key(other) == _key(person)) continue;
           edges.add(_ConnectionEdge(other, work.title, work.releaseYear));
@@ -60,7 +67,8 @@ class _ActorConnectionScreenState extends State<ActorConnectionScreen> {
       }
     }
     for (final edges in graph.values) {
-      edges.sort((a, b) => a.workTitle.toLowerCase().compareTo(b.workTitle.toLowerCase()));
+      edges.sort((a, b) =>
+          a.workTitle.toLowerCase().compareTo(b.workTitle.toLowerCase()));
     }
     return graph;
   }
@@ -78,18 +86,31 @@ class _ActorConnectionScreenState extends State<ActorConnectionScreen> {
     final from = _fromController.text.trim();
     final to = _toController.text.trim();
     if (from.isEmpty || to.isEmpty) {
-      setState(() { _searched = true; _path = const []; _error = 'Enter both names to find a connection.'; });
+      setState(() {
+        _searched = true;
+        _path = const [];
+        _error = 'Enter both names to find a connection.';
+      });
       return;
     }
     final graph = _graph();
     final source = _key(from);
     final target = _key(to);
     if (!graph.containsKey(source) || !graph.containsKey(target)) {
-      setState(() { _searched = true; _path = const []; _error = 'One or both people are missing from credits in your indexed library.'; });
+      setState(() {
+        _searched = true;
+        _path = const [];
+        _error =
+            'One or both people are missing from credits in your indexed library.';
+      });
       return;
     }
     if (source == target) {
-      setState(() { _searched = true; _path = [_ConnectionStep(_displayName(source))]; _error = null; });
+      setState(() {
+        _searched = true;
+        _path = [_ConnectionStep(_displayName(source))];
+        _error = null;
+      });
       return;
     }
 
@@ -107,7 +128,12 @@ class _ActorConnectionScreenState extends State<ActorConnectionScreen> {
       }
     }
     if (!visited.contains(target)) {
-      setState(() { _searched = true; _path = const []; _error = 'No connection was found in the media currently indexed on this server.'; });
+      setState(() {
+        _searched = true;
+        _path = const [];
+        _error =
+            'No connection was found in the media currently indexed on this server.';
+      });
       return;
     }
 
@@ -130,7 +156,11 @@ class _ActorConnectionScreenState extends State<ActorConnectionScreen> {
           viaYear: i == 0 ? null : edges[i - 1].workYear,
         ),
     ];
-    setState(() { _searched = true; _path = path; _error = null; });
+    setState(() {
+      _searched = true;
+      _path = path;
+      _error = null;
+    });
   }
 
   @override
@@ -140,7 +170,11 @@ class _ActorConnectionScreenState extends State<ActorConnectionScreen> {
   }
 
   @override
-  void dispose() { _fromController.dispose(); _toController.dispose(); super.dispose(); }
+  void dispose() {
+    _fromController.dispose();
+    _toController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -149,7 +183,9 @@ class _ActorConnectionScreenState extends State<ActorConnectionScreen> {
     return Scaffold(
       appBar: AppBar(title: const UniversalText('People Connections')),
       body: ListView(padding: const EdgeInsets.all(18), children: [
-        const UniversalText('Find a cross-media path between actors, directors, writers, singers, bands, and credited music contributors. Connections can pass through movies, TV shows, soundtrack credits, songs, featured artists, groups, and collaborations when those relationships are present in your indexed metadata.', style: TextStyle(color: Colors.white70, height: 1.35)),
+        const UniversalText(
+            'Find a cross-media path between actors, directors, writers, singers, bands, and credited music contributors. Connections can pass through movies, TV shows, soundtrack credits, songs, featured artists, groups, and collaborations when those relationships are present in your indexed metadata.',
+            style: TextStyle(color: Colors.white70, height: 1.35)),
         const SizedBox(height: 16),
         TextField(
           controller: _fromController,
@@ -172,26 +208,68 @@ class _ActorConnectionScreenState extends State<ActorConnectionScreen> {
           ),
         ),
         const SizedBox(height: 14),
-        FilledButton.icon(onPressed: _findPath, icon: const Icon(Icons.account_tree_rounded), label: const UniversalText('Find cross-media connection')),
+        FilledButton.icon(
+            onPressed: _findPath,
+            icon: const Icon(Icons.account_tree_rounded),
+            label: const UniversalText('Find cross-media connection')),
         if (_searched && _error != null) ...[
           const SizedBox(height: 16),
-          Card(child: Padding(padding: const EdgeInsets.all(14), child: Text(_error!))),
+          Card(
+              child: Padding(
+                  padding: const EdgeInsets.all(14), child: Text(_error!))),
         ],
         if (_path.isNotEmpty) ...[
           const SizedBox(height: 18),
-          Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('${_path.length - 1} connection${_path.length == 2 ? '' : 's'}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
-            const SizedBox(height: 12),
-            for (var i = 0; i < _path.length; i++) ...[
-              Row(children: [CircleAvatar(radius: 16, child: Text('${i + 1}')), const SizedBox(width: 10), Expanded(child: Text(_path[i].person, style: const TextStyle(fontWeight: FontWeight.w800)))]),
-              if (i < _path.length - 1) Padding(
-                padding: const EdgeInsets.only(left: 25, top: 6, bottom: 6),
-                child: Row(children: [Container(width: 2, height: 22, color: Theme.of(context).colorScheme.primary), const SizedBox(width: 10), Expanded(child: Text('via ${_path[i + 1].viaTitle ?? 'shared work'}${_path[i + 1].viaYear == null ? '' : ' (${_path[i + 1].viaYear})'}', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 12)))]),
-              ),
-            ],
-          ]))),
+          Card(
+              child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                            '${_path.length - 1} connection${_path.length == 2 ? '' : 's'}',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w900, fontSize: 18)),
+                        const SizedBox(height: 12),
+                        for (var i = 0; i < _path.length; i++) ...[
+                          Row(children: [
+                            CircleAvatar(radius: 16, child: Text('${i + 1}')),
+                            const SizedBox(width: 10),
+                            Expanded(
+                                child: Text(_path[i].person,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w800)))
+                          ]),
+                          if (i < _path.length - 1)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                  left: 25, top: 6, bottom: 6),
+                              child: Row(children: [
+                                Container(
+                                    width: 2,
+                                    height: 22,
+                                    color:
+                                        Theme.of(context).colorScheme.primary),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                    child: Text(
+                                        'via ${_path[i + 1].viaTitle ?? 'shared work'}${_path[i + 1].viaYear == null ? '' : ' (${_path[i + 1].viaYear})'}',
+                                        style: TextStyle(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary,
+                                            fontSize: 12)))
+                              ]),
+                            ),
+                        ],
+                      ]))),
         ],
-        if (allPeople.isEmpty) const Padding(padding: EdgeInsets.only(top: 12), child: UniversalText('Import cast, soundtrack, artist, group-membership, and collaboration metadata to build richer cross-media paths.', style: TextStyle(color: Colors.white54))),
+        if (allPeople.isEmpty)
+          const Padding(
+              padding: EdgeInsets.only(top: 12),
+              child: UniversalText(
+                  'Import cast, soundtrack, artist, group-membership, and collaboration metadata to build richer cross-media paths.',
+                  style: TextStyle(color: Colors.white54))),
       ]),
     );
   }

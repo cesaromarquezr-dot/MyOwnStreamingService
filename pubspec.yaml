@@ -48,6 +48,8 @@ dependencies:
   vector_math: ^2.4.4
   flutter_svg: ^2.3.2
 
+  material_ui: any
+  cupertino_ui: any
 dev_dependencies:
   flutter_test:
     sdk: flutter

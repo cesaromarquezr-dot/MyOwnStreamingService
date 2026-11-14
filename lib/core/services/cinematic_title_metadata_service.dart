@@ -786,6 +786,59 @@ class CinematicTitleMetadataService {
     return List<CinematicTitleRecommendation>.unmodifiable(output);
   }
 
+  /// Returns movie and television titles associated with one exact production
+  /// company or TV network ID. Movie and TV queries are kept separate because
+  /// TMDB exposes different discover endpoints for each media type.
+  static Future<List<CinematicTitleRecommendation>> lookupCompanyRecommendations({
+    required int companyId,
+    bool isNetwork = false,
+    int limit = 18,
+  }) async {
+    if (!isConfigured || companyId <= 0 || limit <= 0) {
+      return const <CinematicTitleRecommendation>[];
+    }
+    final cacheKey = 'company:${isNetwork ? 'network' : 'studio'}:$companyId:$limit';
+    final cached = _companyRecommendationsCache[cacheKey];
+    if (cached != null) return cached;
+    final requests = <Future<List<CinematicTitleRecommendation>>>[];
+    for (final isTv in <bool>[false, true]) {
+      if (isNetwork && !isTv) continue;
+      requests.add(() async {
+        try {
+          final payload = await _get(
+            isTv ? '/discover/tv' : '/discover/movie',
+            <String, String>{
+              'page': '1',
+              'include_adult': 'false',
+              'sort_by': 'popularity.desc',
+              'vote_count.gte': '3',
+              if (isNetwork) 'with_networks': companyId.toString(),
+              if (!isNetwork) 'with_companies': companyId.toString(),
+            },
+          );
+          return _listOfMaps(payload['results'])
+              .map((row) => CinematicTitleRecommendation.fromJson(row, isTv: isTv))
+              .where((item) => item.providerId > 0 && item.title.trim().isNotEmpty)
+              .map((item) => item.withContext(
+                    reason: isNetwork
+                        ? 'From this TV network.'
+                        : 'From this production company.',
+                  ))
+              .toList(growable: false);
+        } catch (_) {
+          return const <CinematicTitleRecommendation>[];
+        }
+      }());
+    }
+    final merged = _mergeRecommendationGroups(await Future.wait(requests), limit);
+    final immutable = List<CinematicTitleRecommendation>.unmodifiable(merged);
+    _companyRecommendationsCache[cacheKey] = immutable;
+    return immutable;
+  }
+
+  static final Map<String, List<CinematicTitleRecommendation>>
+      _companyRecommendationsCache = <String, List<CinematicTitleRecommendation>>{};
+
   /// Builds the metadata-backed recommendation groups used by Home. All discovery
   /// requests are scoped to the source media type (movie or TV) and use TMDB
   /// metadata IDs rather than guessing company or performer names.

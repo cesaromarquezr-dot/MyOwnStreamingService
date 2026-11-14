@@ -9,7 +9,7 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
@@ -61,9 +61,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
         padding: const EdgeInsets.fromLTRB(18, 12, 18, 36),
         children: [
           _heroCard(context),
-
           const SizedBox(height: 10),
-
           Card(
             child: ListTile(
               leading: const Icon(Icons.qr_code_2_rounded),
@@ -93,11 +91,8 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
               },
             ),
           ),
-
           const SizedBox(height: 14),
-
           _sectionTitle('Send to TV'),
-
           _deviceCard(
             context,
             'Scan & pair a TV',
@@ -107,7 +102,6 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
             Icons.qr_code_2_rounded,
             _pairDevice,
           ),
-
           ...devices.map(
             (device) => _deviceCard(
               context,
@@ -117,11 +111,8 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
               () => _castTo(context, device),
             ),
           ),
-
           const SizedBox(height: 12),
-
           _sectionTitle('Road Trip Mode'),
-
           Card(
             child: Column(
               children: [
@@ -180,11 +171,8 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
               ],
             ),
           ),
-
           const SizedBox(height: 12),
-
           _sectionTitle('Offline Downloads'),
-
           Card(
             child: Column(
               children: [
@@ -220,7 +208,6 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
               ],
             ),
           ),
-
           if (profile != null) ...[
             const SizedBox(height: 12),
             UniversalText(
@@ -594,7 +581,8 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
                   ...media.take(12).map(
                         (item) => CheckboxListTile(
                           value: downloads.contains(item.id),
-                          title: LocalizedMediaText(item.title, preserveOriginal: true),
+                          title: LocalizedMediaText(item.title,
+                              preserveOriginal: true),
                           subtitle: Text(
                             _mediaTypeLabel(item),
                           ),

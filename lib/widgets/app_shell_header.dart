@@ -1,6 +1,6 @@
 // Shared app-shell header. Kept separate from main.dart so search and
 // profile/header UI can be maintained independently from route orchestration.
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../localization.dart';
 import '../page_customization_button.dart';

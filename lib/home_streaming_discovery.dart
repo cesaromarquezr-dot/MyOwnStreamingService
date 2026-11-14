@@ -5,7 +5,7 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:ui' show ImageFilter;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
@@ -13,6 +13,7 @@ import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 import 'app_core.dart';
 import 'widgets/added_by_profile_label.dart';
+import 'widgets/media_status_badges.dart';
 import 'cinematic_title.dart';
 import 'artwork_selection_store.dart';
 import 'artwork_gallery_screen.dart';
@@ -4505,6 +4506,86 @@ class _CollectionMemberRail extends StatelessWidget {
   }
 }
 
+class _SearchLibraryPosterRail extends StatelessWidget {
+  const _SearchLibraryPosterRail({required this.items});
+
+  final List<MediaItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+        child: Text(
+          'Add artwork to your library to see your movies, shows and albums here.',
+          style: TextStyle(color: Colors.white54, fontSize: 12),
+        ),
+      );
+    }
+    return SizedBox(
+      height: 194,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        scrollDirection: Axis.horizontal,
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final item = items[index];
+          return SizedBox(
+            width: 104,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(9),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  settings: RouteSettings(name: '/app/media/${item.id}'),
+                  builder: (_) => MediaDetailsScreen(media: item),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(9),
+                    child: SizedBox(
+                      width: 104,
+                      height: 148,
+                      child: Container(
+                        color: const Color(0xFF15151A),
+                        child: Image.network(
+                          item.imageUrl!,
+                          fit: item.type.toLowerCase().contains('album')
+                              ? BoxFit.contain
+                              : BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: const Color(0xFF25252B),
+                            alignment: Alignment.center,
+                            child: const Icon(Icons.movie_outlined,
+                                color: Colors.white54),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    item.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
 /// Default search-screen discovery: popular searches, trending searches, playlists and collections.
 class SearchDiscoveryLanding extends StatelessWidget {
   final ValueChanged<String> onSearch;
@@ -4539,10 +4620,31 @@ class SearchDiscoveryLanding extends StatelessWidget {
     final featured = collections.where((c) => c.isFeatured).take(4).toList();
     final collectionCards =
         (featured.isNotEmpty ? featured : collections).take(8).toList();
+    final browseItems = AppController.instance.library.where((item) {
+      final type = item.type.toLowerCase();
+      final isBrowseable = type.contains('movie') ||
+          type.contains('film') ||
+          type.contains('show') ||
+          type.contains('series') ||
+          type.contains('album') ||
+          item.isSeries;
+      return isBrowseable &&
+          item.isAccessibleTo(AppController.instance.currentProfile) &&
+          (item.imageUrl?.trim().startsWith('http') ?? false) &&
+          !item.isBonusContent;
+    }).toList()
+      ..sort((a, b) => b.addedAt.compareTo(a.addedAt));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _DiscoverySectionHeader(
+          title: 'Browse Your Library',
+          subtitle: 'Pick a movie, show or album before typing a search',
+        ),
+        _SearchLibraryPosterRail(
+          items: browseItems.take(18).toList(growable: false),
+        ),
         _DiscoverySectionHeader(
             title: 'Popular Searches',
             subtitle: 'Start with a popular genre or theme'),
@@ -5268,6 +5370,15 @@ class _DiscoveryMediaCardState extends State<_DiscoveryMediaCard> {
                             bottom: 8,
                             child: Icon(Icons.play_circle_fill_rounded,
                                 size: 27, color: Colors.white),
+                          ),
+                        if (widget.media != null)
+                          Positioned(
+                            right: 7,
+                            top: 7,
+                            child: MediaStatusBadgeRow(
+                              media: widget.media!,
+                              dense: true,
+                            ),
                           ),
                         if (widget.isOwned != null)
                           Positioned(

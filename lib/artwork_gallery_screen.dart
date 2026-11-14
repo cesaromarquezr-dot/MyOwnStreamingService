@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 import 'app_core.dart';
@@ -25,6 +25,7 @@ class ArtworkGalleryScreen extends StatefulWidget {
   final String? initialBackdropPath;
   final ValueChanged<String> onPosterSet;
   final ValueChanged<String> onBackdropSet;
+
   /// Optional scope override, used by the profile picker to save a shared
   /// default before the viewer chooses an individual profile.
   final String? profileIdOverride;
@@ -44,9 +45,8 @@ class _ArtworkGalleryScreenState extends State<ArtworkGalleryScreen>
       ? widget.metadata.backdropPaths
       : widget.metadata.posterPaths;
 
-  String? get _activeSelection => _tabs.index == 1
-      ? _selectedBackdropPath
-      : _selectedPosterPath;
+  String? get _activeSelection =>
+      _tabs.index == 1 ? _selectedBackdropPath : _selectedPosterPath;
 
   void _stepSelection(int delta) {
     final paths = _activePaths;
@@ -63,14 +63,17 @@ class _ArtworkGalleryScreenState extends State<ArtworkGalleryScreen>
     });
   }
 
-  String get _profileId => widget.profileIdOverride ??
-      AppController.instance.currentProfile?.id ?? 'guest';
+  String get _profileId =>
+      widget.profileIdOverride ??
+      AppController.instance.currentProfile?.id ??
+      'guest';
 
   @override
   void initState() {
     super.initState();
     _tabs = TabController(length: 2, vsync: this);
-    _selectedPosterPath = widget.initialPosterPath ?? widget.metadata.posterPath;
+    _selectedPosterPath =
+        widget.initialPosterPath ?? widget.metadata.posterPath;
     _selectedBackdropPath =
         widget.initialBackdropPath ?? widget.metadata.backdropPath;
   }
@@ -152,18 +155,19 @@ class _ArtworkGalleryScreenState extends State<ArtworkGalleryScreen>
         child: TabBarView(
           controller: _tabs,
           children: [
-          _galleryGrid(
-            paths: posters,
-            backdrop: false,
-            selectedPath: _selectedPosterPath,
-            onSelected: (path) => setState(() => _selectedPosterPath = path),
-          ),
-          _galleryGrid(
-            paths: backdrops,
-            backdrop: true,
-            selectedPath: _selectedBackdropPath,
-            onSelected: (path) => setState(() => _selectedBackdropPath = path),
-          ),
+            _galleryGrid(
+              paths: posters,
+              backdrop: false,
+              selectedPath: _selectedPosterPath,
+              onSelected: (path) => setState(() => _selectedPosterPath = path),
+            ),
+            _galleryGrid(
+              paths: backdrops,
+              backdrop: true,
+              selectedPath: _selectedBackdropPath,
+              onSelected: (path) =>
+                  setState(() => _selectedBackdropPath = path),
+            ),
           ],
         ),
       ),
@@ -174,7 +178,8 @@ class _ArtworkGalleryScreenState extends State<ArtworkGalleryScreen>
           builder: (context, _) {
             final isBackdrop = _tabs.index == 1;
             final paths = isBackdrop ? backdrops : posters;
-            final selected = isBackdrop ? _selectedBackdropPath : _selectedPosterPath;
+            final selected =
+                isBackdrop ? _selectedBackdropPath : _selectedPosterPath;
             final selectedIndex = paths.indexOf(selected ?? '');
             return Column(
               mainAxisSize: MainAxisSize.min,
@@ -183,7 +188,8 @@ class _ArtworkGalleryScreenState extends State<ArtworkGalleryScreen>
                   children: [
                     IconButton.filledTonal(
                       tooltip: 'Previous artwork (Left Arrow)',
-                      onPressed: paths.length > 1 ? () => _stepSelection(-1) : null,
+                      onPressed:
+                          paths.length > 1 ? () => _stepSelection(-1) : null,
                       icon: const Icon(Icons.chevron_left_rounded),
                     ),
                     Expanded(
@@ -194,13 +200,15 @@ class _ArtworkGalleryScreenState extends State<ArtworkGalleryScreen>
                               : '${selectedIndex < 0 ? 'Choose' : selectedIndex + 1} of ${paths.length} · Use ← / → to browse',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: Colors.white70, fontSize: 12),
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 12),
                         ),
                       ),
                     ),
                     IconButton.filledTonal(
                       tooltip: 'Next artwork (Right Arrow)',
-                      onPressed: paths.length > 1 ? () => _stepSelection(1) : null,
+                      onPressed:
+                          paths.length > 1 ? () => _stepSelection(1) : null,
                       icon: const Icon(Icons.chevron_right_rounded),
                     ),
                   ],
@@ -255,7 +263,13 @@ class _ArtworkGalleryScreenState extends State<ArtworkGalleryScreen>
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final columns = width >= 1200 ? 6 : width >= 850 ? 5 : width >= 580 ? 4 : 2;
+        final columns = width >= 1200
+            ? 6
+            : width >= 850
+                ? 5
+                : width >= 580
+                    ? 4
+                    : 2;
         return GridView.builder(
           padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
           itemCount: paths.length,
@@ -289,14 +303,17 @@ class _ArtworkGalleryScreenState extends State<ArtworkGalleryScreen>
                         child: Icon(Icons.broken_image_outlined,
                             size: 38, color: Colors.white38),
                       ),
-                      loadingBuilder: (context, child, progress) => progress == null
+                      loadingBuilder: (context, child, progress) => progress ==
+                              null
                           ? child
-                          : const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                          : const Center(
+                              child: CircularProgressIndicator(strokeWidth: 2)),
                     ),
                     if (selected)
                       Container(
                         decoration: BoxDecoration(
-                          border: Border.all(color: Colors.greenAccent, width: 4),
+                          border:
+                              Border.all(color: Colors.greenAccent, width: 4),
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
@@ -305,7 +322,8 @@ class _ArtworkGalleryScreenState extends State<ArtworkGalleryScreen>
                       right: 8,
                       bottom: 8,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 9, vertical: 7),
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: .78),
                           borderRadius: BorderRadius.circular(8),
@@ -314,17 +332,26 @@ class _ArtworkGalleryScreenState extends State<ArtworkGalleryScreen>
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              selected ? Icons.check_circle : Icons.radio_button_unchecked,
-                              color: selected ? Colors.greenAccent : Colors.white70,
+                              selected
+                                  ? Icons.check_circle
+                                  : Icons.radio_button_unchecked,
+                              color: selected
+                                  ? Colors.greenAccent
+                                  : Colors.white70,
                               size: 17,
                             ),
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
-                                selected ? 'Selected' : (backdrop ? 'Select backdrop' : 'Select poster'),
+                                selected
+                                    ? 'Selected'
+                                    : (backdrop
+                                        ? 'Select backdrop'
+                                        : 'Select poster'),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                                style: const TextStyle(
+                                    fontSize: 11, fontWeight: FontWeight.w800),
                               ),
                             ),
                           ],

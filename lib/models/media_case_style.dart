@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Physical packaging styles used by the Virtual Store, Kiosk and Theater.
 ///
@@ -47,7 +47,9 @@ class MediaCaseStyle {
     if (raw.isEmpty) return 'Digital / not recorded';
 
     final text = raw.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-    if (text.contains('4k') || text.contains('uhd') || text.contains('ultrahd')) {
+    if (text.contains('4k') ||
+        text.contains('uhd') ||
+        text.contains('ultrahd')) {
       return '4K Ultra HD';
     }
     if (text.contains('steelbook') || text.contains('steelcase')) {

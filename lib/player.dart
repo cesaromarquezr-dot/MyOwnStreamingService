@@ -4,7 +4,7 @@
 
 import 'dart:async';
 import 'backend_api.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import 'device_features.dart';
 import 'app_core.dart';
@@ -20,7 +20,6 @@ import 'core/services/original_language_defaults.dart';
 import 'stores/theater_store.dart';
 import 'core/services/recent_playback_store.dart';
 import 'presence/account_profile_presence_service.dart';
-
 
 class PlayerScreen extends StatefulWidget {
   final MediaItem media;
@@ -111,7 +110,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
       );
       final roomName = widget.theaterRoomId == null
           ? 'Now Playing'
-          : (matchingRooms.isEmpty ? 'Private Theater' : matchingRooms.first.name);
+          : (matchingRooms.isEmpty
+              ? 'Private Theater'
+              : matchingRooms.first.name);
       AccountProfilePresenceService.instance.start(
         profileId: activeProfile.id,
         activityType: 'watching',
@@ -213,9 +214,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final preferredAudioLanguage = preferences.preferredAudioLanguage.isNotEmpty
         ? preferences.preferredAudioLanguage
         : (preferences.preferOriginalAudio ? originalLanguage : null);
-    final preferredSubtitleLanguage = preferences.preferredSubtitleLanguage.isNotEmpty
-        ? preferences.preferredSubtitleLanguage
-        : (preferences.preferOriginalSubtitles ? originalLanguage : null);
+    final preferredSubtitleLanguage =
+        preferences.preferredSubtitleLanguage.isNotEmpty
+            ? preferences.preferredSubtitleLanguage
+            : (preferences.preferOriginalSubtitles ? originalLanguage : null);
     final automaticAudio = OriginalLanguageDefaults.bestTrack(
           audioTracks,
           targetLanguage: preferredAudioLanguage,
@@ -229,9 +231,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
     final savedAudio = savedTracks['audio'];
     final savedSubtitle = savedTracks['subtitle'];
-    final selectedAudio = audioTracks.contains(savedAudio)
-        ? savedAudio!
-        : automaticAudio;
+    final selectedAudio =
+        audioTracks.contains(savedAudio) ? savedAudio! : automaticAudio;
     final selectedSubtitle = !preferences.subtitlesEnabled ||
             (savedTracks.containsKey('subtitle') && savedSubtitle == '')
         ? null
@@ -241,7 +242,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     setState(() {
       _autoplayNextEnabled = preferences.autoplayNext;
-      subtitlesEnabled = preferences.subtitlesEnabled && selectedSubtitle != null;
+      subtitlesEnabled =
+          preferences.subtitlesEnabled && selectedSubtitle != null;
       this.selectedAudio = selectedAudio;
       this.selectedSubtitle = selectedSubtitle;
     });
@@ -251,7 +253,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final controller = AppController.instance;
     final profile = controller.currentProfile;
     final api = controller.backendApi;
-    if (profile == null || profile.id != _playbackProfileId || !api.isAuthenticated) return;
+    if (profile == null ||
+        profile.id != _playbackProfileId ||
+        !api.isAuthenticated) {
+      return;
+    }
     try {
       final deviceId = await controller.ensureDeviceId();
       final result = await api.createPlaybackSession(
@@ -407,13 +413,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
             valueMs: DateTime.now().difference(_qoeStartedAt).inMilliseconds));
       }
 
-      if (widget.initialPositionSeconds != null && !_initialScheduledSeekApplied) {
+      if (widget.initialPositionSeconds != null &&
+          !_initialScheduledSeekApplied) {
         _initialScheduledSeekApplied = true;
-        unawaited(_seekYoutubeBySeconds(widget.initialPositionSeconds!.clamp(0, 24 * 60 * 60)));
+        unawaited(_seekYoutubeBySeconds(
+            widget.initialPositionSeconds!.clamp(0, 24 * 60 * 60)));
       } else {
-        final savedSeconds = AppController.instance.playbackPositionSeconds[widget.media.id];
-        final savedDuration = AppController.instance.playbackDurationSeconds[widget.media.id];
-        if (savedSeconds != null && savedSeconds > 0 && savedDuration != null && savedDuration > 0) {
+        final savedSeconds =
+            AppController.instance.playbackPositionSeconds[widget.media.id];
+        final savedDuration =
+            AppController.instance.playbackDurationSeconds[widget.media.id];
+        if (savedSeconds != null &&
+            savedSeconds > 0 &&
+            savedDuration != null &&
+            savedDuration > 0) {
           unawaited(_restoreSavedPlaybackPosition(savedSeconds));
         } else if (position > 0.0 && position < 1.0) {
           _seekYoutubeByNormalizedPosition(position);
@@ -456,7 +469,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     xrayPlaybackPosition.value = state.position;
     if (youtubeController!.value.playerState == PlayerState.playing) {
-      _updateTheaterRoomStatus('previewing', state.position.inSeconds.toDouble());
+      _updateTheaterRoomStatus(
+          'previewing', state.position.inSeconds.toDouble());
     }
 
     if ((position - normalizedPosition).abs() > 0.005) {
@@ -483,7 +497,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (_lastTheaterStatus == status &&
         positionSeconds != null &&
         _lastTheaterProgressSync != null &&
-        now.difference(_lastTheaterProgressSync!) < const Duration(seconds: 15)) {
+        now.difference(_lastTheaterProgressSync!) <
+            const Duration(seconds: 15)) {
       return;
     }
     _lastTheaterStatus = status;
@@ -598,7 +613,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   /// Performs `_pauseYoutubeVideo` for this feature. Update this documentation when its contract changes.
   void _pauseYoutubeVideo() {
-
     youtubeController?.pauseVideo();
 
     if (mounted) {
@@ -680,7 +694,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
 
     _startControlsTimer();
-
   }
 
   /// Performs `_handleMainPlayPause` for this feature. Update this documentation when its contract changes.
@@ -819,8 +832,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       final queuedMedia = nextMedia;
       final queuedTrack = nextTrack;
       final queuedTitle = queuedMedia?.title ?? queuedTrack!.title;
-      final queuedSubtitle = queuedMedia?.type ??
-          '${queuedTrack!.artist} · ${queuedTrack.album}';
+      final queuedSubtitle =
+          queuedMedia?.type ?? '${queuedTrack!.artist} · ${queuedTrack.album}';
       showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
@@ -867,7 +880,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   if (mounted && messenger.mounted) {
                     messenger.showSnackBar(
                       SnackBar(
-                        content: Text('Could not start the queued title: $error'),
+                        content:
+                            Text('Could not start the queued title: $error'),
                       ),
                     );
                   }
@@ -1026,10 +1040,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
           selectedAudio: selectedAudio,
           subtitlesEnabled: subtitlesEnabled,
           selectedSubtitle: selectedSubtitle,
-          originalAudioLanguage: OriginalLanguageDefaults.resolveForMedia(widget.media),
+          originalAudioLanguage:
+              OriginalLanguageDefaults.resolveForMedia(widget.media),
           originalAudioTrack: OriginalLanguageDefaults.matchingTrack(
             widget.media.audioTracks,
-            targetLanguage: OriginalLanguageDefaults.resolveForMedia(widget.media),
+            targetLanguage:
+                OriginalLanguageDefaults.resolveForMedia(widget.media),
           ),
           onAudioChanged: _changeAudioTrack,
           onSubtitleChanged: _changeSubtitleTrack,
@@ -1678,9 +1694,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
               value: position,
               min: 0,
               max: 1,
-              onChanged: videoFinished || !hasYoutube
-                  ? null
-                  : updatePosition,
+              onChanged: videoFinished || !hasYoutube ? null : updatePosition,
             ),
           ),
           Row(
@@ -1741,7 +1755,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
       ),
     );
   }
-
 }
 
 // ============================================================
@@ -2354,14 +2367,18 @@ class _AudioSubtitleOptionsState extends State<AudioSubtitleOptions> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.verified_outlined, color: Colors.greenAccent, size: 19),
+                      const Icon(Icons.verified_outlined,
+                          color: Colors.greenAccent, size: 19),
                       const SizedBox(width: 9),
                       Expanded(
                         child: Text(
                           widget.originalAudioTrack != null
                               ? 'Original audio: ${OriginalLanguageDefaults.displayName(widget.originalAudioLanguage)} · ${widget.originalAudioTrack}. Other available tracks, including dubs, remain selectable.'
                               : 'Original language: ${OriginalLanguageDefaults.displayName(widget.originalAudioLanguage)}. A matching track was not identified in this file; the listed audio tracks remain available.',
-                          style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.35),
+                          style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                              height: 1.35),
                         ),
                       ),
                     ],
@@ -2414,7 +2431,8 @@ class _AudioSubtitleOptionsState extends State<AudioSubtitleOptions> {
                 const SizedBox(height: 6),
                 const Text(
                   'Your per-title choice is remembered by profile. The current adaptive video_player source does not expose audio-track switching yet, so changing this selection may not change an active HLS/DASH stream.',
-                  style: TextStyle(color: Colors.white54, fontSize: 11, height: 1.35),
+                  style: TextStyle(
+                      color: Colors.white54, fontSize: 11, height: 1.35),
                 ),
                 const SizedBox(height: 14),
               ],

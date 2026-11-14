@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_core.dart';
@@ -19,13 +19,44 @@ class _ChannelCenterScreenState extends State<ChannelCenterScreen> {
   final _name = TextEditingController();
   final _description = TextEditingController();
   static const _presets = <Map<String, String>>[
-    {'name':'Superhero Channel','description':'Superhero movies and series','icon':'🦸','kind':'My Channel'},
-    {'name':'Comedy Channel','description':'Comedy movies and series','icon':'😂','kind':'My Channel'},
-    {'name':'Horror Channel','description':'Horror movies and series','icon':'👻','kind':'My Channel'},
-    {'name':'Sci-Fi Channel','description':'Science-fiction adventures','icon':'🚀','kind':'My Channel'},
+    {
+      'name': 'Superhero Channel',
+      'description': 'Superhero movies and series',
+      'icon': '🦸',
+      'kind': 'My Channel'
+    },
+    {
+      'name': 'Comedy Channel',
+      'description': 'Comedy movies and series',
+      'icon': '😂',
+      'kind': 'My Channel'
+    },
+    {
+      'name': 'Horror Channel',
+      'description': 'Horror movies and series',
+      'icon': '👻',
+      'kind': 'My Channel'
+    },
+    {
+      'name': 'Sci-Fi Channel',
+      'description': 'Science-fiction adventures',
+      'icon': '🚀',
+      'kind': 'My Channel'
+    },
   ];
-  @override void initState() { super.initState(); _load(); }
-  @override void dispose() { _name.dispose(); _description.dispose(); super.dispose(); }
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _description.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_key);
@@ -52,20 +83,57 @@ class _ChannelCenterScreenState extends State<ChannelCenterScreen> {
     }
     if (mounted) setState(() => _loaded = true);
   }
-  Future<void> _save() async { final prefs = await SharedPreferences.getInstance(); await prefs.setString(_key, jsonEncode(_channels)); }
-  Future<void> _add({Map<String,String>? preset}) async {
+
+  Future<void> _save() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_key, jsonEncode(_channels));
+  }
+
+  Future<void> _add({Map<String, String>? preset}) async {
     _name.text = preset?['name'] ?? '';
     _description.text = preset?['description'] ?? '';
-    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-      title: Text(preset == null ? 'Create channel' : 'Add ${preset['name']}'),
-      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: _name, decoration: const InputDecoration(labelText: 'Channel name')),
-        TextField(controller: _description, decoration: const InputDecoration(labelText: 'Description')),
-        const Padding(padding: EdgeInsets.only(top:8), child: Text('This creates a curated channel entry from movies and shows in your library.')),
-      ])), actions: [TextButton(onPressed:()=>Navigator.pop(ctx,false), child: const Text('Cancel')), FilledButton(onPressed:()=>Navigator.pop(ctx,true), child: const Text('Save'))]));
+    final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+                title: Text(preset == null
+                    ? 'Create channel'
+                    : 'Add ${preset['name']}'),
+                content: SingleChildScrollView(
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  TextField(
+                      controller: _name,
+                      decoration:
+                          const InputDecoration(labelText: 'Channel name')),
+                  TextField(
+                      controller: _description,
+                      decoration:
+                          const InputDecoration(labelText: 'Description')),
+                  const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: Text(
+                          'This creates a curated channel entry from movies and shows in your library.')),
+                ])),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Cancel')),
+                  FilledButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text('Save'))
+                ]));
     if (ok != true || _name.text.trim().isEmpty) return;
-    setState(() { _channels.add({'id':DateTime.now().microsecondsSinceEpoch.toString(),'name':_name.text.trim(),'description':_description.text.trim(),'kind':'My Channel','enabled':true}); }); await _save();
+    setState(() {
+      _channels.add({
+        'id': DateTime.now().microsecondsSinceEpoch.toString(),
+        'name': _name.text.trim(),
+        'description': _description.text.trim(),
+        'kind': 'My Channel',
+        'enabled': true
+      });
+    });
+    await _save();
   }
+
   Future<void> _edit(Map<String, dynamic> channel) async {
     _name.text = channel['name']?.toString() ?? '';
     _description.text = channel['description']?.toString() ?? '';
@@ -73,33 +141,33 @@ class _ChannelCenterScreenState extends State<ChannelCenterScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-          title: const Text('Edit channel'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: _name,
-                  decoration: const InputDecoration(labelText: 'Name'),
-                ),
-                TextField(
-                  controller: _description,
-                  decoration: const InputDecoration(labelText: 'Description'),
-                ),
-              ],
-            ),
+        title: const Text('Edit channel'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _name,
+                decoration: const InputDecoration(labelText: 'Name'),
+              ),
+              TextField(
+                controller: _description,
+                decoration: const InputDecoration(labelText: 'Description'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Save'),
-            ),
-          ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
     );
 
     if (ok != true || _name.text.trim().isEmpty) return;
@@ -110,6 +178,7 @@ class _ChannelCenterScreenState extends State<ChannelCenterScreen> {
     });
     await _save();
   }
+
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(
@@ -245,7 +314,8 @@ class HomeChannelsSection extends StatelessWidget {
           item.description ?? '',
           ...item.genres,
           ...item.tags,
-          if (item.franchiseName?.trim().isNotEmpty == true) item.franchiseName!,
+          if (item.franchiseName?.trim().isNotEmpty == true)
+            item.franchiseName!,
         ].join(' ').toLowerCase();
     if (terms.isNotEmpty) {
       for (final media in library) {
@@ -267,14 +337,18 @@ class HomeChannelsSection extends StatelessWidget {
     String subtitle,
     IconData icon,
   ) {
-    final normalized = title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+    final normalized =
+        title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
     final preview = MediaItem(
       id: 'home-channel-$normalized',
       title: title,
       type: 'channel',
       imageUrl: _channelArtwork(title),
       description: subtitle,
-      tags: <String>['Channel', if (title.toLowerCase().contains('tv')) 'Television'],
+      tags: <String>[
+        'Channel',
+        if (title.toLowerCase().contains('tv')) 'Television'
+      ],
     );
     return Padding(
       padding: const EdgeInsets.only(right: 10),

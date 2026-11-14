@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../app_core.dart';
 import '../models/media_case_style.dart';
 import 'media_case_3d_view.dart';
+import 'media_status_badges.dart';
 
 class KioskMovieCard extends StatelessWidget {
   const KioskMovieCard({
@@ -17,8 +18,8 @@ class KioskMovieCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = MediaCaseStyle.fromFormat(media.displayCaseFormat);
-    final isSquarePackage = style.kind == MediaCaseKind.cd ||
-        style.kind == MediaCaseKind.vinyl;
+    final isSquarePackage =
+        style.kind == MediaCaseKind.cd || style.kind == MediaCaseKind.vinyl;
 
     return InkWell(
       onTap: onTap,
@@ -29,13 +30,29 @@ class KioskMovieCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Center(
-              child: MediaCase3DView(
-                title: media.title,
-                media: media,
-                format: media.displayCaseFormat,
-                year: media.releaseYear,
-                width: isSquarePackage ? 106 : 104,
-                height: 138,
+              child: SizedBox(
+                width: 116,
+                height: 146,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Center(
+                      child: MediaCase3DView(
+                        title: media.title,
+                        media: media,
+                        format: media.displayCaseFormat,
+                        year: media.releaseYear,
+                        width: isSquarePackage ? 106 : 104,
+                        height: 138,
+                      ),
+                    ),
+                    Positioned(
+                      top: 2,
+                      right: 0,
+                      child: MediaStatusBadgeRow(media: media, dense: true),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 8),

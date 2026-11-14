@@ -3,7 +3,7 @@
 // music, lyrics, music videos, search, social features and Group Watch.
 // Settings are stored by profile and do not alter the account's source media.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app_core.dart';
 import 'core/models/profile_governance.dart';
@@ -99,18 +99,26 @@ class _ProfileContentSafetyScreenState
 
   String _label(ProfileContentLevel value) {
     switch (value) {
-      case ProfileContentLevel.littleKids: return 'Little Kids';
-      case ProfileContentLevel.kids: return 'Kids';
-      case ProfileContentLevel.olderKids: return 'Older Kids';
-      case ProfileContentLevel.teen: return 'Teen';
-      case ProfileContentLevel.mature: return 'Mature';
-      case ProfileContentLevel.unrestricted: return 'Unrestricted';
-      case ProfileContentLevel.custom: return 'Custom';
+      case ProfileContentLevel.littleKids:
+        return 'Little Kids';
+      case ProfileContentLevel.kids:
+        return 'Kids';
+      case ProfileContentLevel.olderKids:
+        return 'Older Kids';
+      case ProfileContentLevel.teen:
+        return 'Teen';
+      case ProfileContentLevel.mature:
+        return 'Mature';
+      case ProfileContentLevel.unrestricted:
+        return 'Unrestricted';
+      case ProfileContentLevel.custom:
+        return 'Custom';
     }
   }
 
   bool _get(String key, {bool fallback = false}) =>
-      PlatformPreferenceStore.getBool('content_safety', key, fallback: fallback);
+      PlatformPreferenceStore.getBool('content_safety', key,
+          fallback: fallback);
 
   Future<void> _set(String key, bool value) async {
     await PlatformPreferenceStore.setBool('content_safety', key, value);
@@ -142,8 +150,7 @@ class _ProfileContentSafetyScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (_serverLoading)
-                    const LinearProgressIndicator(),
+                  if (_serverLoading) const LinearProgressIndicator(),
                   if (_serverError != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 10),
@@ -206,10 +213,12 @@ class _ProfileContentSafetyScreenState
                     child: UniversalText('Require a separate child profile'),
                   ),
                 ],
-                onChanged: _serverLoading ? null : (value) {
-                  if (value == null) return;
-                  _setChildAccessMode(value);
-                },
+                onChanged: _serverLoading
+                    ? null
+                    : (value) {
+                        if (value == null) return;
+                        _setChildAccessMode(value);
+                      },
               ),
               const SizedBox(height: 8),
               const UniversalText(
@@ -233,8 +242,10 @@ class _ProfileContentSafetyScreenState
           _section(
             'App Access',
             [
-              _switch('Hide restricted search results', 'hide_restricted_search', true),
-              _switch('Block restricted Group Watch', 'block_group_watch', true),
+              _switch('Hide restricted search results',
+                  'hide_restricted_search', true),
+              _switch(
+                  'Block restricted Group Watch', 'block_group_watch', true),
               _switch('Restrict social features', 'restrict_social', false),
               _switch('Restrict importing', 'restrict_imports', false),
               _switch('Restrict purchases', 'restrict_purchases', true),
@@ -244,17 +255,22 @@ class _ProfileContentSafetyScreenState
           _section(
             'Additional Safety Checks',
             [
-              _switch('Require approval for uncertain metadata', 'approval_uncertain', true),
-              _switch('Require approval for mature content', 'approval_mature', false),
-              _switch('Show content warnings before playback', 'show_warnings', true),
-              _switch('Protect mature content with profile PIN', 'mature_pin', false),
+              _switch('Require approval for uncertain metadata',
+                  'approval_uncertain', true),
+              _switch('Require approval for mature content', 'approval_mature',
+                  false),
+              _switch('Show content warnings before playback', 'show_warnings',
+                  true),
+              _switch('Protect mature content with profile PIN', 'mature_pin',
+                  false),
             ],
           ),
           const SizedBox(height: 18),
           OutlinedButton.icon(
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const PlatformExpansionScreen()),
+              MaterialPageRoute(
+                  builder: (_) => const PlatformExpansionScreen()),
             ),
             icon: const Icon(Icons.tune_rounded),
             label: const UniversalText('OPEN ADVANCED SAFETY SETTINGS'),
@@ -272,7 +288,9 @@ class _ProfileContentSafetyScreenState
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-                child: Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+                child: Text(title,
+                    style: const TextStyle(
+                        fontSize: 19, fontWeight: FontWeight.w900)),
               ),
               ...children,
             ],

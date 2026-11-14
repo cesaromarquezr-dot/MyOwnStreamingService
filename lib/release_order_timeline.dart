@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app_core.dart';
 import 'details.dart';
@@ -15,7 +15,8 @@ class ReleaseOrderTimelineScreen extends StatefulWidget {
       _ReleaseOrderTimelineScreenState();
 }
 
-class _ReleaseOrderTimelineScreenState extends State<ReleaseOrderTimelineScreen> {
+class _ReleaseOrderTimelineScreenState
+    extends State<ReleaseOrderTimelineScreen> {
   ReleaseOrderDirection _direction = ReleaseOrderDirection.newestFirst;
   ReleaseOrderSection? _sectionFilter;
   String? _genreFilter;
@@ -96,26 +97,27 @@ class _ReleaseOrderTimelineScreenState extends State<ReleaseOrderTimelineScreen>
                     _genreFilter = null;
                   });
                 }),
-                _filterChip('Movies',
-                    _sectionFilter == ReleaseOrderSection.movies, () {
+                _filterChip(
+                    'Movies', _sectionFilter == ReleaseOrderSection.movies, () {
                   setState(() {
                     _sectionFilter = ReleaseOrderSection.movies;
                     _genreFilter = null;
                   });
                 }),
-                _filterChip('TV Shows',
-                    _sectionFilter == ReleaseOrderSection.shows, () {
+                _filterChip(
+                    'TV Shows', _sectionFilter == ReleaseOrderSection.shows,
+                    () {
                   setState(() {
                     _sectionFilter = ReleaseOrderSection.shows;
                     _genreFilter = null;
                   });
                 }),
-                _filterChip('Music',
-                    _sectionFilter == ReleaseOrderSection.music, () {
+                _filterChip(
+                    'Music', _sectionFilter == ReleaseOrderSection.music, () {
                   setState(() => _sectionFilter = ReleaseOrderSection.music);
                 }),
-                _filterChip('Other',
-                    _sectionFilter == ReleaseOrderSection.other, () {
+                _filterChip(
+                    'Other', _sectionFilter == ReleaseOrderSection.other, () {
                   setState(() {
                     _sectionFilter = ReleaseOrderSection.other;
                     _genreFilter = null;
@@ -205,7 +207,8 @@ class _ReleaseOrderTimelineScreenState extends State<ReleaseOrderTimelineScreen>
                             ),
                           ),
                           children: [
-                            for (final section in ReleaseOrderGrouping.sectionOrder)
+                            for (final section
+                                in ReleaseOrderGrouping.sectionOrder)
                               if (group.sections[section]?.isNotEmpty == true)
                                 _sectionContents(
                                   section,
@@ -286,14 +289,16 @@ class _ReleaseOrderTimelineScreenState extends State<ReleaseOrderTimelineScreen>
 
   Widget _sectionContents(ReleaseOrderSection section, List<MediaItem> items) {
     final config = switch (section) {
-      ReleaseOrderSection.movies =>
-        (label: 'Movies', icon: Icons.movie_outlined),
-      ReleaseOrderSection.shows =>
-        (label: 'TV Shows', icon: Icons.tv_outlined),
-      ReleaseOrderSection.music =>
-        (label: 'Music', icon: Icons.album_outlined),
-      ReleaseOrderSection.other =>
-        (label: 'Other', icon: Icons.video_library_outlined),
+      ReleaseOrderSection.movies => (
+          label: 'Movies',
+          icon: Icons.movie_outlined
+        ),
+      ReleaseOrderSection.shows => (label: 'TV Shows', icon: Icons.tv_outlined),
+      ReleaseOrderSection.music => (label: 'Music', icon: Icons.album_outlined),
+      ReleaseOrderSection.other => (
+          label: 'Other',
+          icon: Icons.video_library_outlined
+        ),
     };
 
     return Padding(
@@ -355,7 +360,8 @@ class _ReleaseOrderTimelineScreenState extends State<ReleaseOrderTimelineScreen>
                         ? Image.network(
                             item.imageUrl!.trim(),
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => _artworkFallback(icon),
+                            errorBuilder: (_, __, ___) =>
+                                _artworkFallback(icon),
                           )
                         : _artworkFallback(icon),
                   ),
@@ -405,7 +411,8 @@ class _ReleaseOrderTimelineScreenState extends State<ReleaseOrderTimelineScreen>
     final parts = <String>[];
     final releaseDate = ReleaseOrderGrouping.releaseDateFor(item);
     if (releaseDate != null) {
-      parts.add(MaterialLocalizations.of(context).formatMediumDate(releaseDate));
+      parts
+          .add(MaterialLocalizations.of(context).formatMediumDate(releaseDate));
     }
     if ((item.editionName ?? '').trim().isNotEmpty) {
       parts.add(item.editionName!.trim());
@@ -415,10 +422,13 @@ class _ReleaseOrderTimelineScreenState extends State<ReleaseOrderTimelineScreen>
     if (disambiguator.isNotEmpty) {
       // Keep title disambiguators for similarly named works, but avoid repeating
       // a year on the year timeline unless it distinguishes the same title.
-      final sameTitleCount = AppController.instance.library.where(
-        (candidate) => MediaIdentitySorting.normalizedTitle(candidate.title) ==
-            MediaIdentitySorting.normalizedTitle(item.title),
-      ).length;
+      final sameTitleCount = AppController.instance.library
+          .where(
+            (candidate) =>
+                MediaIdentitySorting.normalizedTitle(candidate.title) ==
+                MediaIdentitySorting.normalizedTitle(item.title),
+          )
+          .length;
       if (sameTitleCount > 1) parts.add(disambiguator);
     }
     return parts.toSet().join(' · ');

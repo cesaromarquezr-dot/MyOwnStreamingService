@@ -1,6 +1,6 @@
 // Shared presentation layer for owned movies, episodes, TV specials, music,
 // physical discs, collections, chapters, and bonus features.
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app_core.dart';
 import 'details.dart';
@@ -167,7 +167,8 @@ class _MediaExperienceScreenState extends State<MediaExperienceScreen> {
                   [
                     media.type,
                     if (media.releaseYear != null) '${media.releaseYear}',
-                    if (media.displayCaseFormat != null) media.displayCaseFormat!,
+                    if (media.displayCaseFormat != null)
+                      media.displayCaseFormat!,
                   ].join(' · '),
                   textAlign: TextAlign.center,
                 ),

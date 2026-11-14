@@ -5,7 +5,7 @@
 import 'dart:async';
 import 'dart:ui';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'backend_api.dart';
 import 'app_core.dart';
 import 'cinematic_title_fonts.dart';
@@ -2232,7 +2232,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
             child: TextField(
               controller: controller,
               focusNode: searchFocusNode,
-              autofocus: true,
+              autofocus: widget.initialQuery.trim().isNotEmpty,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 16,
@@ -2292,8 +2292,8 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     final languages = results
         .map((media) =>
             (media.originalLanguage?.trim().isNotEmpty == true
-                ? media.originalLanguage
-                : media.language)
+                    ? media.originalLanguage
+                    : media.language)
                 ?.trim() ??
             '')
         .where((language) => language.isNotEmpty)
@@ -2325,7 +2325,8 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
         children: [
           const UniversalText(
             'Refine titles',
-            style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w700),
+            style:
+                TextStyle(color: Colors.white70, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 5),
           Wrap(
@@ -2348,8 +2349,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
                 ),
               if (genres.isNotEmpty)
                 DropdownButton<String>(
-                  value: genres.any(
-                          (genre) => genre == selectedDiscoveryGenre)
+                  value: genres.any((genre) => genre == selectedDiscoveryGenre)
                       ? selectedDiscoveryGenre
                       : '',
                   dropdownColor: const Color(0xFF202027),
@@ -2416,10 +2416,10 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
               if (hasRuntime)
                 DropdownButton<String>(
                   value: const <String>{
-                            'Under 90 min',
-                            '90-150 min',
-                            'Over 150 min',
-                          }.contains(selectedRuntimeBand)
+                    'Under 90 min',
+                    '90-150 min',
+                    'Over 150 min',
+                  }.contains(selectedRuntimeBand)
                       ? selectedRuntimeBand
                       : '',
                   dropdownColor: const Color(0xFF202027),
@@ -2506,8 +2506,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
         return false;
       }
       if (selectedDiscoveryLanguage != null) {
-        final language =
-            (item.originalLanguage?.trim().isNotEmpty == true
+        final language = (item.originalLanguage?.trim().isNotEmpty == true
                 ? item.originalLanguage
                 : item.language)
             ?.trim();
@@ -2536,9 +2535,8 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
         }
       }
       if (terms != null) {
-        final descriptors = <String>[...item.genres, ...item.tags]
-            .join(' ')
-            .toLowerCase();
+        final descriptors =
+            <String>[...item.genres, ...item.tags].join(' ').toLowerCase();
         if (!terms.any((term) => descriptors.contains(term))) return false;
       }
       return true;

@@ -3,7 +3,7 @@
 // This file is part of the documented Flutter/home-server architecture.
 
 import 'dart:math' as math;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'app_core.dart';
 import 'localization.dart';
 import 'backend_api.dart';
@@ -298,24 +298,121 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const UniversalText('General settings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-                const SizedBox(height: 6),
-                const UniversalText('Playback, connected devices, remote controls and support live here so Watch and the More menu remain consolidated.', style: TextStyle(color: Colors.white60)),
-                const SizedBox(height: 8),
-                ListTile(leading: const Icon(Icons.devices_rounded), title: const UniversalText('Device Center'), subtitle: const UniversalText('Devices, downloads and connected screens'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DeviceCenterScreen()))),
-                ListTile(leading: const Icon(Icons.auto_awesome_rounded), title: const UniversalText('Streaming Upgrade Center'), subtitle: const UniversalText('Search, collections, profiles and streaming tools'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StreamingUpgradeCenterScreen()))),
-                ListTile(leading: const Icon(Icons.palette_outlined), title: const UniversalText('Personal Rating Colors'), subtitle: const UniversalText('Customize the color bands used for your own movie, show, and music scores'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RatingColorSettingsScreen()))),
-                const SizedBox(height: 14),
-                const UniversalText('Appearance & Interface', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                ListTile(leading: const Icon(Icons.dashboard_customize_rounded), title: const UniversalText('Interface Experience Studio'), subtitle: const UniversalText('Choose Classic, Virtual Store, Redbox or Theater and customize each design'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const InterfaceExperienceStudioScreen()))),
-                ListTile(leading: const Icon(Icons.high_quality_rounded), title: const UniversalText('Streaming Experience'), subtitle: const UniversalText('Playback quality, accessibility and player diagnostics'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StreamingExperienceSettingsScreen()))),
-                ListTile(leading: const Icon(Icons.energy_savings_leaf_rounded), title: const UniversalText('Power & Performance'), subtitle: const UniversalText('Eco mode, OLED-black surfaces and background activity controls'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PowerPerformanceScreen()))),
-                ListTile(leading: const Icon(Icons.tune_rounded), title: const UniversalText('Perfect Streaming'), subtitle: const UniversalText('Autoplay, discovery and watch-party preferences'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PerfectStreamingExperienceScreen()))),
-                ListTile(leading: const Icon(Icons.settings_remote_rounded), title: const UniversalText('TV Controller'), subtitle: const UniversalText('Pair and control a supported TV'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TvControllerScreen()))),
-                ListTile(leading: const Icon(Icons.tv_rounded), title: const UniversalText('TV Host'), subtitle: const UniversalText('Display a pairing code on this TV'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TvHostScreen()))),
-                ListTile(leading: const Icon(Icons.support_agent_rounded), title: const UniversalText('Customer Support & Tickets'), subtitle: const UniversalText('Get help and track support requests'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CustomerSupportScreen()))),
-              ]),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const UniversalText('General settings',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 6),
+                    const UniversalText(
+                        'Playback, connected devices, remote controls and support live here so Watch and the More menu remain consolidated.',
+                        style: TextStyle(color: Colors.white60)),
+                    const SizedBox(height: 8),
+                    ListTile(
+                        leading: const Icon(Icons.devices_rounded),
+                        title: const UniversalText('Device Center'),
+                        subtitle: const UniversalText(
+                            'Devices, downloads and connected screens'),
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const DeviceCenterScreen()))),
+                    ListTile(
+                        leading: const Icon(Icons.auto_awesome_rounded),
+                        title: const UniversalText('Streaming Upgrade Center'),
+                        subtitle: const UniversalText(
+                            'Search, collections, profiles and streaming tools'),
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    const StreamingUpgradeCenterScreen()))),
+                    ListTile(
+                        leading: const Icon(Icons.palette_outlined),
+                        title: const UniversalText('Personal Rating Colors'),
+                        subtitle: const UniversalText(
+                            'Customize the color bands used for your own movie, show, and music scores'),
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    const RatingColorSettingsScreen()))),
+                    const SizedBox(height: 14),
+                    const UniversalText('Appearance & Interface',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w800)),
+                    ListTile(
+                        leading: const Icon(Icons.dashboard_customize_rounded),
+                        title:
+                            const UniversalText('Interface Experience Studio'),
+                        subtitle: const UniversalText(
+                            'Choose Classic, Virtual Store, Redbox or Theater and customize each design'),
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    const InterfaceExperienceStudioScreen()))),
+                    ListTile(
+                        leading: const Icon(Icons.high_quality_rounded),
+                        title: const UniversalText('Streaming Experience'),
+                        subtitle: const UniversalText(
+                            'Playback quality, accessibility and player diagnostics'),
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    const StreamingExperienceSettingsScreen()))),
+                    ListTile(
+                        leading: const Icon(Icons.energy_savings_leaf_rounded),
+                        title: const UniversalText('Power & Performance'),
+                        subtitle: const UniversalText(
+                            'Eco mode, OLED-black surfaces and background activity controls'),
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    const PowerPerformanceScreen()))),
+                    ListTile(
+                        leading: const Icon(Icons.tune_rounded),
+                        title: const UniversalText('Perfect Streaming'),
+                        subtitle: const UniversalText(
+                            'Autoplay, discovery and watch-party preferences'),
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    const PerfectStreamingExperienceScreen()))),
+                    ListTile(
+                        leading: const Icon(Icons.settings_remote_rounded),
+                        title: const UniversalText('TV Controller'),
+                        subtitle: const UniversalText(
+                            'Pair and control a supported TV'),
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const TvControllerScreen()))),
+                    ListTile(
+                        leading: const Icon(Icons.tv_rounded),
+                        title: const UniversalText('TV Host'),
+                        subtitle: const UniversalText(
+                            'Display a pairing code on this TV'),
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const TvHostScreen()))),
+                    ListTile(
+                        leading: const Icon(Icons.support_agent_rounded),
+                        title:
+                            const UniversalText('Customer Support & Tickets'),
+                        subtitle: const UniversalText(
+                            'Get help and track support requests'),
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    const CustomerSupportScreen()))),
+                  ]),
             ),
           ),
           const SizedBox(height: 12),

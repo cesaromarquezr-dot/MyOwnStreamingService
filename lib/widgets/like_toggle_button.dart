@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Reusable presentation for the canonical Universal Likes capability.
 /// The caller owns persistence; this widget only manages the interaction and

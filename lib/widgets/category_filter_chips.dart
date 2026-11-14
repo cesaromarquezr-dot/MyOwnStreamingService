@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Shared category-filter UI for liked songs, movies, TV shows and any future
 /// typed library view. Filtering is supplied by the parent; this widget does

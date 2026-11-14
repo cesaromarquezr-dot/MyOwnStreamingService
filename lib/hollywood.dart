@@ -2,7 +2,7 @@
 // Purpose: Implements the hollywood portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'localization.dart';
 
 /// Actor/Actress discovered from media imported into the user's library.
@@ -38,8 +38,7 @@ class Actor {
     int age = now.year - dateOfBirth!.year;
 
     if (now.month < dateOfBirth!.month ||
-        (now.month == dateOfBirth!.month &&
-            now.day < dateOfBirth!.day)) {
+        (now.month == dateOfBirth!.month && now.day < dateOfBirth!.day)) {
       age--;
     }
 
@@ -87,6 +86,7 @@ class _ActorsScreenState extends State<ActorsScreen> {
   final List<Actor> actors = [];
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final filteredActors = actors.where((actor) {
@@ -108,7 +108,8 @@ class _ActorsScreenState extends State<ActorsScreen> {
             expandedHeight: 250,
             backgroundColor: const Color(0xFF070707),
             elevation: 0,
-            title: const UniversalText('Actors',
+            title: const UniversalText(
+              'Actors',
               style: TextStyle(
                 fontWeight: FontWeight.w700,
               ),
@@ -155,10 +156,10 @@ class _ActorsScreenState extends State<ActorsScreen> {
                     right: 24,
                     bottom: 28,
                     child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        UniversalText('Your Stars',
+                        UniversalText(
+                          'Your Stars',
                           style: Theme.of(context)
                               .textTheme
                               .headlineLarge
@@ -168,7 +169,8 @@ class _ActorsScreenState extends State<ActorsScreen> {
                               ),
                         ),
                         const SizedBox(height: 7),
-                        UniversalText('Actors and actresses discovered from your library.',
+                        UniversalText(
+                          'Actors and actresses discovered from your library.',
                           style: TextStyle(
                             color: Colors.grey.shade400,
                             fontSize: 15,
@@ -199,8 +201,7 @@ class _ActorsScreenState extends State<ActorsScreen> {
                 },
                 decoration: InputDecoration(
                   hintText: tr('Search actors...'),
-                  prefixIcon:
-                      const Icon(Icons.search_rounded),
+                  prefixIcon: const Icon(Icons.search_rounded),
                   suffixIcon: searchQuery.isEmpty
                       ? null
                       : IconButton(
@@ -217,18 +218,15 @@ class _ActorsScreenState extends State<ActorsScreen> {
                   filled: true,
                   fillColor: const Color(0xFF151515),
                   border: OutlineInputBorder(
-                    borderRadius:
-                        BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(18),
                     borderSide: BorderSide.none,
                   ),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius:
-                        BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(18),
                     borderSide: BorderSide.none,
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius:
-                        BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(18),
                     borderSide: BorderSide(
                       color: Theme.of(context)
                           .colorScheme
@@ -259,8 +257,7 @@ class _ActorsScreenState extends State<ActorsScreen> {
               sliver: SliverGrid(
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
-                    final actor =
-                        filteredActors[index];
+                    final actor = filteredActors[index];
 
                     return _ActorCard(
                       actor: actor,
@@ -269,8 +266,7 @@ class _ActorsScreenState extends State<ActorsScreen> {
                   },
                   childCount: filteredActors.length,
                 ),
-                gridDelegate:
-                    const SliverGridDelegateWithMaxCrossAxisExtent(
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                   maxCrossAxisExtent: 210,
                   mainAxisExtent: 285,
                   crossAxisSpacing: 14,
@@ -303,6 +299,7 @@ class _ActorCardState extends State<_ActorCard> {
   bool pressed = false;
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final actor = widget.actor;
@@ -357,8 +354,7 @@ class _ActorCardState extends State<_ActorCard> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) =>
-                    ActorDetailsScreen(actor: actor),
+                builder: (_) => ActorDetailsScreen(actor: actor),
               ),
             );
           },
@@ -368,30 +364,24 @@ class _ActorCardState extends State<_ActorCard> {
                 : hovered
                     ? 1.035
                     : 1,
-            duration:
-                const Duration(milliseconds: 180),
+            duration: const Duration(milliseconds: 180),
             curve: Curves.easeOutCubic,
             child: AnimatedContainer(
-              duration:
-                  const Duration(milliseconds: 180),
+              duration: const Duration(milliseconds: 180),
               decoration: BoxDecoration(
-                borderRadius:
-                    BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(18),
                 boxShadow: hovered
                     ? [
                         BoxShadow(
-                          color: Colors.black
-                              .withValues(alpha: .5),
+                          color: Colors.black.withValues(alpha: .5),
                           blurRadius: 25,
-                          offset:
-                              const Offset(0, 12),
+                          offset: const Offset(0, 12),
                         ),
                       ]
                     : [],
               ),
               child: ClipRRect(
-                borderRadius:
-                    BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(18),
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -402,14 +392,10 @@ class _ActorCardState extends State<_ActorCard> {
                     // Bottom gradient.
                     Positioned.fill(
                       child: DecoratedBox(
-                        decoration:
-                            BoxDecoration(
-                          gradient:
-                              LinearGradient(
-                            begin:
-                                Alignment.topCenter,
-                            end:
-                                Alignment.bottomCenter,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
                             colors: [
                               Colors.transparent,
                               Colors.black.withValues(
@@ -434,18 +420,15 @@ class _ActorCardState extends State<_ActorCard> {
                       right: 14,
                       bottom: 14,
                       child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             actor.name,
                             maxLines: 2,
-                            overflow:
-                                TextOverflow.ellipsis,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 17,
-                              fontWeight:
-                                  FontWeight.w700,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                           if (actor.knownFor.isNotEmpty) ...[
@@ -453,8 +436,7 @@ class _ActorCardState extends State<_ActorCard> {
                             Text(
                               actor.knownFor,
                               maxLines: 1,
-                              overflow:
-                                  TextOverflow.ellipsis,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: Colors.grey.shade300,
                                 fontSize: 12,
@@ -467,8 +449,7 @@ class _ActorCardState extends State<_ActorCard> {
 
                     AnimatedOpacity(
                       opacity: hovered ? 1 : 0,
-                      duration:
-                          const Duration(milliseconds: 180),
+                      duration: const Duration(milliseconds: 180),
                       child: Positioned.fill(
                         child: Container(
                           decoration: BoxDecoration(
@@ -483,8 +464,7 @@ class _ActorCardState extends State<_ActorCard> {
                                 shape: BoxShape.circle,
                               ),
                               child: Padding(
-                                padding:
-                                    EdgeInsets.all(12),
+                                padding: EdgeInsets.all(12),
                                 child: Icon(
                                   Icons.arrow_forward_rounded,
                                   color: Colors.black,
@@ -516,6 +496,7 @@ class _ActorImage extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     if (actor.photoUrl.isEmpty) {
@@ -546,8 +527,7 @@ class _ActorImage extends StatelessWidget {
           ),
         );
       },
-      loadingBuilder:
-          (context, child, loadingProgress) {
+      loadingBuilder: (context, child, loadingProgress) {
         if (loadingProgress == null) {
           return child;
         }
@@ -577,22 +557,21 @@ class _EmptyActorsState extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(30),
         child: Column(
-          mainAxisAlignment:
-              MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
               width: 90,
               height: 90,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white
-                    .withValues(alpha: .05),
+                color: Colors.white.withValues(alpha: .05),
               ),
               child: Icon(
                 hasSearch
@@ -604,9 +583,7 @@ class _EmptyActorsState extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             Text(
-              hasSearch
-                  ? 'No actors found'
-                  : 'No actors yet',
+              hasSearch ? 'No actors found' : 'No actors yet',
               style: const TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
@@ -640,6 +617,7 @@ class ActorDetailsScreen extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
@@ -649,8 +627,7 @@ class ActorDetailsScreen extends StatelessWidget {
           SliverAppBar(
             expandedHeight: 430,
             pinned: true,
-            backgroundColor:
-                const Color(0xFF070707),
+            backgroundColor: const Color(0xFF070707),
             elevation: 0,
             title: Text(
               actor.name,
@@ -666,23 +643,19 @@ class ActorDetailsScreen extends StatelessWidget {
                     Image.network(
                       actor.photoUrl,
                       fit: BoxFit.cover,
-                      errorBuilder:
-                          (_, __, ___) {
+                      errorBuilder: (_, __, ___) {
                         return Container(
-                          color:
-                              const Color(0xFF171717),
+                          color: const Color(0xFF171717),
                         );
                       },
                     )
                   else
                     Container(
-                      color:
-                          const Color(0xFF171717),
+                      color: const Color(0xFF171717),
                       child: Icon(
                         Icons.person_rounded,
                         size: 110,
-                        color:
-                            Colors.grey.shade700,
+                        color: Colors.grey.shade700,
                       ),
                     ),
 
@@ -690,10 +663,8 @@ class ActorDetailsScreen extends StatelessWidget {
                   DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        begin:
-                            Alignment.topCenter,
-                        end:
-                            Alignment.bottomCenter,
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
                         colors: [
                           Colors.black.withValues(
                             alpha: .15,
@@ -717,15 +688,13 @@ class ActorDetailsScreen extends StatelessWidget {
                     right: 22,
                     bottom: 28,
                     child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           actor.name,
                           style: const TextStyle(
                             fontSize: 34,
-                            fontWeight:
-                                FontWeight.w800,
+                            fontWeight: FontWeight.w800,
                             letterSpacing: -.7,
                           ),
                         ),
@@ -734,8 +703,7 @@ class ActorDetailsScreen extends StatelessWidget {
                           Text(
                             actor.knownFor,
                             style: TextStyle(
-                              color:
-                                  Colors.grey.shade300,
+                              color: Colors.grey.shade300,
                               fontSize: 15,
                             ),
                           ),
@@ -747,7 +715,6 @@ class ActorDetailsScreen extends StatelessWidget {
               ),
             ),
           ),
-
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(
               20,
@@ -761,23 +728,19 @@ class ActorDetailsScreen extends StatelessWidget {
                   if (actor.biography.isNotEmpty)
                     _InfoSection(
                       title: tr('Biography'),
-                      icon:
-                          Icons.auto_stories_outlined,
+                      icon: Icons.auto_stories_outlined,
                       child: Text(
                         actor.biography,
                         style: TextStyle(
-                          color:
-                              Colors.grey.shade300,
+                          color: Colors.grey.shade300,
                           height: 1.55,
                           fontSize: 15,
                         ),
                       ),
                     ),
-
                   if (actor.placeOfBirth.isNotEmpty ||
                       actor.dateOfBirth != null ||
-                      actor.relationshipStatus
-                          .isNotEmpty ||
+                      actor.relationshipStatus.isNotEmpty ||
                       actor.partnerName.isNotEmpty)
                     _InfoSection(
                       title: tr('About'),
@@ -786,54 +749,39 @@ class ActorDetailsScreen extends StatelessWidget {
                         children: [
                           if (actor.dateOfBirth != null)
                             _ActorInfoRow(
-                              icon:
-                                  Icons.cake_outlined,
+                              icon: Icons.cake_outlined,
                               label: 'Born',
-                              value:
-                                  _formatDate(
+                              value: _formatDate(
                                 actor.dateOfBirth!,
                               ),
                             ),
                           if (actor.currentAge != null)
                             _ActorInfoRow(
-                              icon:
-                                  Icons.person_outline,
+                              icon: Icons.person_outline,
                               label: 'Age',
-                              value:
-                                  actor.currentAge!
-                                      .toString(),
+                              value: actor.currentAge!.toString(),
                             ),
-                          if (actor.placeOfBirth
-                              .isNotEmpty)
+                          if (actor.placeOfBirth.isNotEmpty)
                             _ActorInfoRow(
-                              icon:
-                                  Icons.location_on_outlined,
+                              icon: Icons.location_on_outlined,
                               label: 'Place of birth',
-                              value:
-                                  actor.placeOfBirth,
+                              value: actor.placeOfBirth,
                             ),
-                          if (actor.relationshipStatus
-                              .isNotEmpty)
+                          if (actor.relationshipStatus.isNotEmpty)
                             _ActorInfoRow(
-                              icon:
-                                  Icons.favorite_border,
+                              icon: Icons.favorite_border,
                               label: 'Relationship',
-                              value:
-                                  actor.relationshipStatus,
+                              value: actor.relationshipStatus,
                             ),
-                          if (actor.partnerName
-                              .isNotEmpty)
+                          if (actor.partnerName.isNotEmpty)
                             _ActorInfoRow(
-                              icon:
-                                  Icons.people_outline,
+                              icon: Icons.people_outline,
                               label: 'Partner',
-                              value:
-                                  actor.partnerName,
+                              value: actor.partnerName,
                             ),
                         ],
                       ),
                     ),
-
                   if (actor.biography.isEmpty &&
                       actor.placeOfBirth.isEmpty &&
                       actor.dateOfBirth == null &&
@@ -882,6 +830,7 @@ class _InfoSection extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
@@ -895,17 +844,14 @@ class _InfoSection extends StatelessWidget {
         ),
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Icon(
                 icon,
                 size: 21,
-                color: Theme.of(context)
-                    .colorScheme
-                    .primary,
+                color: Theme.of(context).colorScheme.primary,
               ),
               const SizedBox(width: 9),
               Text(
@@ -937,13 +883,13 @@ class _ActorInfoRow extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
             icon,
@@ -979,6 +925,7 @@ class _NoActorDetails extends StatelessWidget {
   const _NoActorDetails();
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
@@ -996,14 +943,16 @@ class _NoActorDetails extends StatelessWidget {
             color: Colors.grey.shade600,
           ),
           const SizedBox(height: 12),
-          const UniversalText('No additional information yet',
+          const UniversalText(
+            'No additional information yet',
             style: TextStyle(
               fontWeight: FontWeight.w600,
               fontSize: 17,
             ),
           ),
           const SizedBox(height: 6),
-          UniversalText('More actor information will appear when metadata is available.',
+          UniversalText(
+            'More actor information will appear when metadata is available.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Colors.grey.shade500,

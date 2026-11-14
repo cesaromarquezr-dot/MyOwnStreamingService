@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app_core.dart';
 import 'localization.dart';
@@ -32,7 +32,8 @@ class DetailsRecommendationsSection extends StatelessWidget {
     }
     final sourceYear = source.releaseYear ?? source.seriesStartYear;
     final candidateYear = candidate.releaseYear ?? candidate.seriesStartYear;
-    return sourceYear == null || candidateYear == null ||
+    return sourceYear == null ||
+        candidateYear == null ||
         sourceYear == candidateYear;
   }
 
@@ -108,7 +109,8 @@ class DetailsRecommendationsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const UniversalText('You might also like',
+        const UniversalText(
+          'You might also like',
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 12),
@@ -121,7 +123,8 @@ class DetailsRecommendationsSection extends StatelessWidget {
             final item = items[index];
             final imageUrl = item.imageUrl;
             final controller = AppController.instance;
-            final ownedRecord = RecommendationOwnershipMatcher.findOwnedMediaForMedia(
+            final ownedRecord =
+                RecommendationOwnershipMatcher.findOwnedMediaForMedia(
               media: item,
               controller: controller,
             );
@@ -129,52 +132,54 @@ class DetailsRecommendationsSection extends StatelessWidget {
             final isWatched = ownedRecord != null &&
                 (controller.isWatched(ownedRecord.id) ||
                     controller.getPlaybackProgress(ownedRecord.id) >= 0.95);
-              return SizedBox(
-                width: 132,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: () => onOpen(item),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(14),
-                          child: SizedBox(
-                            width: 132,
-                            child: imageUrl != null && imageUrl.startsWith('http')
-                                ? Image.network(
-                                    imageUrl,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => _ArtworkFallback(title: item.title),
-                                  )
-                                : _ArtworkFallback(title: item.title),
-                          ),
+            return SizedBox(
+              width: 132,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => onOpen(item),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: SizedBox(
+                          width: 132,
+                          child: imageUrl != null && imageUrl.startsWith('http')
+                              ? Image.network(
+                                  imageUrl,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) =>
+                                      _ArtworkFallback(title: item.title),
+                                )
+                              : _ArtworkFallback(title: item.title),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        item.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        item.type,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white54, fontSize: 12),
-                      ),
-                      const SizedBox(height: 5),
-                      RecommendationOwnershipBadge(
-                        isOwned: isOwned,
-                        isWatched: isWatched,
-                        compact: true,
-                      ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      item.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      item.type,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                          const TextStyle(color: Colors.white54, fontSize: 12),
+                    ),
+                    const SizedBox(height: 5),
+                    RecommendationOwnershipBadge(
+                      isOwned: isOwned,
+                      isWatched: isWatched,
+                      compact: true,
+                    ),
+                  ],
                 ),
+              ),
             );
           },
         ),
@@ -195,9 +200,13 @@ class _ArtworkFallback extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.movie_creation_outlined, size: 30, color: Colors.white54),
+            const Icon(Icons.movie_creation_outlined,
+                size: 30, color: Colors.white54),
             const SizedBox(height: 8),
-            Text(title, maxLines: 3, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
+            Text(title,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center),
           ],
         ),
       );

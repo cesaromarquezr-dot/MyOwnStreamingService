@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'backend_api.dart';
 import 'app_core.dart';
 import 'accessibility_offline_settings.dart';

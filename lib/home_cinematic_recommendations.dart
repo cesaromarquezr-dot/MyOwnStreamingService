@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app_core.dart';
 import 'details.dart';
@@ -76,8 +76,7 @@ class _HomeCinematicRecommendationsSectionState
     List<MediaItem> library,
   ) {
     for (final candidate in <MediaItem>[...watched, ...library]) {
-      if (_isMovieOrShow(candidate) &&
-          candidate.title.trim().isNotEmpty) {
+      if (_isMovieOrShow(candidate) && candidate.title.trim().isNotEmpty) {
         return candidate;
       }
     }
@@ -95,7 +94,8 @@ class _HomeCinematicRecommendationsSectionState
   }
 
   @override
-  void didUpdateWidget(covariant HomeCinematicRecommendationsSection oldWidget) {
+  void didUpdateWidget(
+      covariant HomeCinematicRecommendationsSection oldWidget) {
     super.didUpdateWidget(oldWidget);
     final oldSource = _chooseSource(oldWidget.watched, oldWidget.library);
     final newSource = _chooseSource(widget.watched, widget.library);
@@ -116,7 +116,8 @@ class _HomeCinematicRecommendationsSectionState
           _source = source;
           _sourceMetadata = null;
           _recommendations = const <CinematicTitleRecommendation>[];
-          _recommendationGroups = const <String, List<CinematicTitleRecommendation>>{};
+          _recommendationGroups =
+              const <String, List<CinematicTitleRecommendation>>{};
           _moodRecommendations = const <CinematicTitleRecommendation>[];
           _loading = false;
           _error = null;
@@ -129,7 +130,8 @@ class _HomeCinematicRecommendationsSectionState
         _source = source;
         _sourceMetadata = null;
         _recommendations = const <CinematicTitleRecommendation>[];
-        _recommendationGroups = const <String, List<CinematicTitleRecommendation>>{};
+        _recommendationGroups =
+            const <String, List<CinematicTitleRecommendation>>{};
         _selectedRecommendationGroup = 'combined';
         _moodRecommendations = const <CinematicTitleRecommendation>[];
         _selectedMoodKey = null;
@@ -160,14 +162,17 @@ class _HomeCinematicRecommendationsSectionState
       );
       if (!mounted || request != _requestSequence) return;
 
-      final sourceKey = RecommendationOwnershipMatcher.normalizeTitle(source.title);
+      final sourceKey =
+          RecommendationOwnershipMatcher.normalizeTitle(source.title);
       final controller = AppController.instance;
       final allSimilar = _decorateRecommendations(
         fetchedGroups['similar'] ?? const <CinematicTitleRecommendation>[],
         controller: controller,
         fallbackReason: 'Because you watched ${source.title}.',
-      ).where((item) =>
-          RecommendationOwnershipMatcher.normalizeTitle(item.title) != sourceKey)
+      )
+          .where((item) =>
+              RecommendationOwnershipMatcher.normalizeTitle(item.title) !=
+              sourceKey)
           .toList(growable: false);
       final backendPersonalized = _loadBackendRecommendationCards(
         controller: controller,
@@ -177,21 +182,25 @@ class _HomeCinematicRecommendationsSectionState
         <CinematicTitleRecommendation>[
           ...backendPersonalized.where((item) => item.isOwned),
           ...allSimilar.where((item) => item.isOwned),
-        ].map((item) => item.withContext(
-              owned: true,
-              reason: item.recommendationReason ??
-                  'Already in your library. Recommended because you watched ${source.title}.',
-            )).toList(growable: false),
+        ]
+            .map((item) => item.withContext(
+                  owned: true,
+                  reason: item.recommendationReason ??
+                      'Already in your library. Recommended because you watched ${source.title}.',
+                ))
+            .toList(growable: false),
       );
       final externalSimilar = _mergeRecommendationCards(
         <CinematicTitleRecommendation>[
           ...backendPersonalized.where((item) => !item.isOwned),
           ...allSimilar.where((item) => !item.isOwned),
-        ].map((item) => item.withContext(
-              owned: false,
-              reason: item.recommendationReason ??
-                  'Not in your library yet. Recommended because you watched ${source.title}.',
-            )).toList(growable: false),
+        ]
+            .map((item) => item.withContext(
+                  owned: false,
+                  reason: item.recommendationReason ??
+                      'Not in your library yet. Recommended because you watched ${source.title}.',
+                ))
+            .toList(growable: false),
       );
       final combined = _mergeRecommendationCards(
         <CinematicTitleRecommendation>[...backendPersonalized, ...allSimilar],
@@ -204,7 +213,8 @@ class _HomeCinematicRecommendationsSectionState
       final company = _decorateRecommendations(
         fetchedGroups['company'] ?? const <CinematicTitleRecommendation>[],
         controller: controller,
-        fallbackReason: 'Shares a production company or network with ${source.title}.',
+        fallbackReason:
+            'Shares a production company or network with ${source.title}.',
       );
       final actors = _decorateRecommendations(
         fetchedGroups['actors'] ?? const <CinematicTitleRecommendation>[],
@@ -222,7 +232,8 @@ class _HomeCinematicRecommendationsSectionState
       ]);
       final groups = <String, List<CinematicTitleRecommendation>>{
         'owned': List<CinematicTitleRecommendation>.unmodifiable(ownedSimilar),
-        'external': List<CinematicTitleRecommendation>.unmodifiable(externalSimilar),
+        'external':
+            List<CinematicTitleRecommendation>.unmodifiable(externalSimilar),
         'combined': List<CinematicTitleRecommendation>.unmodifiable(combined),
         'genre': genre,
         'company': company,
@@ -230,7 +241,9 @@ class _HomeCinematicRecommendationsSectionState
         'all': all,
       };
       setState(() {
-        _recommendationGroups = Map<String, List<CinematicTitleRecommendation>>.unmodifiable(groups);
+        _recommendationGroups =
+            Map<String, List<CinematicTitleRecommendation>>.unmodifiable(
+                groups);
         _recommendations = groups[_selectedRecommendationGroup] ?? combined;
       });
     } catch (error) {
@@ -322,24 +335,25 @@ class _HomeCinematicRecommendationsSectionState
       return (item.providerId > 0 || item.localMedia != null) &&
           seen.add(identity);
     }).map((item) {
-          final owned = item.localMedia != null
-              ? item.isOwned
-              : RecommendationOwnershipMatcher.isRecommendationOwned(
-                  recommendation: item,
-                  controller: controller,
-                );
-          return item.withContext(
-            owned: owned,
-            reason: item.recommendationReason ?? fallbackReason,
-          );
-        }).toList(growable: false);
+      final owned = item.localMedia != null
+          ? item.isOwned
+          : RecommendationOwnershipMatcher.isRecommendationOwned(
+              recommendation: item,
+              controller: controller,
+            );
+      return item.withContext(
+        owned: owned,
+        reason: item.recommendationReason ?? fallbackReason,
+      );
+    }).toList(growable: false);
   }
 
   void _selectRecommendationGroup(String key) {
     if (key == _selectedRecommendationGroup) return;
     setState(() {
       _selectedRecommendationGroup = key;
-      _recommendations = _recommendationGroups[key] ?? const <CinematicTitleRecommendation>[];
+      _recommendations =
+          _recommendationGroups[key] ?? const <CinematicTitleRecommendation>[];
     });
   }
 
@@ -354,13 +368,18 @@ class _HomeCinematicRecommendationsSectionState
     });
     final request = _requestSequence;
     try {
-      final results = await CinematicTitleMetadataService.lookupMoodRecommendations(
+      final results =
+          await CinematicTitleMetadataService.lookupMoodRecommendations(
         moodKey: mood.key,
         sourceProviderId: metadata.providerId,
         sourceIsTv: metadata.isTv,
         limit: 20,
       );
-      if (!mounted || request != _requestSequence || _selectedMoodKey != mood.key) return;
+      if (!mounted ||
+          request != _requestSequence ||
+          _selectedMoodKey != mood.key) {
+        return;
+      }
       final seen = <int>{metadata.providerId};
       final controller = AppController.instance;
       setState(() {
@@ -371,19 +390,24 @@ class _HomeCinematicRecommendationsSectionState
                     recommendation: item,
                     controller: controller,
                   ),
-                  reason: 'A ${mood.label} pick based on your discovery choice.',
+                  reason:
+                      'A ${mood.label} pick based on your discovery choice.',
                 )));
       });
     } catch (error) {
       if (mounted && request == _requestSequence) {
-        setState(() => _error = 'Could not load mood picks: ${error.toString().replaceFirst('Exception: ', '')}');
+        setState(() => _error =
+            'Could not load mood picks: ${error.toString().replaceFirst('Exception: ', '')}');
       }
     } finally {
-      if (mounted && request == _requestSequence) setState(() => _loadingMood = false);
+      if (mounted && request == _requestSequence) {
+        setState(() => _loadingMood = false);
+      }
     }
   }
 
-  Future<void> _openRecommendation(CinematicTitleRecommendation recommendation) async {
+  Future<void> _openRecommendation(
+      CinematicTitleRecommendation recommendation) async {
     final directMedia = recommendation.localMedia;
     if (directMedia != null) {
       await Navigator.of(context).push<void>(MaterialPageRoute<void>(
@@ -427,7 +451,8 @@ class _HomeCinematicRecommendationsSectionState
           if (_error != null && _recommendations.isEmpty && !_loading)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: Text(_error!, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              child: Text(_error!,
+                  style: const TextStyle(color: Colors.white54, fontSize: 12)),
             ),
           Text(
             'Seven ways to discover ${_source!.isSeries ? 'shows' : 'movies'}',
@@ -474,7 +499,8 @@ class _HomeCinematicRecommendationsSectionState
             sourceTitle: _source!.title,
             recommendations: _recommendations,
             loading: _loading,
-            onOpen: (recommendation) => unawaited(_openRecommendation(recommendation)),
+            onOpen: (recommendation) =>
+                unawaited(_openRecommendation(recommendation)),
             moodOptionsEnabled: _sourceMetadata != null,
             selectedMoodKey: _selectedMoodKey,
             moodRecommendations: _moodRecommendations,

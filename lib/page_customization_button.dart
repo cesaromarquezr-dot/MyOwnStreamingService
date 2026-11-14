@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Opens the page-specific customization screen registered by the app shell.
 typedef PageCustomizationOpener = void Function(

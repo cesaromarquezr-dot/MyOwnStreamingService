@@ -1,7 +1,8 @@
 // FILE: `lib/main.dart`.
 // Purpose: Implements the main portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
-import 'package:flutter/material.dart';
+import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -9,7 +10,8 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_localizations/flutter_localizations.dart'
+    as flutter_localizations;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'app_core.dart';
 import 'widgets/added_by_profile_label.dart';
@@ -42,6 +44,7 @@ import 'home_arrow_rail.dart';
 import 'page_hero_banner.dart';
 import 'country_origin_style.dart';
 import 'recommendation_ownership.dart';
+import 'widgets/media_status_badges.dart';
 import 'catalog_poster_image.dart';
 import 'music_catalog_screen.dart';
 import 'home_franchise_progress.dart';
@@ -383,7 +386,7 @@ class _MyStreamingServiceState extends State<MyStreamingService> {
           .toList(growable: false),
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
+        flutter_localizations.GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
       navigatorKey: _appNavigatorKey,
@@ -545,22 +548,38 @@ class _PageAppearance {
   final int accentColor;
   final int backgroundColor;
   final String density;
+  final String themePreset;
+  final double glassIntensity;
+  final double backdropDim;
+  final String typography;
 
   const _PageAppearance({
     this.accentColor = 0xFFE53935,
     this.backgroundColor = 0xFF090909,
     this.density = 'Comfortable',
+    this.themePreset = 'Cinematic Dark',
+    this.glassIntensity = 0.35,
+    this.backdropDim = 0.55,
+    this.typography = 'System',
   });
 
   _PageAppearance copyWith({
     int? accentColor,
     int? backgroundColor,
     String? density,
+    String? themePreset,
+    double? glassIntensity,
+    double? backdropDim,
+    String? typography,
   }) =>
       _PageAppearance(
         accentColor: accentColor ?? this.accentColor,
         backgroundColor: backgroundColor ?? this.backgroundColor,
         density: density ?? this.density,
+        themePreset: themePreset ?? this.themePreset,
+        glassIntensity: glassIntensity ?? this.glassIntensity,
+        backdropDim: backdropDim ?? this.backdropDim,
+        typography: typography ?? this.typography,
       );
 }
 
@@ -585,6 +604,12 @@ class _PageAppearanceStore {
           backgroundColor:
               (json['backgroundColor'] as num?)?.toInt() ?? 0xFF090909,
           density: json['density']?.toString() ?? 'Comfortable',
+          themePreset: json['themePreset']?.toString() ?? 'Cinematic Dark',
+          glassIntensity: ((json['glassIntensity'] as num?)?.toDouble() ?? 0.35)
+              .clamp(0.0, 1.0),
+          backdropDim: ((json['backdropDim'] as num?)?.toDouble() ?? 0.55)
+              .clamp(0.0, 1.0),
+          typography: json['typography']?.toString() ?? 'System',
         );
       } catch (_) {
         return const _PageAppearance();
@@ -600,6 +625,10 @@ class _PageAppearanceStore {
         'accentColor': appearance.accentColor,
         'backgroundColor': appearance.backgroundColor,
         'density': appearance.density,
+        'themePreset': appearance.themePreset,
+        'glassIntensity': appearance.glassIntensity,
+        'backdropDim': appearance.backdropDim,
+        'typography': appearance.typography,
       }),
     );
     _appPageState.refresh();
@@ -678,7 +707,10 @@ class _AppPageSurface extends StatelessWidget {
             surfaceTintColor: Colors.transparent,
           ),
           cardTheme: baseTheme.cardTheme.copyWith(
-            color: oledBlack ? Colors.black : baseTheme.cardTheme.color,
+            color: oledBlack
+                ? Colors.black
+                : Color(0xFF171A22).withValues(
+                    alpha: 0.72 + (appearance.glassIntensity * 0.25)),
             surfaceTintColor: Colors.transparent,
           ),
           dialogTheme: baseTheme.dialogTheme.copyWith(
@@ -698,10 +730,13 @@ class _AppPageSurface extends StatelessWidget {
                 : baseTheme.navigationBarTheme.backgroundColor,
             surfaceTintColor: Colors.transparent,
           ),
-          textTheme: accessibility.highContrast
-              ? baseTheme.textTheme
-                  .apply(bodyColor: Colors.white, displayColor: Colors.white)
-              : baseTheme.textTheme,
+          textTheme: (accessibility.highContrast
+                  ? baseTheme.textTheme.apply(
+                      bodyColor: Colors.white, displayColor: Colors.white)
+                  : baseTheme.textTheme)
+              .apply(
+                  fontFamily:
+                      appearance.typography == 'Rounded' ? 'Arial' : null),
           visualDensity: density,
         );
         final media = MediaQuery.of(context);
@@ -906,6 +941,103 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
           const UniversalText(
             'Page colors, layout, and section visibility are saved for this page.',
             style: TextStyle(color: Colors.white70),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Theme & visual effects',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 4),
+                  const Text(
+                      'Native Flutter styling controls inspired by cinematic community themes. These settings replace Jellyfin-specific CSS and plugins.',
+                      style: TextStyle(color: Colors.white60, fontSize: 12)),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: const [
+                      'Cinematic Dark',
+                      'Glass Cinema',
+                      'Midnight Blue',
+                      'Retro Video Store',
+                      'Minimal Studio',
+                      'High Contrast'
+                    ].contains(draft.themePreset)
+                        ? draft.themePreset
+                        : 'Cinematic Dark',
+                    decoration:
+                        const InputDecoration(labelText: 'Theme preset'),
+                    items: const [
+                      'Cinematic Dark',
+                      'Glass Cinema',
+                      'Midnight Blue',
+                      'Retro Video Store',
+                      'Minimal Studio',
+                      'High Contrast'
+                    ]
+                        .map((v) => DropdownMenuItem(value: v, child: Text(v)))
+                        .toList(),
+                    onChanged: (v) {
+                      if (v == null) return;
+                      const accents = {
+                        'Cinematic Dark': 0xFFE53935,
+                        'Glass Cinema': 0xFF80CBC4,
+                        'Midnight Blue': 0xFF448AFF,
+                        'Retro Video Store': 0xFFFFB300,
+                        'Minimal Studio': 0xFFB0BEC5,
+                        'High Contrast': 0xFFFFFF00
+                      };
+                      const backgrounds = {
+                        'Cinematic Dark': 0xFF090909,
+                        'Glass Cinema': 0xFF101820,
+                        'Midnight Blue': 0xFF071426,
+                        'Retro Video Store': 0xFF17100B,
+                        'Minimal Studio': 0xFF101010,
+                        'High Contrast': 0xFF000000
+                      };
+                      setState(() => draft = draft.copyWith(
+                          themePreset: v,
+                          accentColor: accents[v],
+                          backgroundColor: backgrounds[v]));
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                      'Glass surface strength: ${(draft.glassIntensity * 100).round()}%'),
+                  Slider(
+                      value: draft.glassIntensity.clamp(0.0, 1.0),
+                      onChanged: (v) => setState(
+                          () => draft = draft.copyWith(glassIntensity: v))),
+                  Text(
+                      'Backdrop dimming preference: ${(draft.backdropDim * 100).round()}%'),
+                  Slider(
+                      value: draft.backdropDim.clamp(0.0, 1.0),
+                      onChanged: (v) => setState(
+                          () => draft = draft.copyWith(backdropDim: v))),
+                  DropdownButtonFormField<String>(
+                    initialValue: draft.typography,
+                    decoration: const InputDecoration(labelText: 'Typography'),
+                    items: const [
+                      DropdownMenuItem(value: 'System', child: Text('System')),
+                      DropdownMenuItem(
+                          value: 'Rounded', child: Text('Rounded / friendly'))
+                    ],
+                    onChanged: (v) {
+                      if (v != null) {
+                        setState(() => draft = draft.copyWith(typography: v));
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                      'Theme presets, surface styling and typography are applied through Flutter ThemeData. Backdrop dimming is saved as a page preference for hero/backdrop widgets to consume.',
+                      style: TextStyle(color: Colors.white54, fontSize: 11)),
+                ],
+              ),
+            ),
           ),
           const SizedBox(height: 12),
           ArtworkDisplayModePicker(
@@ -2429,8 +2561,13 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     });
 
     final profile = AppController.instance.currentProfile;
+    final activeMode = parseInterfaceExperienceMode(
+      InterfaceExperienceRepository.instance.notifier.value?.activeExperience,
+    );
+    final shouldSaveClassicHome =
+        widget.firstSetup || activeMode == InterfaceExperienceMode.classic;
     await AppSectionCustomizationStore.save(profile, _artworkSectionDraft);
-    if (selectedPage == CustomizationPage.home) {
+    if (selectedPage == CustomizationPage.home && shouldSaveClassicHome) {
       draft.heroItemCount = _homeHeroSettings.itemCount;
       await PageHeroSettingsStore.save('home', _homeHeroSettings);
     }
@@ -2476,7 +2613,11 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     }
 
     if (widget.lockedPage == CustomizationPage.home) {
-      HomeCustomizationStore.apply(draft, profile);
+      // Non-Classic Home screens are edited in Interface Experience Studio.
+      // Never apply the Classic Home draft while another experience is active.
+      if (activeMode == InterfaceExperienceMode.classic) {
+        HomeCustomizationStore.apply(draft, profile);
+      }
     } else if (widget.lockedPage == CustomizationPage.details) {
       DetailsCustomizationStore.apply(profile, detailsDraft);
     } else if (widget.lockedPage == CustomizationPage.music) {
@@ -2732,19 +2873,23 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     switch (mode) {
       case InterfaceExperienceMode.classic:
         icon = Icons.dashboard_customize_rounded;
-        detail = 'Customize your classic home layout, navigation, rows and artwork behavior.';
+        detail =
+            'Customize your classic home layout, navigation, rows and artwork behavior.';
         break;
       case InterfaceExperienceMode.blockbuster:
         icon = Icons.storefront_rounded;
-        detail = 'Customize the store floor, walking style, shelves, wall posters, hanging aisle banners, case animations and collection gallery.';
+        detail =
+            'Customize the store floor, walking style, shelves, wall posters, hanging aisle banners, case animations and collection gallery.';
         break;
       case InterfaceExperienceMode.redbox:
         icon = Icons.dns_rounded;
-        detail = 'Customize kiosk tile density, poster wall, remote focus, screensaver and touch-friendly browsing.';
+        detail =
+            'Customize kiosk tile density, poster wall, remote focus, screensaver and touch-friendly browsing.';
         break;
       case InterfaceExperienceMode.theater:
         icon = Icons.theaters_rounded;
-        detail = 'Customize the private theater room experience, ambience and pre-show presentation. Room names and playback status are managed in Theater Rooms.';
+        detail =
+            'Customize the private theater room experience, ambience and pre-show presentation. Room names and playback status are managed in Theater Rooms.';
         break;
     }
     return Card(
@@ -2759,9 +2904,13 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Active interface · ${mode.label}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+                  Text('Active interface · ${mode.label}',
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w900)),
                   const SizedBox(height: 5),
-                  Text(detail, style: const TextStyle(color: Colors.white60, fontSize: 12, height: 1.35)),
+                  Text(detail,
+                      style: const TextStyle(
+                          color: Colors.white60, fontSize: 12, height: 1.35)),
                   const SizedBox(height: 10),
                   FilledButton.tonalIcon(
                     onPressed: () async {
@@ -2771,7 +2920,15 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
                       if (mounted) setState(() {});
                     },
                     icon: const Icon(Icons.tune_rounded),
-                    label: Text('Customize ${mode.label}'),
+                    label: Text(switch (mode) {
+                      InterfaceExperienceMode.classic =>
+                        'Customize Classic Home',
+                      InterfaceExperienceMode.blockbuster =>
+                        'Customize Virtual Store Home',
+                      InterfaceExperienceMode.redbox => 'Customize Kiosk Home',
+                      InterfaceExperienceMode.theater =>
+                        'Customize Theater Home',
+                    }),
                   ),
                 ],
               ),
@@ -2817,7 +2974,18 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             isHome
                 ? (widget.firstSetup
                     ? 'How do you want your main screen to look?'
-                    : 'Build your Home screen your way.')
+                    : switch (parseInterfaceExperienceMode(
+                        InterfaceExperienceRepository
+                            .instance.notifier.value?.activeExperience)) {
+                        InterfaceExperienceMode.classic =>
+                          'Build your Classic Home your way.',
+                        InterfaceExperienceMode.blockbuster =>
+                          'Customize your Virtual Store Home.',
+                        InterfaceExperienceMode.redbox =>
+                          'Customize your Kiosk Home.',
+                        InterfaceExperienceMode.theater =>
+                          'Customize your Theater Home.',
+                      })
                 : isMusic
                     ? 'Build your Music page your way.'
                     : 'Build your Details page your way.',
@@ -2830,7 +2998,18 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           const SizedBox(height: 8),
           Text(
             isHome
-                ? 'Choose what appears, change the presentation, and drag Home sections into the order you want.'
+                ? switch (parseInterfaceExperienceMode(
+                    InterfaceExperienceRepository
+                        .instance.notifier.value?.activeExperience)) {
+                    InterfaceExperienceMode.classic =>
+                      'Choose what appears, change the presentation, and drag Classic Home sections into the order you want.',
+                    InterfaceExperienceMode.blockbuster =>
+                      'Configure store entrances, floor layout, shelves, posters, navigation and store-specific previews. These settings are saved separately from Classic Home.',
+                    InterfaceExperienceMode.redbox =>
+                      'Configure kiosk categories, poster grids, focus navigation, screensaver and kiosk presentation. These settings are saved separately from Classic Home.',
+                    InterfaceExperienceMode.theater =>
+                      'Configure theater rooms, ambience, pre-show presentation and theater navigation. These settings are saved separately from Classic Home.',
+                  }
                 : isMusic
                     ? 'Choose discovery sections, the persistent player, Spotify-inspired mixes, and the order of your Music page.'
                     : 'Choose which Details sections appear, control metadata and poster presentation, and drag sections into the order you want.',
@@ -4652,7 +4831,13 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
                       ? 'Customize Details'
                       : 'Customize Music')
               : 'Customize ${switch (selectedPage) {
-                  CustomizationPage.home => 'Home',
+                  CustomizationPage.home => switch (activeInterfaceMode) {
+                      InterfaceExperienceMode.classic => 'Home',
+                      InterfaceExperienceMode.blockbuster =>
+                        'Virtual Store Home',
+                      InterfaceExperienceMode.redbox => 'Kiosk Home',
+                      InterfaceExperienceMode.theater => 'Theater Home',
+                    },
                   CustomizationPage.details => 'Details',
                   CustomizationPage.music => 'Music',
                 }}',
@@ -4663,8 +4848,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             : [
                 TextButton(
                   onPressed: _save,
-                  child: const UniversalText(
-                    'SAVE',
+                  child: UniversalText(
+                    isHome && !useClassicHomeCustomizer ? 'DONE' : 'SAVE',
                     style: TextStyle(fontWeight: FontWeight.w900),
                   ),
                 ),
@@ -4699,14 +4884,21 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'This interface has its own customization workspace.',
+                      Text(
+                        'Customize ${switch (activeInterfaceMode) {
+                          InterfaceExperienceMode.classic => 'Classic Home',
+                          InterfaceExperienceMode.blockbuster =>
+                            'Virtual Store Home',
+                          InterfaceExperienceMode.redbox => 'Kiosk Home',
+                          InterfaceExperienceMode.theater => 'Theater Home',
+                        }}',
                         style: TextStyle(fontWeight: FontWeight.w900),
                       ),
                       const SizedBox(height: 6),
                       Text(
                         '${activeInterfaceMode.label} uses its own layout, colors, navigation and preview. Classic home controls are kept separate and are not applied to this experience.',
-                        style: const TextStyle(color: Colors.white60, height: 1.4),
+                        style:
+                            const TextStyle(color: Colors.white60, height: 1.4),
                       ),
                     ],
                   ),
@@ -4734,7 +4926,9 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
                               : selectedPage == CustomizationPage.details
                                   ? 'CONTINUE TO MUSIC'
                                   : 'CONTINUE TO ACCOUNT INVITE')
-                          : 'SAVE CHANGES',
+                          : (isHome && !useClassicHomeCustomizer
+                              ? 'DONE'
+                              : 'SAVE CHANGES'),
                 ),
               ),
             ),
@@ -5033,8 +5227,7 @@ void _showGlobalMore() {
       },
       onDialogueSearch: () {
         Navigator.of(sheetContext).pop();
-        push(const DialogueSearchScreen(),
-            routeName: '/app/media/identify');
+        push(const DialogueSearchScreen(), routeName: '/app/media/identify');
       },
       onGroupRecommendations: () {
         Navigator.of(sheetContext).pop();
@@ -5078,7 +5271,8 @@ void _showGlobalMore() {
       },
       onMediaExperience: () {
         Navigator.of(sheetContext).pop();
-        push(const MediaExperienceScreen(), routeName: '/app/page/media-experience');
+        push(const MediaExperienceScreen(),
+            routeName: '/app/page/media-experience');
       },
     ),
   );
@@ -5485,11 +5679,28 @@ class _MoreActionsSheet extends StatelessWidget {
             'Owned Media Experiences',
             'Browse, organize and play media already in your collection',
             [
-              _MoreChoice('Virtual Store', 'Explore your owned media catalog', Icons.storefront_outlined, onVirtualStore),
-              _MoreChoice('Virtual Kiosk', 'Self-service browsing for your library', Icons.point_of_sale_outlined, onKiosk),
-              _MoreChoice('Private Theater', 'Manage rooms and current playback', Icons.theaters_outlined, onTheater),
-              _MoreChoice('Disc & Box Set Collections', 'Browse multi-disc editions and TV-special sets', Icons.album_outlined, onCollections),
-              _MoreChoice('Media Experience', 'Open disc menus, scenes, audio and bonus features', Icons.slow_motion_video_rounded, onMediaExperience),
+              _MoreChoice('Virtual Store', 'Explore your owned media catalog',
+                  Icons.storefront_outlined, onVirtualStore),
+              _MoreChoice(
+                  'Virtual Kiosk',
+                  'Self-service browsing for your library',
+                  Icons.point_of_sale_outlined,
+                  onKiosk),
+              _MoreChoice(
+                  'Private Theater',
+                  'Manage rooms and current playback',
+                  Icons.theaters_outlined,
+                  onTheater),
+              _MoreChoice(
+                  'Disc & Box Set Collections',
+                  'Browse multi-disc editions and TV-special sets',
+                  Icons.album_outlined,
+                  onCollections),
+              _MoreChoice(
+                  'Media Experience',
+                  'Open disc menus, scenes, audio and bonus features',
+                  Icons.slow_motion_video_rounded,
+                  onMediaExperience),
             ],
           ),
           _combinedCard(
@@ -7337,6 +7548,11 @@ class _MediaCardState extends State<MediaCard> {
                                 ]),
                           ),
                         ),
+                      Positioned(
+                        top: 7,
+                        right: 7,
+                        child: MediaStatusBadgeRow(media: media, dense: true),
+                      ),
                       if (widget.showOwnership)
                         Positioned(
                           top: 6,

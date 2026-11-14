@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app_core.dart';
 import 'details.dart';
@@ -63,7 +63,8 @@ class _GenreExplorerScreenState extends State<GenreExplorerScreen> {
         actions: [
           IconButton(
             tooltip: 'Clear search',
-            onPressed: _query.isEmpty ? null : () => setState(() => _query = ''),
+            onPressed:
+                _query.isEmpty ? null : () => setState(() => _query = ''),
             icon: const Icon(Icons.close_rounded),
           ),
         ],
@@ -76,17 +77,28 @@ class _GenreExplorerScreenState extends State<GenreExplorerScreen> {
           const SizedBox(height: 6),
           Text(
             'Browse broad genres, subgenres and hybrid styles. Results are matched against metadata in your library.',
-            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 18),
           SegmentedButton<String>(
             segments: const [
-              ButtonSegment(value: 'Movies', label: Text('Movies'), icon: Icon(Icons.movie_outlined)),
-              ButtonSegment(value: 'Shows', label: Text('TV'), icon: Icon(Icons.tv_outlined)),
-              ButtonSegment(value: 'Music', label: Text('Music'), icon: Icon(Icons.music_note_rounded)),
+              ButtonSegment(
+                  value: 'Movies',
+                  label: Text('Movies'),
+                  icon: Icon(Icons.movie_outlined)),
+              ButtonSegment(
+                  value: 'Shows',
+                  label: Text('TV'),
+                  icon: Icon(Icons.tv_outlined)),
+              ButtonSegment(
+                  value: 'Music',
+                  label: Text('Music'),
+                  icon: Icon(Icons.music_note_rounded)),
             ],
             selected: {_medium},
-            onSelectionChanged: (value) => setState(() => _medium = value.first),
+            onSelectionChanged: (value) =>
+                setState(() => _medium = value.first),
           ),
           const SizedBox(height: 14),
           TextField(
@@ -95,7 +107,8 @@ class _GenreExplorerScreenState extends State<GenreExplorerScreen> {
               prefixIcon: const Icon(Icons.search_rounded),
               hintText: 'Search genres and subgenres',
               filled: true,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
             ),
           ),
           const SizedBox(height: 12),
@@ -134,7 +147,8 @@ class _GenreGroupCard extends StatelessWidget {
         child: ExpansionTile(
           key: ValueKey('${group.name}:$forceExpanded'),
           initiallyExpanded: forceExpanded,
-          title: Text(group.name, style: const TextStyle(fontWeight: FontWeight.w800)),
+          title: Text(group.name,
+              style: const TextStyle(fontWeight: FontWeight.w800)),
           subtitle: Text('${group.genres.length} genres and subgenres'),
           childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
           children: [
@@ -169,21 +183,29 @@ class GenreResultsScreen extends StatelessWidget {
   bool _isFilmOrShow(MediaItem item) {
     final type = item.type.toLowerCase();
     if (medium == 'Shows') {
-      return item.isSeries || type.contains('show') || type.contains('series') || type.contains('tv');
+      return item.isSeries ||
+          type.contains('show') ||
+          type.contains('series') ||
+          type.contains('tv');
     }
-    return type.contains('movie') || type.contains('film') || type.contains('documentary');
+    return type.contains('movie') ||
+        type.contains('film') ||
+        type.contains('documentary');
   }
 
   @override
   Widget build(BuildContext context) {
     if (medium == 'Music') {
       final store = MusicLibraryStore.instance;
-      final tracks = <MusicTrack>{...store.tracks, ...store.catalogTracks.values}.toList();
-      final results = tracks.where((track) => MusicGenreSystem.matchesGenres(
-            track.genres,
-            [genre],
-            itemSubgenres: track.subgenres,
-          )).toList(growable: false);
+      final tracks =
+          <MusicTrack>{...store.tracks, ...store.catalogTracks.values}.toList();
+      final results = tracks
+          .where((track) => MusicGenreSystem.matchesGenres(
+                track.genres,
+                [genre],
+                itemSubgenres: track.subgenres,
+              ))
+          .toList(growable: false);
       return Scaffold(
         appBar: AppBar(title: Text(genre)),
         body: results.isEmpty
@@ -195,9 +217,12 @@ class GenreResultsScreen extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final track = results[index];
                   return ListTile(
-                    leading: _GenreArtwork(url: track.artworkUrl, icon: Icons.music_note_rounded),
-                    title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text('${track.artist}${track.album.isEmpty ? '' : ' · ${track.album}'}'),
+                    leading: _GenreArtwork(
+                        url: track.artworkUrl, icon: Icons.music_note_rounded),
+                    title: Text(track.title,
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    subtitle: Text(
+                        '${track.artist}${track.album.isEmpty ? '' : ' · ${track.album}'}'),
                     trailing: Icon(
                       (track.audioUrl?.trim().isNotEmpty ?? false)
                           ? Icons.play_circle_outline_rounded
@@ -239,11 +264,19 @@ class GenreResultsScreen extends StatelessWidget {
               itemBuilder: (context, index) {
                 final item = results[index];
                 return ListTile(
-                  leading: _GenreArtwork(url: item.imageUrl, icon: Icons.movie_outlined),
-                  title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  subtitle: Text('${item.releaseYear ?? ''}${item.genres.isEmpty ? '' : ' · ${item.genres.join(' / ')}'}'),
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                    builder: (_) => MediaDetailsScreen(media: item, wrappedContextType: 'genre', wrappedContextId: genre.toLowerCase(), wrappedContextTitle: genre),
+                  leading: _GenreArtwork(
+                      url: item.imageUrl, icon: Icons.movie_outlined),
+                  title: Text(item.title,
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(
+                      '${item.releaseYear ?? ''}${item.genres.isEmpty ? '' : ' · ${item.genres.join(' / ')}'}'),
+                  onTap: () =>
+                      Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => MediaDetailsScreen(
+                        media: item,
+                        wrappedContextType: 'genre',
+                        wrappedContextId: genre.toLowerCase(),
+                        wrappedContextTitle: genre),
                   )),
                 );
               },
@@ -266,12 +299,16 @@ class _GenreArtwork extends StatelessWidget {
         width: 54,
         height: 64,
         child: value.isEmpty
-            ? ColoredBox(color: Theme.of(context).colorScheme.surfaceContainerHighest, child: Icon(icon))
-            : Image.network(value, fit: BoxFit.cover,
+            ? ColoredBox(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                child: Icon(icon))
+            : Image.network(value,
+                fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => ColoredBox(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: Icon(icon),
-                )),
+                      color:
+                          Theme.of(context).colorScheme.surfaceContainerHighest,
+                      child: Icon(icon),
+                    )),
       ),
     );
   }
@@ -288,9 +325,12 @@ class _GenreEmptyState extends StatelessWidget {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             const Icon(Icons.local_movies_outlined, size: 42),
             const SizedBox(height: 10),
-            Text('No imported items tagged "$genre" yet.', textAlign: TextAlign.center),
+            Text('No imported items tagged "$genre" yet.',
+                textAlign: TextAlign.center),
             const SizedBox(height: 5),
-            const Text('The genre remains searchable and will appear when matching metadata is imported.', textAlign: TextAlign.center),
+            const Text(
+                'The genre remains searchable and will appear when matching metadata is imported.',
+                textAlign: TextAlign.center),
           ]),
         ),
       );

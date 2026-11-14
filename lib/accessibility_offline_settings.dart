@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app_core.dart';
 import 'app_accessibility.dart';
@@ -259,8 +259,8 @@ class _AccessibilityOfflineSettingsScreenState
                     value: privacy.sharePresence,
                     onChanged: saving
                         ? null
-                        : (value) => _savePrivacy(
-                            () => privacy.sharePresence = value),
+                        : (value) =>
+                            _savePrivacy(() => privacy.sharePresence = value),
                   ),
                   SwitchListTile(
                     title: const UniversalText('Share viewing activity'),

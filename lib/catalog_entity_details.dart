@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:http/http.dart' as http;
 
 import 'app_core.dart';
@@ -384,7 +384,10 @@ class CatalogEntityDetailsScreen extends StatelessWidget {
                         const SizedBox(height: 8),
                         const Text(
                           'This profile includes local catalog examples without media files. The listed filmography is limited to currently indexed credits and may not be exhaustive.',
-                          style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.35),
+                          style: TextStyle(
+                              color: Colors.white54,
+                              fontSize: 12,
+                              height: 1.35),
                         ),
                       ],
                     ],
@@ -460,7 +463,6 @@ class _EntityCredit {
   final List<String> roles;
 }
 
-
 /// A real TMDB portrait when a strict name match is available; otherwise a
 /// neutral fallback is shown instead of a guessed photo.
 class CatalogPersonAvatar extends StatelessWidget {
@@ -515,7 +517,8 @@ class _ProviderPersonFilmography extends StatefulWidget {
       _ProviderPersonFilmographyState();
 }
 
-class _ProviderPersonFilmographyState extends State<_ProviderPersonFilmography> {
+class _ProviderPersonFilmographyState
+    extends State<_ProviderPersonFilmography> {
   String _filter = 'All';
   bool _showAll = false;
 
@@ -575,7 +578,8 @@ class _ProviderPersonFilmographyState extends State<_ProviderPersonFilmography> 
                 errorBuilder: (_, __, ___) => Container(
                   color: Colors.white.withValues(alpha: .06),
                   alignment: Alignment.center,
-                  child: const Icon(Icons.movie_outlined, color: Colors.white38),
+                  child:
+                      const Icon(Icons.movie_outlined, color: Colors.white38),
                 ),
               ),
       ),
@@ -622,14 +626,16 @@ class _ProviderPersonFilmographyState extends State<_ProviderPersonFilmography> 
                     const SizedBox(height: 3),
                     Text(
                       '${credit.mediaType == 'tv' ? 'TV Show' : 'Movie'} · ${_year(credit)}',
-                      style: const TextStyle(color: Colors.white60, fontSize: 12),
+                      style:
+                          const TextStyle(color: Colors.white60, fontSize: 12),
                     ),
                     const SizedBox(height: 3),
                     Text(
                       credit.roleLabel,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      style:
+                          const TextStyle(color: Colors.white70, fontSize: 12),
                     ),
                   ],
                 ),
@@ -660,7 +666,8 @@ class _ProviderPersonFilmographyState extends State<_ProviderPersonFilmography> 
     }
 
     return FutureBuilder<CinematicPersonMetadata?>(
-      future: CinematicPersonMetadataService.lookupPersonProfile(widget.entityName),
+      future:
+          CinematicPersonMetadataService.lookupPersonProfile(widget.entityName),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Container(
@@ -671,9 +678,15 @@ class _ProviderPersonFilmographyState extends State<_ProviderPersonFilmography> 
             ),
             child: const Row(
               children: [
-                SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2)),
                 SizedBox(width: 12),
-                Expanded(child: Text('Loading person photo, biography, and filmography from TMDB…', style: TextStyle(color: Colors.white70))),
+                Expanded(
+                    child: Text(
+                        'Loading person photo, biography, and filmography from TMDB…',
+                        style: TextStyle(color: Colors.white70))),
               ],
             ),
           );
@@ -715,7 +728,8 @@ class _ProviderPersonFilmographyState extends State<_ProviderPersonFilmography> 
         final dateParts = <String>[
           if ((profile.birthday ?? '').isNotEmpty) 'Born ${profile.birthday}',
           if ((profile.deathday ?? '').isNotEmpty) 'Died ${profile.deathday}',
-          if ((profile.placeOfBirth ?? '').trim().isNotEmpty) profile.placeOfBirth!.trim(),
+          if ((profile.placeOfBirth ?? '').trim().isNotEmpty)
+            profile.placeOfBirth!.trim(),
           if ((profile.person.knownForDepartment ?? '').trim().isNotEmpty)
             'Known for ${profile.person.knownForDepartment}',
         ];
@@ -733,17 +747,25 @@ class _ProviderPersonFilmographyState extends State<_ProviderPersonFilmography> 
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('BIOGRAPHY', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w900, letterSpacing: 1.1)),
+                  const Text('BIOGRAPHY',
+                      style: TextStyle(
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.1)),
                   const SizedBox(height: 8),
                   Text(
                     profile.biography.isNotEmpty
                         ? profile.biography
                         : 'TMDB does not currently provide a biography for this person.',
-                    style: TextStyle(color: Colors.white.withValues(alpha: .88), height: 1.45),
+                    style: TextStyle(
+                        color: Colors.white.withValues(alpha: .88),
+                        height: 1.45),
                   ),
                   if (dateParts.isNotEmpty) ...[
                     const SizedBox(height: 10),
-                    Text(dateParts.join('  ·  '), style: const TextStyle(color: Colors.white60, height: 1.4, fontSize: 12)),
+                    Text(dateParts.join('  ·  '),
+                        style: const TextStyle(
+                            color: Colors.white60, height: 1.4, fontSize: 12)),
                   ],
                 ],
               ),
@@ -751,15 +773,26 @@ class _ProviderPersonFilmographyState extends State<_ProviderPersonFilmography> 
             const SizedBox(height: 14),
             Row(
               children: [
-                const Expanded(child: Text('FULL FILMOGRAPHY', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: .7))),
-                Text('${filtered.length} titles', style: const TextStyle(color: Colors.white60, fontSize: 12)),
+                const Expanded(
+                    child: Text('FULL FILMOGRAPHY',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: .7))),
+                Text('${filtered.length} titles',
+                    style:
+                        const TextStyle(color: Colors.white60, fontSize: 12)),
               ],
             ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 7,
               children: [
-                for (final filter in const <String>['All', 'Movies', 'TV Shows'])
+                for (final filter in const <String>[
+                  'All',
+                  'Movies',
+                  'TV Shows'
+                ])
                   ChoiceChip(
                     label: Text(filter),
                     selected: _filter == filter,
@@ -774,7 +807,9 @@ class _ProviderPersonFilmographyState extends State<_ProviderPersonFilmography> 
             if (filtered.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 18),
-                child: Text('TMDB has no matching movie or TV credits for this filter.', style: TextStyle(color: Colors.white60)),
+                child: Text(
+                    'TMDB has no matching movie or TV credits for this filter.',
+                    style: TextStyle(color: Colors.white60)),
               )
             else ...[
               for (final credit in visible) _filmographyTile(credit),
@@ -793,7 +828,10 @@ class _ProviderPersonFilmographyState extends State<_ProviderPersonFilmography> 
             ],
             const Padding(
               padding: EdgeInsets.only(top: 5, bottom: 6),
-              child: Text('Person data, photos, and credits provided by TMDB. Titles not in your local catalog are displayed for reference and cannot open a local playback/details record.', style: TextStyle(color: Colors.white38, fontSize: 11, height: 1.35)),
+              child: Text(
+                  'Person data, photos, and credits provided by TMDB. Titles not in your local catalog are displayed for reference and cannot open a local playback/details record.',
+                  style: TextStyle(
+                      color: Colors.white38, fontSize: 11, height: 1.35)),
             ),
           ],
         );
@@ -806,39 +844,128 @@ class _ProviderPersonFilmographyState extends State<_ProviderPersonFilmography> 
 class _MusicBrainzArtistSection extends StatefulWidget {
   const _MusicBrainzArtistSection({required this.name});
   final String name;
-  @override State<_MusicBrainzArtistSection> createState() => _MusicBrainzArtistSectionState();
+  @override
+  State<_MusicBrainzArtistSection> createState() =>
+      _MusicBrainzArtistSectionState();
 }
+
 class _MusicBrainzArtistSectionState extends State<_MusicBrainzArtistSection> {
   late Future<Map<String, dynamic>?> _future;
-  @override void initState() { super.initState(); _future = _lookup(); }
+  @override
+  void initState() {
+    super.initState();
+    _future = _lookup();
+  }
+
   Future<Map<String, dynamic>?> _lookup() async {
     try {
-      final uri = Uri.https('musicbrainz.org', '/ws/2/artist/', {'query': 'artist:"${widget.name}"', 'fmt':'json', 'limit':'5'});
-      final response = await http.get(uri, headers: {'User-Agent':'MyOwnStreamingService/1.0 (personal media catalog)'}).timeout(const Duration(seconds: 8));
+      final uri = Uri.https('musicbrainz.org', '/ws/2/artist/',
+          {'query': 'artist:"${widget.name}"', 'fmt': 'json', 'limit': '5'});
+      final response = await http.get(uri, headers: {
+        'User-Agent': 'MyOwnStreamingService/1.0 (personal media catalog)'
+      }).timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return null;
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final artists = data['artists']; if (artists is! List) return null;
+      final artists = data['artists'];
+      if (artists is! List) return null;
       final target = widget.name.trim().toLowerCase();
-      Map<String,dynamic>? match;
+      Map<String, dynamic>? match;
       for (final item in artists.whereType<Map>()) {
-        final row = Map<String,dynamic>.from(item);
-        if ((row['name']?.toString().trim().toLowerCase() ?? '') == target) { match = row; break; }
+        final row = Map<String, dynamic>.from(item);
+        if ((row['name']?.toString().trim().toLowerCase() ?? '') == target) {
+          match = row;
+          break;
+        }
       }
       if (match == null) return null;
-      final id = match['id']?.toString(); if (id == null || id.isEmpty) return null;
-      final releasesUri = Uri.https('musicbrainz.org', '/ws/2/release/', {'artist':id,'fmt':'json','limit':'20','inc':'artist-credits'});
-      final releasesResponse = await http.get(releasesUri, headers: {'User-Agent':'MyOwnStreamingService/1.0 (personal media catalog)'}).timeout(const Duration(seconds: 8));
-      final releasesData = releasesResponse.statusCode == 200 ? jsonDecode(releasesResponse.body) as Map<String,dynamic> : <String,dynamic>{};
+      final id = match['id']?.toString();
+      if (id == null || id.isEmpty) return null;
+      final releasesUri = Uri.https('musicbrainz.org', '/ws/2/release/', {
+        'artist': id,
+        'fmt': 'json',
+        'limit': '20',
+        'inc': 'artist-credits'
+      });
+      final releasesResponse = await http.get(releasesUri, headers: {
+        'User-Agent': 'MyOwnStreamingService/1.0 (personal media catalog)'
+      }).timeout(const Duration(seconds: 8));
+      final releasesData = releasesResponse.statusCode == 200
+          ? jsonDecode(releasesResponse.body) as Map<String, dynamic>
+          : <String, dynamic>{};
       final raw = releasesData['releases'];
-      final releases = raw is List ? raw.whereType<Map>().map((e)=>Map<String,dynamic>.from(e)).toList() : <Map<String,dynamic>>[];
-      return {'artist':match,'releases':releases};
-    } catch (_) { return null; }
+      final releases = raw is List
+          ? raw
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList()
+          : <Map<String, dynamic>>[];
+      return {'artist': match, 'releases': releases};
+    } catch (_) {
+      return null;
+    }
   }
-  @override Widget build(BuildContext context) => FutureBuilder<Map<String,dynamic>?>(future:_future,builder:(context,snapshot){
-    if(snapshot.connectionState==ConnectionState.waiting) return const Padding(padding:EdgeInsets.all(12),child:LinearProgressIndicator());
-    final data=snapshot.data; if(data==null) return const SizedBox.shrink();
-    final artist=data['artist'] as Map<String,dynamic>; final releases=data['releases'] as List<Map<String,dynamic>>;
-    final country=artist['country']?.toString(); final area=(artist['area'] is Map)?(artist['area'] as Map)['name']?.toString():null;
-    return Container(margin:const EdgeInsets.only(top:16),padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:const Color(0xFF151515),borderRadius:BorderRadius.circular(14)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Text('MUSIC CAREER',style:TextStyle(fontWeight:FontWeight.w900,letterSpacing:1,color:Colors.white70)),const SizedBox(height:6),Text('MusicBrainz artist match · ${[if(country!=null&&country.isNotEmpty)country,if(area!=null&&area.isNotEmpty)area].join(' · ')}',style:const TextStyle(color:Colors.white60,fontSize:12)),const SizedBox(height:12),const Text('Albums & releases',style:TextStyle(fontSize:17,fontWeight:FontWeight.bold)),if(releases.isEmpty)const Text('Artist found; no releases were returned.',style:TextStyle(color:Colors.white60)) else ...releases.map((r){final title=r['title']?.toString()??'Untitled release';final date=r['date']?.toString()??'Date unknown';final format=(r['release-group'] is Map)?((r['release-group'] as Map)['primary-type']?.toString()??'Release'):'Release';return ListTile(dense:true,contentPadding:EdgeInsets.zero,leading:const Icon(Icons.album_outlined),title:Text(title),subtitle:Text('$format · $date'));}),const Text('MusicBrainz data may include singles, reissues, and duplicate editions.',style:TextStyle(color:Colors.white54,fontSize:11))]));
-  });
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>?>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+              padding: EdgeInsets.all(12), child: LinearProgressIndicator());
+        }
+        final data = snapshot.data;
+        if (data == null) return const SizedBox.shrink();
+        final artist = data['artist'] as Map<String, dynamic>;
+        final releases = data['releases'] as List<Map<String, dynamic>>;
+        final country = artist['country']?.toString();
+        final area = (artist['area'] is Map)
+            ? (artist['area'] as Map)['name']?.toString()
+            : null;
+        return Container(
+            margin: const EdgeInsets.only(top: 16),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+                color: const Color(0xFF151515),
+                borderRadius: BorderRadius.circular(14)),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('MUSIC CAREER',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1,
+                      color: Colors.white70)),
+              const SizedBox(height: 6),
+              Text(
+                  'MusicBrainz artist match · ${[
+                    if (country != null && country.isNotEmpty) country,
+                    if (area != null && area.isNotEmpty) area
+                  ].join(' · ')}',
+                  style: const TextStyle(color: Colors.white60, fontSize: 12)),
+              const SizedBox(height: 12),
+              const Text('Albums & releases',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+              if (releases.isEmpty)
+                const Text('Artist found; no releases were returned.',
+                    style: TextStyle(color: Colors.white60))
+              else
+                ...releases.map((r) {
+                  final title = r['title']?.toString() ?? 'Untitled release';
+                  final date = r['date']?.toString() ?? 'Date unknown';
+                  final format = (r['release-group'] is Map)
+                      ? ((r['release-group'] as Map)['primary-type']
+                              ?.toString() ??
+                          'Release')
+                      : 'Release';
+                  return ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.album_outlined),
+                      title: Text(title),
+                      subtitle: Text('$format · $date'));
+                }),
+              const Text(
+                  'MusicBrainz data may include singles, reissues, and duplicate editions.',
+                  style: TextStyle(color: Colors.white54, fontSize: 11))
+            ]));
+      });
 }

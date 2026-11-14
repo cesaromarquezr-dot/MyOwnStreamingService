@@ -7,7 +7,7 @@ library;
 
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'app_core.dart';
 import 'details.dart';
@@ -317,8 +317,6 @@ class CinematicDiscoveryLogic {
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
     return {for (final key in orderedKeys) key: groups[key]!};
   }
-
-
 }
 
 class CinematicDiscoveryStudioScreen extends StatelessWidget {
@@ -402,7 +400,6 @@ class CinematicDiscoveryStudioScreen extends StatelessWidget {
               'X-Ray Story Explorer',
               'Choose a title to explore cast, production, connections and spoiler-aware details.',
               const XRayCatalogPickerScreen()),
-
           _studioTile(
               context,
               Icons.public_rounded,

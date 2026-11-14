@@ -2,7 +2,7 @@
 // Purpose: Find embeddable YouTube music videos using song/artist metadata
 // while keeping the YouTube API key on the authenticated backend.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
@@ -51,7 +51,8 @@ class _MusicVideoSearchScreenState extends State<MusicVideoSearchScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (initialVideo != null &&
-          RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(initialVideo['videoId']?.toString() ?? '')) {
+          RegExp(r'^[A-Za-z0-9_-]{11}$')
+              .hasMatch(initialVideo['videoId']?.toString() ?? '')) {
         setState(() {
           _providerConfigured = true;
           _videos.add(Map<String, dynamic>.from(initialVideo));
@@ -84,7 +85,8 @@ class _MusicVideoSearchScreenState extends State<MusicVideoSearchScreen> {
     if (!AppController.instance.isBackendAuthenticated) {
       setState(() {
         _providerConfigured = false;
-        _message = 'Sign in to the MyOwnStreamingService backend to load video matches inside the app. You can still search YouTube directly.';
+        _message =
+            'Sign in to the MyOwnStreamingService backend to load video matches inside the app. You can still search YouTube directly.';
         _error = null;
         _videos.clear();
       });
@@ -129,9 +131,7 @@ class _MusicVideoSearchScreenState extends State<MusicVideoSearchScreen> {
     } catch (error) {
       if (!mounted || requestId != _requestId) return;
       setState(() {
-        _error = error
-            .toString()
-            .replaceFirst('BackendApiException: ', '');
+        _error = error.toString().replaceFirst('BackendApiException: ', '');
         _message = null;
       });
     } finally {
@@ -244,7 +244,8 @@ class _MusicVideoSearchScreenState extends State<MusicVideoSearchScreen> {
             const SizedBox(height: 6),
             const Text(
               'Video playback is provided by YouTube. Some videos may be restricted or removed by their uploader.',
-              style: TextStyle(color: Colors.white38, fontSize: 11, height: 1.4),
+              style:
+                  TextStyle(color: Colors.white38, fontSize: 11, height: 1.4),
             ),
           ],
           if (_loading) ...<Widget>[
@@ -259,7 +260,8 @@ class _MusicVideoSearchScreenState extends State<MusicVideoSearchScreen> {
             const SizedBox(height: 14),
             _notice(
               'YouTube API setup needed',
-              _message ?? 'Set YOUTUBE_API_KEY in Backend/.env to show matching videos here. Spotify supplies song metadata; YouTube supplies the video search results.',
+              _message ??
+                  'Set YOUTUBE_API_KEY in Backend/.env to show matching videos here. Spotify supplies song metadata; YouTube supplies the video search results.',
             ),
           ] else if (_message != null && _message!.isNotEmpty) ...<Widget>[
             const SizedBox(height: 14),
@@ -297,7 +299,8 @@ class _MusicVideoSearchScreenState extends State<MusicVideoSearchScreen> {
     final thumbnailUrl = video['thumbnailUrl']?.toString() ?? '';
     final channel = video['channelTitle']?.toString().trim() ?? '';
     final publishedAt = video['publishedAt']?.toString() ?? '';
-    final publishedYear = publishedAt.length >= 4 ? publishedAt.substring(0, 4) : '';
+    final publishedYear =
+        publishedAt.length >= 4 ? publishedAt.substring(0, 4) : '';
     final selected = videoId == _selectedVideoId;
     final subtitle = <String>[
       if (channel.isNotEmpty) channel,
@@ -310,7 +313,10 @@ class _MusicVideoSearchScreenState extends State<MusicVideoSearchScreen> {
             ? const Color(0xFF26352D)
             : Colors.white.withValues(alpha: .045),
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: selected ? Colors.greenAccent.withValues(alpha: .4) : Colors.white10),
+        border: Border.all(
+            color: selected
+                ? Colors.greenAccent.withValues(alpha: .4)
+                : Colors.white10),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -334,7 +340,9 @@ class _MusicVideoSearchScreenState extends State<MusicVideoSearchScreen> {
         ),
         subtitle: subtitle.isEmpty
             ? null
-            : Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis,
+            : Text(subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(color: Colors.white60, fontSize: 11)),
         trailing: Wrap(
           spacing: -8,
@@ -343,14 +351,17 @@ class _MusicVideoSearchScreenState extends State<MusicVideoSearchScreen> {
               tooltip: selected ? 'Selected video' : 'Play video in app',
               onPressed: () => _playVideo(video),
               icon: Icon(
-                selected ? Icons.check_circle_rounded : Icons.play_circle_fill_rounded,
+                selected
+                    ? Icons.check_circle_rounded
+                    : Icons.play_circle_fill_rounded,
                 color: selected ? Colors.lightGreenAccent : Colors.white,
                 size: 28,
               ),
             ),
             IconButton(
               tooltip: 'Open on YouTube',
-              onPressed: () => _openVideoUrl(video['watchUrl']?.toString() ?? ''),
+              onPressed: () =>
+                  _openVideoUrl(video['watchUrl']?.toString() ?? ''),
               icon: const Icon(Icons.open_in_new_rounded, size: 20),
             ),
           ],
@@ -379,7 +390,8 @@ class _MusicVideoSearchScreenState extends State<MusicVideoSearchScreen> {
           children: <Widget>[
             Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
             const SizedBox(height: 4),
-            Text(body, style: const TextStyle(color: Colors.white70, height: 1.4)),
+            Text(body,
+                style: const TextStyle(color: Colors.white70, height: 1.4)),
           ],
         ),
       );

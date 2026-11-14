@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/scheduler.dart';
 
 /// A reusable horizontal Home shelf with explicit previous/next controls.
@@ -98,7 +98,8 @@ class _HomeArrowRailState extends State<HomeArrowRail> {
     super.dispose();
   }
 
-  Widget _arrow({required bool forward, required bool enabled, required bool rtl}) {
+  Widget _arrow(
+      {required bool forward, required bool enabled, required bool rtl}) {
     final atLogicalStart = forward ? false : true;
     final icon = atLogicalStart
         ? (rtl ? Icons.chevron_right_rounded : Icons.chevron_left_rounded)
@@ -155,7 +156,8 @@ class _HomeArrowRailState extends State<HomeArrowRail> {
                 scrollDirection: Axis.horizontal,
                 physics: widget.physics,
                 itemCount: widget.itemCount,
-                separatorBuilder: (_, __) => SizedBox(width: widget.separatorExtent),
+                separatorBuilder: (_, __) =>
+                    SizedBox(width: widget.separatorExtent),
                 itemBuilder: widget.itemBuilder,
               ),
             ),

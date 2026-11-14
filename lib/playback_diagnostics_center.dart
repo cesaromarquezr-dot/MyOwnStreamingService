@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Guided troubleshooting and planning. This screen records no live playback
 /// telemetry; it helps users classify a symptom until backend events are wired.

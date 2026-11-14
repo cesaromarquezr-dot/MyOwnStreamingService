@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'backend_api.dart';
@@ -9,6 +9,7 @@ import 'details.dart';
 import 'localization.dart';
 
 import 'backend_api_compatibility.dart';
+
 /// A single canonical work used by a curated or catalog-generated watch guide.
 /// The stable id is shared between guides so completion carries across branches.
 @immutable

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../app_core.dart';
 import '../catalog_poster_image.dart';
@@ -41,14 +41,13 @@ class MediaCase3DView extends StatelessWidget {
         ? format
         : media?.displayCaseFormat;
     final style = MediaCaseStyle.fromFormat(selectedFormat);
-    final resolvedColor = caseColor == 0xFF243447
-        ? style.color.toARGB32()
-        : caseColor;
+    final resolvedColor =
+        caseColor == 0xFF243447 ? style.color.toARGB32() : caseColor;
     // Audio CDs and vinyl sleeves are square packages, unlike DVD/Blu-ray cases.
-    final caseHeight = style.kind == MediaCaseKind.cd ||
-            style.kind == MediaCaseKind.vinyl
-        ? width
-        : height;
+    final caseHeight =
+        style.kind == MediaCaseKind.cd || style.kind == MediaCaseKind.vinyl
+            ? width
+            : height;
 
     return SizedBox(
       width: width + 8,

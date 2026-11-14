@@ -2,7 +2,7 @@
 // Purpose: Combines the most useful streaming UX patterns into one per-profile
 // preference screen. Provider-specific integrations remain opt-in and separate.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_core.dart';
@@ -47,7 +47,8 @@ class _PerfectStreamingExperienceScreenState
     setState(() {
       _prefs = prefs;
       _cleanNavigation = prefs.getBool(_key('clean_navigation')) ?? true;
-      _personalizedDiscovery = prefs.getBool(_key('personalized_discovery')) ?? true;
+      _personalizedDiscovery =
+          prefs.getBool(_key('personalized_discovery')) ?? true;
       _autoplayNext = prefs.getBool(_key('autoplay_next')) ?? true;
       _rememberPlayback = prefs.getBool(_key('remember_playback')) ?? true;
       _unifiedSeasons = prefs.getBool(_key('unified_seasons')) ?? true;
@@ -112,27 +113,67 @@ class _PerfectStreamingExperienceScreenState
                   ),
                 ),
                 const SizedBox(height: 20),
-                _section('Navigation & discovery', 'Make it easy to find something worth watching.'),
-                _toggle('Clean, intuitive navigation', 'Prefer clear destinations and fewer confusing menu layers.', _cleanNavigation,
-                    (v) => _set('clean_navigation', v, () => _cleanNavigation = v), Icons.explore_outlined),
-                _toggle('Personalized recommendations', 'Use profile preferences and viewing activity where supported.', _personalizedDiscovery,
-                    (v) => _set('personalized_discovery', v, () => _personalizedDiscovery = v), Icons.recommend_outlined),
-                _toggle('Tag-based search filters', 'Keep genre, mood, year and other descriptive filters available.', _tagSearch,
-                    (v) => _set('tag_search', v, () => _tagSearch = v), Icons.filter_alt_outlined),
+                _section('Navigation & discovery',
+                    'Make it easy to find something worth watching.'),
+                _toggle(
+                    'Clean, intuitive navigation',
+                    'Prefer clear destinations and fewer confusing menu layers.',
+                    _cleanNavigation,
+                    (v) =>
+                        _set('clean_navigation', v, () => _cleanNavigation = v),
+                    Icons.explore_outlined),
+                _toggle(
+                    'Personalized recommendations',
+                    'Use profile preferences and viewing activity where supported.',
+                    _personalizedDiscovery,
+                    (v) => _set('personalized_discovery', v,
+                        () => _personalizedDiscovery = v),
+                    Icons.recommend_outlined),
+                _toggle(
+                    'Tag-based search filters',
+                    'Keep genre, mood, year and other descriptive filters available.',
+                    _tagSearch,
+                    (v) => _set('tag_search', v, () => _tagSearch = v),
+                    Icons.filter_alt_outlined),
                 const SizedBox(height: 12),
-                _section('Player & series', 'Reduce friction between episodes and keep your place.'),
-                _toggle('Autoplay next episode', 'Allow the next episode to start automatically when supported.', _autoplayNext,
-                    (v) => _set('autoplay_next', v, () => _autoplayNext = v), Icons.skip_next_rounded),
-                _toggle('Remember playback position', 'Make it easy to resume a movie or episode.', _rememberPlayback,
-                    (v) => _set('remember_playback', v, () => _rememberPlayback = v), Icons.history_rounded),
-                _toggle('Unified seasons and episodes', 'Prefer season and episode navigation without returning to the main menu.', _unifiedSeasons,
-                    (v) => _set('unified_seasons', v, () => _unifiedSeasons = v), Icons.video_library_outlined),
+                _section('Player & series',
+                    'Reduce friction between episodes and keep your place.'),
+                _toggle(
+                    'Autoplay next episode',
+                    'Allow the next episode to start automatically when supported.',
+                    _autoplayNext,
+                    (v) => _set('autoplay_next', v, () => _autoplayNext = v),
+                    Icons.skip_next_rounded),
+                _toggle(
+                    'Remember playback position',
+                    'Make it easy to resume a movie or episode.',
+                    _rememberPlayback,
+                    (v) => _set(
+                        'remember_playback', v, () => _rememberPlayback = v),
+                    Icons.history_rounded),
+                _toggle(
+                    'Unified seasons and episodes',
+                    'Prefer season and episode navigation without returning to the main menu.',
+                    _unifiedSeasons,
+                    (v) =>
+                        _set('unified_seasons', v, () => _unifiedSeasons = v),
+                    Icons.video_library_outlined),
                 const SizedBox(height: 12),
-                _section('Shared viewing', 'Bring people together around the media they enjoy.'),
-                _toggle('Watch Party shortcuts', 'Keep synchronized group viewing easy to discover.', _watchParty,
-                    (v) => _set('watch_party', v, () => _watchParty = v), Icons.groups_rounded),
-                _toggle('Next-day catalogs', 'Show interest in titles that become available soon through connected providers.', _nextDayContent,
-                    (v) => _set('next_day_content', v, () => _nextDayContent = v), Icons.event_available_rounded),
+                _section('Shared viewing',
+                    'Bring people together around the media they enjoy.'),
+                _toggle(
+                    'Watch Party shortcuts',
+                    'Keep synchronized group viewing easy to discover.',
+                    _watchParty,
+                    (v) => _set('watch_party', v, () => _watchParty = v),
+                    Icons.groups_rounded),
+                _toggle(
+                    'Next-day catalogs',
+                    'Show interest in titles that become available soon through connected providers.',
+                    _nextDayContent,
+                    (v) =>
+                        _set('next_day_content', v, () => _nextDayContent = v),
+                    Icons.event_available_rounded),
                 const SizedBox(height: 12),
                 Card(
                   child: Padding(
@@ -170,7 +211,8 @@ class _PerfectStreamingExperienceScreenState
       );
 
   Widget _toggle(String title, String subtitle, bool value,
-      ValueChanged<bool> onChanged, IconData icon) => Card(
+          ValueChanged<bool> onChanged, IconData icon) =>
+      Card(
         margin: const EdgeInsets.only(bottom: 8),
         child: SwitchListTile.adaptive(
           value: value,

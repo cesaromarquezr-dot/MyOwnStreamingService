@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app_core.dart';
 import 'profile_administration.dart';
@@ -31,7 +31,8 @@ class ProfilesAndPermissionsHubScreen extends StatelessWidget {
                   const Icon(Icons.family_restroom_rounded, size: 34),
                   const SizedBox(height: 10),
                   const Text('Household access, by profile',
-                      style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+                      style:
+                          TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
                   const SizedBox(height: 6),
                   Text(
                     profile == null
@@ -43,9 +44,12 @@ class ProfilesAndPermissionsHubScreen extends StatelessWidget {
                   FilledButton.icon(
                     onPressed: profile == null
                         ? () => _open(context, const ProfileSelectionScreen())
-                        : () => _open(context, ProfileAdministrationScreen(profile: profile)),
+                        : () => _open(context,
+                            ProfileAdministrationScreen(profile: profile)),
                     icon: const Icon(Icons.manage_accounts_rounded),
-                    label: Text(profile == null ? 'Choose profile' : 'Profile administration'),
+                    label: Text(profile == null
+                        ? 'Choose profile'
+                        : 'Profile administration'),
                   ),
                 ],
               ),
@@ -56,11 +60,13 @@ class ProfilesAndPermissionsHubScreen extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.shield_outlined),
               title: const Text('Content safety & parental controls'),
-              subtitle: const Text('Age level, restricted content and profile safety settings'),
+              subtitle: const Text(
+                  'Age level, restricted content and profile safety settings'),
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: profile == null
                   ? () => _open(context, const ProfileSelectionScreen())
-                  : () => _open(context, ProfileContentSafetyScreen(profile: profile)),
+                  : () => _open(
+                      context, ProfileContentSafetyScreen(profile: profile)),
             ),
           ),
           const SizedBox(height: 10),

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../app_core.dart';
 import '../cinematic_title_fonts.dart';
@@ -90,7 +90,9 @@ class MediaCard extends StatelessWidget {
                   fontSize: 12,
                 ),
               ),
-            if (media.isSeries || const <String>{'movie', 'film'}.contains(media.type.trim().toLowerCase()))
+            if (media.isSeries ||
+                const <String>{'movie', 'film'}
+                    .contains(media.type.trim().toLowerCase()))
               Text(
                 'Origin: ${mediaCountryOriginLabel(media)}',
                 maxLines: 1,

@@ -4,7 +4,7 @@
 
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app_core.dart';
 import 'release_order_grouping.dart';
@@ -22,9 +22,7 @@ import 'country_origin_style.dart';
 import 'user_rating_store.dart';
 import 'rating_system.dart';
 import 'home_streaming_discovery.dart'
-    show
-        HomeHeroCarousel,
-        HomeHoverPreviewStore;
+    show HomeHeroCarousel, HomeHoverPreviewStore;
 
 class SeriesScreen extends StatefulWidget {
   const SeriesScreen({super.key});
@@ -47,6 +45,7 @@ class _SeriesScreenState extends State<SeriesScreen>
   PageHeroSettings _heroSettings = const PageHeroSettings();
 
   @override
+
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
@@ -54,7 +53,9 @@ class _SeriesScreenState extends State<SeriesScreen>
     TmdbMediaRatingStore.revision.addListener(_onTmdbRatingsChanged);
     unawaited(UserMediaRatingStore.initializeForProfile(
       AppController.instance.currentProfile?.id,
-    ).then((_) { if (mounted) setState(() {}); }));
+    ).then((_) {
+      if (mounted) setState(() {});
+    }));
     HomeHoverPreviewStore.clearCurrent();
 
     // Seed browseable catalog examples when Movies/TV is opened directly.
@@ -102,6 +103,7 @@ class _SeriesScreenState extends State<SeriesScreen>
   void _onHeroSettingsRevision() => unawaited(_reloadHeroSettings());
 
   @override
+
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     PageHeroSettingsStore.revision.removeListener(_onHeroSettingsRevision);
@@ -122,41 +124,50 @@ class _SeriesScreenState extends State<SeriesScreen>
     final result = _searchQuery.trim().isEmpty
         ? List<MediaItem>.from(shows)
         : shows.where((show) {
-            return show.title.toLowerCase().contains(_searchQuery.trim().toLowerCase());
+            return show.title
+                .toLowerCase()
+                .contains(_searchQuery.trim().toLowerCase());
           }).toList();
 
     _sortMedia(result);
     return result;
   }
 
-
   /// Sorts the visible TV-show list without changing the underlying library order.
   void _sortMedia(List<MediaItem> items) {
     switch (_sortMode) {
       case 'A-Z':
-        items.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+        items.sort(
+            (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
         break;
       case 'Z-A':
-        items.sort((a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()));
+        items.sort(
+            (a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()));
         break;
       case 'Oldest to Newest':
         items.sort((a, b) => ReleaseOrderGrouping.compareMediaByReleaseDate(
-              a, b, newestFirst: false));
+            a, b,
+            newestFirst: false));
         break;
       case 'Newest to Oldest':
         items.sort((a, b) => ReleaseOrderGrouping.compareMediaByReleaseDate(
-              a, b, newestFirst: true));
+            a, b,
+            newestFirst: true));
         break;
       case 'Countries A-Z':
         items.sort((a, b) {
           final aCountry = (a.countryOfOrigin ?? '').trim().toLowerCase();
           final bCountry = (b.countryOfOrigin ?? '').trim().toLowerCase();
           if (aCountry.isEmpty || bCountry.isEmpty) {
-            if (aCountry.isEmpty && bCountry.isEmpty) return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+            if (aCountry.isEmpty && bCountry.isEmpty) {
+              return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+            }
             return aCountry.isEmpty ? 1 : -1;
           }
           final byCountry = aCountry.compareTo(bCountry);
-          return byCountry != 0 ? byCountry : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+          return byCountry != 0
+              ? byCountry
+              : a.title.toLowerCase().compareTo(b.title.toLowerCase());
         });
         break;
       case 'Countries Z-A':
@@ -164,11 +175,15 @@ class _SeriesScreenState extends State<SeriesScreen>
           final aCountry = (a.countryOfOrigin ?? '').trim().toLowerCase();
           final bCountry = (b.countryOfOrigin ?? '').trim().toLowerCase();
           if (aCountry.isEmpty || bCountry.isEmpty) {
-            if (aCountry.isEmpty && bCountry.isEmpty) return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+            if (aCountry.isEmpty && bCountry.isEmpty) {
+              return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+            }
             return aCountry.isEmpty ? 1 : -1;
           }
           final byCountry = bCountry.compareTo(aCountry);
-          return byCountry != 0 ? byCountry : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+          return byCountry != 0
+              ? byCountry
+              : a.title.toLowerCase().compareTo(b.title.toLowerCase());
         });
         break;
       case 'Top Rated':
@@ -176,19 +191,22 @@ class _SeriesScreenState extends State<SeriesScreen>
         final lowestFirst = _sortMode == 'Lowest Rated';
         items.sort((a, b) {
           final scoreA = TmdbMediaRatingStore.scoreFor(
-            title: a.title, isTv: true, year: a.seriesStartYear ?? a.releaseYear,
+            title: a.title,
+            isTv: true,
+            year: a.seriesStartYear ?? a.releaseYear,
           );
           final scoreB = TmdbMediaRatingStore.scoreFor(
-            title: b.title, isTv: true, year: b.seriesStartYear ?? b.releaseYear,
+            title: b.title,
+            isTv: true,
+            year: b.seriesStartYear ?? b.releaseYear,
           );
           if (scoreA == null && scoreB == null) {
             return a.title.toLowerCase().compareTo(b.title.toLowerCase());
           }
           if (scoreA == null) return 1;
           if (scoreB == null) return -1;
-          final scoreOrder = lowestFirst
-              ? scoreA.compareTo(scoreB)
-              : scoreB.compareTo(scoreA);
+          final scoreOrder =
+              lowestFirst ? scoreA.compareTo(scoreB) : scoreB.compareTo(scoreA);
           return scoreOrder != 0
               ? scoreOrder
               : a.title.toLowerCase().compareTo(b.title.toLowerCase());
@@ -210,21 +228,37 @@ class _SeriesScreenState extends State<SeriesScreen>
       children: [
         DropdownButtonHideUnderline(
           child: DropdownButton<String>(
-        value: _sortMode,
-        dropdownColor: const Color(0xFF151515),
-        icon: const Icon(Icons.unfold_more_rounded, color: Colors.white70, size: 18),
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
-        items: const [
-          DropdownMenuItem(value: 'Default', child: UniversalText('Default')),
-          DropdownMenuItem(value: 'A-Z', child: UniversalText('Titles A-Z')),
-          DropdownMenuItem(value: 'Z-A', child: UniversalText('Titles Z-A')),
-          DropdownMenuItem(value: 'Countries A-Z', child: UniversalText('Countries A-Z')),
-          DropdownMenuItem(value: 'Countries Z-A', child: UniversalText('Countries Z-A')),
-          DropdownMenuItem(value: 'Oldest to Newest', child: UniversalText('Oldest to Newest')),
-          DropdownMenuItem(value: 'Newest to Oldest', child: UniversalText('Newest to Oldest')),
-          DropdownMenuItem(value: 'Top Rated', child: UniversalText('Top Rated (TMDB)')),
-          DropdownMenuItem(value: 'Lowest Rated', child: UniversalText('Lowest Rated (TMDB)')),
-        ],
+            value: _sortMode,
+            dropdownColor: const Color(0xFF151515),
+            icon: const Icon(Icons.unfold_more_rounded,
+                color: Colors.white70, size: 18),
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
+            items: const [
+              DropdownMenuItem(
+                  value: 'Default', child: UniversalText('Default')),
+              DropdownMenuItem(
+                  value: 'A-Z', child: UniversalText('Titles A-Z')),
+              DropdownMenuItem(
+                  value: 'Z-A', child: UniversalText('Titles Z-A')),
+              DropdownMenuItem(
+                  value: 'Countries A-Z',
+                  child: UniversalText('Countries A-Z')),
+              DropdownMenuItem(
+                  value: 'Countries Z-A',
+                  child: UniversalText('Countries Z-A')),
+              DropdownMenuItem(
+                  value: 'Oldest to Newest',
+                  child: UniversalText('Oldest to Newest')),
+              DropdownMenuItem(
+                  value: 'Newest to Oldest',
+                  child: UniversalText('Newest to Oldest')),
+              DropdownMenuItem(
+                  value: 'Top Rated', child: UniversalText('Top Rated (TMDB)')),
+              DropdownMenuItem(
+                  value: 'Lowest Rated',
+                  child: UniversalText('Lowest Rated (TMDB)')),
+            ],
             onChanged: _changeSortMode,
           ),
         ),
@@ -240,6 +274,7 @@ class _SeriesScreenState extends State<SeriesScreen>
       ],
     );
   }
+
   /// Performs `_openSearch` for this feature. Update this documentation when its contract changes.
   void _openSearch() {
     final controller = TextEditingController(text: _searchQuery);
@@ -268,7 +303,8 @@ class _SeriesScreenState extends State<SeriesScreen>
                 Row(
                   children: [
                     const Expanded(
-                      child: UniversalText('Search TV Shows',
+                      child: UniversalText(
+                        'Search TV Shows',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 21,
@@ -347,7 +383,8 @@ class _SeriesScreenState extends State<SeriesScreen>
                         borderRadius: BorderRadius.circular(15),
                       ),
                     ),
-                    child: const UniversalText('Search',
+                    child: const UniversalText(
+                      'Search',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
@@ -414,6 +451,7 @@ class _SeriesScreenState extends State<SeriesScreen>
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final shows = _getShows();
@@ -424,51 +462,71 @@ class _SeriesScreenState extends State<SeriesScreen>
     final showHero = _searchQuery.trim().isEmpty &&
         _heroSettings.enabled &&
         shows.isNotEmpty;
-    final viewEntries = remainingShows.map((show) => LibraryViewEntry(
-      title: show.title,
-      subtitle: [
-        if (show.seriesStartYear != null || show.releaseYear != null)
-          (show.seriesStartYear ?? show.releaseYear).toString(),
-        if (show.genres.isNotEmpty) show.genres.take(2).join(' · '),
-        mediaCountryOriginLabel(show),
-        show.type,
-        if ((show.addedByProfileName?.trim().isNotEmpty ?? false)) 'Added by ${show.addedByProfileName!.trim()}',
-        if ((show.addedByProfileName?.trim().isNotEmpty != true) && const <String>{'home-server-scanner', 'import/rip', 'disc_ingestion_center', 'approved-arm-import', 'arm-import'}.contains(show.addedSource.trim().toLowerCase())) 'Added by unknown profile',
-      ].where((part) => part.trim().isNotEmpty).join(' · '),
-      subtitleBuilder: (context) => Wrap(
-        spacing: 5, runSpacing: 2, crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          if (show.seriesStartYear != null || show.releaseYear != null) Text((show.seriesStartYear ?? show.releaseYear).toString(), style: const TextStyle(color: Colors.white60, fontSize: 11)),
-          CountryOriginInline(media: show, fontSize: 10.5),
-          TmdbMediaRatingBadge(
-            title: show.title,
-            isTv: true,
-            year: show.seriesStartYear ?? show.releaseYear,
-          ),
-          AddedByProfileLabel.forMedia(show),
-          if (UserMediaRatingStore.scorePercentFor(
-                AppController.instance.currentProfile?.id, show.id) != null)
-            UserScoreBadge(
-              score: UserMediaRatingStore.scoreFor(
-                AppController.instance.currentProfile?.id, show.id),
-              palette: UserMediaRatingStore.paletteFor(
-                AppController.instance.currentProfile?.id),
-            ),
-        ],
-      ),
-      year: show.seriesStartYear ?? show.releaseYear,
-      artworkBuilder: (context, fit) => CatalogPosterImage(media: show, fit: fit),
-      fallbackIcon: Icons.live_tv_outlined,
-      onTap: () => _openShow(show),
-      onHover: (hovering) {
-        if (_searchQuery.trim().isNotEmpty || !_heroSettings.enabled) return;
-        if (hovering) {
-          HomeHoverPreviewStore.show(show);
-        } else {
-          HomeHoverPreviewStore.clear(show.id);
-        }
-      },
-    )).toList(growable: false);
+    final viewEntries = remainingShows
+        .map((show) => LibraryViewEntry(
+              title: show.title,
+              subtitle: [
+                if (show.seriesStartYear != null || show.releaseYear != null)
+                  (show.seriesStartYear ?? show.releaseYear).toString(),
+                if (show.genres.isNotEmpty) show.genres.take(2).join(' · '),
+                mediaCountryOriginLabel(show),
+                show.type,
+                if ((show.addedByProfileName?.trim().isNotEmpty ?? false))
+                  'Added by ${show.addedByProfileName!.trim()}',
+                if ((show.addedByProfileName?.trim().isNotEmpty != true) &&
+                    const <String>{
+                      'home-server-scanner',
+                      'import/rip',
+                      'disc_ingestion_center',
+                      'approved-arm-import',
+                      'arm-import'
+                    }.contains(show.addedSource.trim().toLowerCase()))
+                  'Added by unknown profile',
+              ].where((part) => part.trim().isNotEmpty).join(' · '),
+              subtitleBuilder: (context) => Wrap(
+                spacing: 5,
+                runSpacing: 2,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  if (show.seriesStartYear != null || show.releaseYear != null)
+                    Text((show.seriesStartYear ?? show.releaseYear).toString(),
+                        style: const TextStyle(
+                            color: Colors.white60, fontSize: 11)),
+                  CountryOriginInline(media: show, fontSize: 10.5),
+                  TmdbMediaRatingBadge(
+                    title: show.title,
+                    isTv: true,
+                    year: show.seriesStartYear ?? show.releaseYear,
+                  ),
+                  AddedByProfileLabel.forMedia(show),
+                  if (UserMediaRatingStore.scorePercentFor(
+                          AppController.instance.currentProfile?.id, show.id) !=
+                      null)
+                    UserScoreBadge(
+                      score: UserMediaRatingStore.scoreFor(
+                          AppController.instance.currentProfile?.id, show.id),
+                      palette: UserMediaRatingStore.paletteFor(
+                          AppController.instance.currentProfile?.id),
+                    ),
+                ],
+              ),
+              year: show.seriesStartYear ?? show.releaseYear,
+              artworkBuilder: (context, fit) =>
+                  CatalogPosterImage(media: show, fit: fit),
+              fallbackIcon: Icons.live_tv_outlined,
+              onTap: () => _openShow(show),
+              onHover: (hovering) {
+                if (_searchQuery.trim().isNotEmpty || !_heroSettings.enabled) {
+                  return;
+                }
+                if (hovering) {
+                  HomeHoverPreviewStore.show(show);
+                } else {
+                  HomeHoverPreviewStore.clear(show.id);
+                }
+              },
+            ))
+        .toList(growable: false);
 
     return Scaffold(
       backgroundColor: const Color(0xFF050505),
@@ -486,7 +544,8 @@ class _SeriesScreenState extends State<SeriesScreen>
           ),
         ),
         titleSpacing: 20,
-        title: const UniversalText('TV Shows',
+        title: const UniversalText(
+          'TV Shows',
           style: TextStyle(
             color: Colors.white,
             fontSize: 25,
@@ -499,7 +558,8 @@ class _SeriesScreenState extends State<SeriesScreen>
             tooltip: 'Search TMDB movies, shows, and people',
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
-                builder: (_) => const MediaMetadataCatalogScreen(initialType: 'tv'),
+                builder: (_) =>
+                    const MediaMetadataCatalogScreen(initialType: 'tv'),
               ),
             ),
             icon: const Icon(Icons.cloud_sync_rounded),
@@ -543,18 +603,21 @@ class _SeriesScreenState extends State<SeriesScreen>
                               slivers: [
                                 if (_viewMode == LibraryViewMode.grid &&
                                     _searchQuery.trim().isEmpty &&
-                                    shows.any((show) => show.tvIntros.isNotEmpty))
+                                    shows.any(
+                                        (show) => show.tvIntros.isNotEmpty))
                                   SliverToBoxAdapter(
                                     child: _TvIntrosSection(
                                       shows: shows
-                                          .where((show) => show.tvIntros.isNotEmpty)
+                                          .where((show) =>
+                                              show.tvIntros.isNotEmpty)
                                           .toList(),
                                       onTap: _openShow,
                                     ),
                                   ),
                                 SliverToBoxAdapter(
                                   child: Padding(
-                                    padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
+                                    padding: const EdgeInsets.fromLTRB(
+                                        18, 0, 18, 16),
                                     child: Row(
                                       children: [
                                         const Expanded(
@@ -575,7 +638,8 @@ class _SeriesScreenState extends State<SeriesScreen>
                                               ? '${shows.length} result${shows.length == 1 ? '' : 's'}'
                                               : '${shows.length} show${shows.length == 1 ? '' : 's'}',
                                           style: TextStyle(
-                                            color: Colors.white.withValues(alpha: 0.48),
+                                            color: Colors.white
+                                                .withValues(alpha: 0.48),
                                             fontSize: 13,
                                             fontWeight: FontWeight.w600,
                                           ),
@@ -587,7 +651,8 @@ class _SeriesScreenState extends State<SeriesScreen>
                                 if (_searchQuery.trim().isNotEmpty)
                                   SliverToBoxAdapter(
                                     child: Padding(
-                                      padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+                                      padding: const EdgeInsets.fromLTRB(
+                                          18, 0, 18, 12),
                                       child: Text(
                                         'Search results for “${_searchQuery.trim()}”',
                                         style: const TextStyle(
@@ -599,11 +664,13 @@ class _SeriesScreenState extends State<SeriesScreen>
                                   ),
                                 SliverToBoxAdapter(
                                   child: Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 18),
                                     child: LibraryViewModePicker(
                                       scope: 'shows',
                                       value: _viewMode,
-                                      onChanged: (mode) => setState(() => _viewMode = mode),
+                                      onChanged: (mode) =>
+                                          setState(() => _viewMode = mode),
                                       compact: true,
                                     ),
                                   ),
@@ -624,19 +691,22 @@ class _SeriesScreenState extends State<SeriesScreen>
                                     child: LibraryCollectionView(
                                       entries: viewEntries,
                                       mode: _viewMode,
-                                      padding: const EdgeInsets.fromLTRB(18, 0, 18, 32),
+                                      padding: const EdgeInsets.fromLTRB(
+                                          18, 0, 18, 32),
                                     ),
                                   )
                                 else
                                   SliverPadding(
-                                    padding: const EdgeInsets.fromLTRB(18, 0, 18, 32),
+                                    padding: const EdgeInsets.fromLTRB(
+                                        18, 0, 18, 32),
                                     sliver: SliverGrid(
                                       delegate: SliverChildBuilderDelegate(
                                         (context, index) {
                                           final animationStart =
                                               (index * 0.055).clamp(0.0, 0.65);
                                           final animationEnd =
-                                              (animationStart + 0.35).clamp(0.0, 1.0);
+                                              (animationStart + 0.35)
+                                                  .clamp(0.0, 1.0);
                                           final animation = CurvedAnimation(
                                             parent: _animationController,
                                             curve: Interval(
@@ -647,18 +717,22 @@ class _SeriesScreenState extends State<SeriesScreen>
                                           );
                                           return AnimatedBuilder(
                                             animation: animation,
-                                            builder: (context, child) => Opacity(
+                                            builder: (context, child) =>
+                                                Opacity(
                                               opacity: animation.value,
                                               child: Transform.translate(
-                                                offset: Offset(0, 28 * (1 - animation.value)),
+                                                offset: Offset(0,
+                                                    28 * (1 - animation.value)),
                                                 child: child,
                                               ),
                                             ),
                                             child: _ShowCard(
                                               show: remainingShows[index],
-                                              enableHomePreview: _searchQuery.trim().isEmpty &&
-                                                  _heroSettings.enabled,
-                                              onTap: () => _openShow(remainingShows[index]),
+                                              enableHomePreview:
+                                                  _searchQuery.trim().isEmpty &&
+                                                      _heroSettings.enabled,
+                                              onTap: () => _openShow(
+                                                  remainingShows[index]),
                                             ),
                                           );
                                         },
@@ -687,7 +761,6 @@ class _SeriesScreenState extends State<SeriesScreen>
   }
 }
 
-
 class _TvIntrosSection extends StatelessWidget {
   final List<MediaItem> shows;
   final ValueChanged<MediaItem> onTap;
@@ -714,7 +787,8 @@ class _TvIntrosSection extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 5),
-          UniversalText('Opening sequences indexed from your TV library',
+          UniversalText(
+            'Opening sequences indexed from your TV library',
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.5),
               fontSize: 12,
@@ -790,7 +864,8 @@ class _TvIntrosSection extends StatelessWidget {
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         show.title,
@@ -806,7 +881,8 @@ class _TvIntrosSection extends StatelessWidget {
                                       Text(
                                         '$introCount intro${introCount == 1 ? '' : 's'} indexed',
                                         style: TextStyle(
-                                          color: Colors.white.withValues(alpha: 0.65),
+                                          color: Colors.white
+                                              .withValues(alpha: 0.65),
                                           fontSize: 11,
                                           fontWeight: FontWeight.w600,
                                         ),
@@ -849,6 +925,7 @@ class _FeaturedShowState extends State<_FeaturedShow> {
   bool _pressed = false;
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final show = widget.show;
@@ -957,7 +1034,8 @@ class _FeaturedShowState extends State<_FeaturedShow> {
                                   ),
                                 ),
                               ),
-                              child: const UniversalText('TV SHOW',
+                              child: const UniversalText(
+                                'TV SHOW',
                                 style: TextStyle(
                                   color: Colors.white70,
                                   fontSize: 10,
@@ -1015,7 +1093,8 @@ class _FeaturedShowState extends State<_FeaturedShow> {
                                     size: 22,
                                   ),
                                   SizedBox(width: 7),
-                                  UniversalText('Open',
+                                  UniversalText(
+                                    'Open',
                                     style: TextStyle(
                                       color: Colors.black,
                                       fontSize: 14,
@@ -1104,6 +1183,7 @@ class _ShowCardState extends State<_ShowCard> {
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final show = widget.show;
@@ -1259,7 +1339,8 @@ class _ShowCardState extends State<_ShowCard> {
                           color: Colors.white.withValues(alpha: 0.10),
                         ),
                       ),
-                      child: const UniversalText('TV',
+                      child: const UniversalText(
+                        'TV',
                         style: TextStyle(
                           color: Colors.white70,
                           fontSize: 10,
@@ -1305,13 +1386,14 @@ class _ShowCardState extends State<_ShowCard> {
                           year: show.seriesStartYear ?? show.releaseYear,
                         ),
                         if (UserMediaRatingStore.scorePercentFor(
-                              AppController.instance.currentProfile?.id,
-                              show.id) != null) ...[
+                                AppController.instance.currentProfile?.id,
+                                show.id) !=
+                            null) ...[
                           const SizedBox(height: 5),
                           UserScoreBadge(
                             score: UserMediaRatingStore.scoreFor(
-                              AppController.instance.currentProfile?.id,
-                              show.id),
+                                AppController.instance.currentProfile?.id,
+                                show.id),
                             palette: UserMediaRatingStore.paletteFor(
                               AppController.instance.currentProfile?.id,
                             ),
@@ -1320,7 +1402,8 @@ class _ShowCardState extends State<_ShowCard> {
                         const SizedBox(height: 2),
                         CountryOriginInline(media: show, fontSize: 10.5),
                         const SizedBox(height: 3),
-                        AddedByProfileLabel.forMedia(show, onArtwork: true, compact: true),
+                        AddedByProfileLabel.forMedia(show,
+                            onArtwork: true, compact: true),
                       ],
                     ),
                   ),
@@ -1368,6 +1451,7 @@ class _PosterPlaceholder extends StatelessWidget {
   const _PosterPlaceholder();
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
@@ -1410,6 +1494,7 @@ class _GlassIconButton extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Material(
@@ -1442,6 +1527,7 @@ class _CinematicBackground extends StatelessWidget {
   const _CinematicBackground();
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Positioned.fill(
@@ -1506,6 +1592,7 @@ class _EmptyState extends StatelessWidget {
   const _EmptyState();
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Center(
@@ -1531,7 +1618,8 @@ class _EmptyState extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
-            const UniversalText('No TV Shows Yet',
+            const UniversalText(
+              'No TV Shows Yet',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.white,
@@ -1540,7 +1628,8 @@ class _EmptyState extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
-            UniversalText('Your imported TV shows will appear here.\n\n'
+            UniversalText(
+              'Your imported TV shows will appear here.\n\n'
               'Use "Add Movie or Show" to import one.',
               textAlign: TextAlign.center,
               style: TextStyle(
@@ -1560,6 +1649,7 @@ class _NoSearchResults extends StatelessWidget {
   const _NoSearchResults();
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Column(
@@ -1581,7 +1671,8 @@ class _NoSearchResults extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 18),
-        const UniversalText('No Shows Found',
+        const UniversalText(
+          'No Shows Found',
           style: TextStyle(
             color: Colors.white,
             fontSize: 21,
@@ -1589,7 +1680,8 @@ class _NoSearchResults extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        UniversalText('Try searching for a different title.',
+        UniversalText(
+          'Try searching for a different title.',
           textAlign: TextAlign.center,
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.5),

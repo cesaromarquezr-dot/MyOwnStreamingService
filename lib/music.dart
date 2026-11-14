@@ -5,7 +5,7 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -1180,8 +1180,11 @@ class MusicPlaybackController extends ChangeNotifier {
     controller.addListener(_handlePlaybackTick);
     try {
       await controller.initialize();
-      final savedSeconds = AppController.instance.playbackPositionSeconds[track.id];
-      if (savedSeconds != null && savedSeconds > 0 && controller.value.duration > Duration.zero) {
+      final savedSeconds =
+          AppController.instance.playbackPositionSeconds[track.id];
+      if (savedSeconds != null &&
+          savedSeconds > 0 &&
+          controller.value.duration > Duration.zero) {
         final target = Duration(seconds: savedSeconds);
         await controller.seekTo(target > controller.value.duration
             ? controller.value.duration
@@ -1226,8 +1229,13 @@ class MusicPlaybackController extends ChangeNotifier {
             {'type': 'genre', 'id': genre, 'name': genre},
         if (_wrappedContextType == 'album' && track.album.trim().isNotEmpty)
           {'type': 'album', 'id': track.album, 'name': track.album},
-        if (_wrappedContextType == 'playlist' && (_wrappedContextTitle?.trim().isNotEmpty ?? false))
-          {'type': 'playlist', 'id': _wrappedContextId ?? _wrappedContextTitle!, 'name': _wrappedContextTitle!},
+        if (_wrappedContextType == 'playlist' &&
+            (_wrappedContextTitle?.trim().isNotEmpty ?? false))
+          {
+            'type': 'playlist',
+            'id': _wrappedContextId ?? _wrappedContextTitle!,
+            'name': _wrappedContextTitle!
+          },
       ];
       unawaited(AppController.instance.recordWrappedActivityDetails(
         mediaId: track.id,
@@ -1264,14 +1272,17 @@ class MusicPlaybackController extends ChangeNotifier {
       return;
     }
     final trackForProgress = currentTrack;
-    if (trackForProgress != null && value.duration > Duration.zero && !value.isCompleted) {
+    if (trackForProgress != null &&
+        value.duration > Duration.zero &&
+        !value.isCompleted) {
       final now = DateTime.now();
       if (_lastProgressSyncAt == null ||
           now.difference(_lastProgressSyncAt!) >= const Duration(seconds: 12)) {
         _lastProgressSyncAt = now;
-        final normalized = (value.position.inMilliseconds / value.duration.inMilliseconds)
-            .clamp(0.0, 1.0)
-            .toDouble();
+        final normalized =
+            (value.position.inMilliseconds / value.duration.inMilliseconds)
+                .clamp(0.0, 1.0)
+                .toDouble();
         AppController.instance.updatePlaybackProgress(
           trackForProgress.id,
           normalized,
@@ -1403,15 +1414,18 @@ class MusicPlaybackController extends ChangeNotifier {
   void _saveCurrentTrackProgress() {
     final controller = _controller;
     final track = currentTrack;
-    if (controller == null || track == null || !controller.value.isInitialized ||
+    if (controller == null ||
+        track == null ||
+        !controller.value.isInitialized ||
         controller.value.duration <= Duration.zero ||
         _playbackProfileId != AppController.instance.currentProfile?.id) {
       return;
     }
     final value = controller.value;
-    final normalized = (value.position.inMilliseconds / value.duration.inMilliseconds)
-        .clamp(0.0, 1.0)
-        .toDouble();
+    final normalized =
+        (value.position.inMilliseconds / value.duration.inMilliseconds)
+            .clamp(0.0, 1.0)
+            .toDouble();
     AppController.instance.updatePlaybackProgress(
       track.id,
       normalized,
@@ -2042,18 +2056,22 @@ class MusicPlaylistDetailsScreen extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Row(children: [
-              Expanded(child: Text('${tracks.length} tracks${profile == null ? '' : ' · ${profile.name}'}',
-                  style: const TextStyle(color: Colors.white60))),
+              Expanded(
+                  child: Text(
+                      '${tracks.length} tracks${profile == null ? '' : ' · ${profile.name}'}',
+                      style: const TextStyle(color: Colors.white60))),
               FilledButton.icon(
-                onPressed: tracks.isEmpty ? null : () {
-                  store.setQueue(tracks, autoAdvance: true);
-                  unawaited(MusicPlaybackController.instance.play(
-                    tracks.first,
-                    wrappedContextType: 'playlist',
-                    wrappedContextId: playlistName,
-                    wrappedContextTitle: playlistName,
-                  ));
-                },
+                onPressed: tracks.isEmpty
+                    ? null
+                    : () {
+                        store.setQueue(tracks, autoAdvance: true);
+                        unawaited(MusicPlaybackController.instance.play(
+                          tracks.first,
+                          wrappedContextType: 'playlist',
+                          wrappedContextId: playlistName,
+                          wrappedContextTitle: playlistName,
+                        ));
+                      },
                 icon: const Icon(Icons.play_arrow_rounded),
                 label: const Text('Play playlist'),
               ),
@@ -2061,7 +2079,8 @@ class MusicPlaylistDetailsScreen extends StatelessWidget {
           ),
           Expanded(
             child: tracks.isEmpty
-                ? const Center(child: Text('This playlist has no available tracks.'))
+                ? const Center(
+                    child: Text('This playlist has no available tracks.'))
                 : ListView.builder(
                     itemCount: tracks.length,
                     itemBuilder: (context, index) {
@@ -2070,22 +2089,26 @@ class MusicPlaylistDetailsScreen extends StatelessWidget {
                         leading: CircleAvatar(child: Text('${index + 1}')),
                         title: LocalizedMediaText(track.title),
                         subtitle: Text('${track.artist} · ${track.album}',
-                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(color: Colors.white60)),
                         trailing: IconButton(
                           tooltip: 'Play from this playlist',
                           icon: const Icon(Icons.play_arrow_rounded),
-                          onPressed: (track.audioUrl?.trim().isNotEmpty ?? false)
-                              ? () => unawaited(MusicPlaybackController.instance.play(
-                                    track,
-                                    wrappedContextType: 'playlist',
-                                    wrappedContextId: playlistName,
-                                    wrappedContextTitle: playlistName,
-                                  ))
-                              : null,
+                          onPressed:
+                              (track.audioUrl?.trim().isNotEmpty ?? false)
+                                  ? () => unawaited(
+                                          MusicPlaybackController.instance.play(
+                                        track,
+                                        wrappedContextType: 'playlist',
+                                        wrappedContextId: playlistName,
+                                        wrappedContextTitle: playlistName,
+                                      ))
+                                  : null,
                         ),
                         onTap: (track.audioUrl?.trim().isNotEmpty ?? false)
-                            ? () => unawaited(MusicPlaybackController.instance.play(
+                            ? () =>
+                                unawaited(MusicPlaybackController.instance.play(
                                   track,
                                   wrappedContextType: 'playlist',
                                   wrappedContextId: playlistName,
@@ -2101,9 +2124,11 @@ class MusicPlaylistDetailsScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _editPlaylistFromDetails(BuildContext context, String name) async {
+  Future<void> _editPlaylistFromDetails(
+      BuildContext context, String name) async {
     final store = MusicLibraryStore.instance;
-    final selected = Set<String>.from(store.playlists[name] ?? const <String>[]);
+    final selected =
+        Set<String>.from(store.playlists[name] ?? const <String>[]);
     final available = store.tracks;
     final result = await showDialog<List<String>>(
       context: context,
@@ -2122,21 +2147,31 @@ class MusicPlaylistDetailsScreen extends StatelessWidget {
                   title: Text(track.title),
                   subtitle: Text('${track.artist} · ${track.album}'),
                   onChanged: (value) => setDialogState(() {
-                    if (value == true) { selected.add(track.id); } else { selected.remove(track.id); }
+                    if (value == true) {
+                      selected.add(track.id);
+                    } else {
+                      selected.remove(track.id);
+                    }
                   }),
                 );
               },
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(dialogContext, selected.toList()), child: const Text('Save')),
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel')),
+            FilledButton(
+                onPressed: () =>
+                    Navigator.pop(dialogContext, selected.toList()),
+                child: const Text('Save')),
           ],
         ),
       ),
     );
     if (result == null) return;
-    final current = List<String>.from(store.playlists[name] ?? const <String>[]);
+    final current =
+        List<String>.from(store.playlists[name] ?? const <String>[]);
     for (final id in current.where((id) => !result.contains(id))) {
       store.toggleTrackInPlaylist(name, id);
     }
@@ -3306,7 +3341,8 @@ class _MusicScreenState extends State<MusicScreen> {
         artistName: sourceTrack.artist,
         artworkUrl: sourceTrack.artworkUrl,
         localTracks: localTracks,
-        onPlayLocalTrack: (row) => _playTrackFromAlbum(row, albumTitle, sourceTrack.artist),
+        onPlayLocalTrack: (row) =>
+            _playTrackFromAlbum(row, albumTitle, sourceTrack.artist),
       ),
     ));
   }
@@ -3319,10 +3355,16 @@ class _MusicScreenState extends State<MusicScreen> {
     final id = row['id']?.toString() ?? '';
     MusicTrack? selected;
     for (final candidate in MusicLibraryStore.instance.tracks) {
-      if (id.isNotEmpty && candidate.id == id) { selected = candidate; break; }
-      if (candidate.title.trim().toLowerCase() == (row['title']?.toString() ?? '').trim().toLowerCase() &&
-          candidate.album.trim().toLowerCase() == albumTitle.trim().toLowerCase() &&
-          candidate.artist.trim().toLowerCase() == artistName.trim().toLowerCase()) {
+      if (id.isNotEmpty && candidate.id == id) {
+        selected = candidate;
+        break;
+      }
+      if (candidate.title.trim().toLowerCase() ==
+              (row['title']?.toString() ?? '').trim().toLowerCase() &&
+          candidate.album.trim().toLowerCase() ==
+              albumTitle.trim().toLowerCase() &&
+          candidate.artist.trim().toLowerCase() ==
+              artistName.trim().toLowerCase()) {
         selected = candidate;
         break;
       }
@@ -3774,7 +3816,8 @@ class _MusicScreenState extends State<MusicScreen> {
             Card(
               child: ListTile(
                 onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                  builder: (_) => MusicPlaylistDetailsScreen(playlistName: entry.key),
+                  builder: (_) =>
+                      MusicPlaylistDetailsScreen(playlistName: entry.key),
                 )),
                 title: Text(entry.key),
                 subtitle: Text(

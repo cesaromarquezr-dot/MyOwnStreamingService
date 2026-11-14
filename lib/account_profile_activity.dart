@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Empty compatibility widget after removal of Friends and profile presence.
 /// It intentionally performs no cross-profile requests or messaging actions.

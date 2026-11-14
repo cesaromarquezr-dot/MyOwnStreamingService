@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../app_core.dart';
 
@@ -92,7 +92,8 @@ class AddedByProfileLabel extends StatelessWidget {
 String? profileNameForId(String? profileId) {
   final id = profileId?.trim() ?? '';
   if (id.isEmpty) return null;
-  for (final profile in AppController.instance.currentAccount?.profiles ?? const <Profile>[]) {
+  for (final profile
+      in AppController.instance.currentAccount?.profiles ?? const <Profile>[]) {
     if (profile.id == id) return profile.name;
   }
   final current = AppController.instance.currentProfile;

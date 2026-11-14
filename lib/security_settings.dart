@@ -2,7 +2,7 @@
 // Purpose: Provides the account Security & Privacy screen for password, MFA,
 // sessions, and security-posture visibility. Credentials are never displayed.
 import 'backend_api.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'app_core.dart';
 import 'localization.dart';
 import 'security_bot_center.dart';

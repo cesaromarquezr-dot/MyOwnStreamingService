@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Stable theme identifiers used by each profile's social appearance settings.
@@ -25,7 +25,12 @@ const List<String> socialThemeStyles = <String>[
 ];
 
 const List<String> socialSectionOrderDefaults = <String>[
-  'Feed', 'Reels', 'Messages', 'Communities', 'Friends', 'My Page',
+  'Feed',
+  'Reels',
+  'Messages',
+  'Communities',
+  'Friends',
+  'My Page',
 ];
 
 /// Profile-wide presentation modes shared by every Customize App screen.
@@ -63,7 +68,8 @@ class ArtworkDisplayModePicker extends StatelessWidget {
             const SizedBox(height: 4),
             const Text(
               'Shared artwork preference for Classic and standard library pages. Virtual Store uses framed wall posters and hanging aisle banners instead of a rotating hero carousel; Kiosk and Theater use their own display controls.',
-              style: TextStyle(color: Colors.white60, fontSize: 12, height: 1.35),
+              style:
+                  TextStyle(color: Colors.white60, fontSize: 12, height: 1.35),
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
@@ -153,42 +159,44 @@ class AppSectionCustomization {
     this.communitiesMembershipFilter = 'All',
     this.communitiesSortOrder = 'Newest to Oldest',
     this.friendsDisplayStyle = 'Casual',
-  }) : libraryWidgetSizes = libraryWidgetSizes ?? <String, String>{},
-       socialNavOrder = List<String>.from(socialNavOrder ?? socialSectionOrderDefaults);
+  })  : libraryWidgetSizes = libraryWidgetSizes ?? <String, String>{},
+        socialNavOrder =
+            List<String>.from(socialNavOrder ?? socialSectionOrderDefaults);
 
   Map<String, dynamic> toJson() => {
-    'shopCardStyle': shopCardStyle,
-    'shopColumns': shopColumns,
-    'showShopPrices': showShopPrices,
-    'showShopInventory': showShopInventory,
-    'libraryCardStyle': libraryCardStyle,
-    'artworkDisplayMode': artworkDisplayMode,
-    'libraryViewMode': libraryViewMode,
-    'libraryColumns': libraryColumns,
-    'libraryWidgetSizes': libraryWidgetSizes,
-    'feedStyle': feedStyle,
-    'profilePageStyle': profilePageStyle,
-    'communitiesStyle': communitiesStyle,
-    'friendsStyle': friendsStyle,
-    'messagesStyle': messagesStyle,
-    'reelsStyle': reelsStyle,
-    'socialNavPosition': socialNavPosition,
-    'socialNavOrder': socialNavOrder,
-    'profilePageViewMode': profilePageViewMode,
-    'profilePostsSortOrder': profilePostsSortOrder,
-    'friendsViewMode': friendsViewMode,
-    'friendsSortOrder': friendsSortOrder,
-    'communitiesViewMode': communitiesViewMode,
-    'communitiesMembershipFilter': communitiesMembershipFilter,
-    'communitiesSortOrder': communitiesSortOrder,
-    'friendsDisplayStyle': friendsStyle,
-  };
+        'shopCardStyle': shopCardStyle,
+        'shopColumns': shopColumns,
+        'showShopPrices': showShopPrices,
+        'showShopInventory': showShopInventory,
+        'libraryCardStyle': libraryCardStyle,
+        'artworkDisplayMode': artworkDisplayMode,
+        'libraryViewMode': libraryViewMode,
+        'libraryColumns': libraryColumns,
+        'libraryWidgetSizes': libraryWidgetSizes,
+        'feedStyle': feedStyle,
+        'profilePageStyle': profilePageStyle,
+        'communitiesStyle': communitiesStyle,
+        'friendsStyle': friendsStyle,
+        'messagesStyle': messagesStyle,
+        'reelsStyle': reelsStyle,
+        'socialNavPosition': socialNavPosition,
+        'socialNavOrder': socialNavOrder,
+        'profilePageViewMode': profilePageViewMode,
+        'profilePostsSortOrder': profilePostsSortOrder,
+        'friendsViewMode': friendsViewMode,
+        'friendsSortOrder': friendsSortOrder,
+        'communitiesViewMode': communitiesViewMode,
+        'communitiesMembershipFilter': communitiesMembershipFilter,
+        'communitiesSortOrder': communitiesSortOrder,
+        'friendsDisplayStyle': friendsStyle,
+      };
 
   factory AppSectionCustomization.fromJson(Map<String, dynamic> json) {
     final legacyTheme = _normalizeSocialTheme(json['friendsDisplayStyle']);
     final rawOrder = (json['socialNavOrder'] as List? ?? const <dynamic>[])
         .map((item) => item.toString())
-        .where(socialSectionOrderDefaults.contains).toSet();
+        .where(socialSectionOrderDefaults.contains)
+        .toSet();
     final normalizedOrder = <String>[
       ...rawOrder,
       ...socialSectionOrderDefaults.where((item) => !rawOrder.contains(item)),
@@ -197,37 +205,80 @@ class AppSectionCustomization {
     final rawArtworkDisplayMode =
         json['artworkDisplayMode']?.toString() ?? 'Poster only';
     final rawFriendsSort = json['friendsSortOrder']?.toString() ?? 'A-Z';
-    final rawCommunityFilter = json['communitiesMembershipFilter']?.toString() ?? 'All';
-    final rawCommunitySort = json['communitiesSortOrder']?.toString() ?? 'Newest to Oldest';
+    final rawCommunityFilter =
+        json['communitiesMembershipFilter']?.toString() ?? 'All';
+    final rawCommunitySort =
+        json['communitiesSortOrder']?.toString() ?? 'Newest to Oldest';
     return AppSectionCustomization(
       shopCardStyle: json['shopCardStyle']?.toString() ?? 'Comfortable',
-      shopColumns: ((json['shopColumns'] as num?)?.toInt() ?? 2).clamp(1, 4).toInt(),
+      shopColumns:
+          ((json['shopColumns'] as num?)?.toInt() ?? 2).clamp(1, 4).toInt(),
       showShopPrices: json['showShopPrices'] != false,
       showShopInventory: json['showShopInventory'] == true,
       libraryCardStyle: json['libraryCardStyle']?.toString() ?? 'Poster',
-      artworkDisplayMode: mediaArtworkDisplayModes.contains(rawArtworkDisplayMode)
-          ? rawArtworkDisplayMode
-          : 'Poster only',
-      libraryViewMode: json['libraryViewMode']?.toString() == 'List' ? 'List' : 'Grid',
-      libraryColumns: ((json['libraryColumns'] as num?)?.toInt() ?? 2).clamp(1, 6).toInt(),
+      artworkDisplayMode:
+          mediaArtworkDisplayModes.contains(rawArtworkDisplayMode)
+              ? rawArtworkDisplayMode
+              : 'Poster only',
+      libraryViewMode:
+          json['libraryViewMode']?.toString() == 'List' ? 'List' : 'Grid',
+      libraryColumns:
+          ((json['libraryColumns'] as num?)?.toInt() ?? 2).clamp(1, 6).toInt(),
       libraryWidgetSizes: json['libraryWidgetSizes'] is Map
-          ? (json['libraryWidgetSizes'] as Map).map((key, value) => MapEntry(key.toString(), value.toString()))
+          ? (json['libraryWidgetSizes'] as Map)
+              .map((key, value) => MapEntry(key.toString(), value.toString()))
           : <String, String>{},
-      feedStyle: _normalizeSocialTheme(json['feedStyle'], fallback: legacyTheme),
-      profilePageStyle: _normalizeSocialTheme(json['profilePageStyle'], fallback: legacyTheme),
-      communitiesStyle: _normalizeSocialTheme(json['communitiesStyle'], fallback: 'Material'),
-      friendsStyle: _normalizeSocialTheme(json['friendsStyle'], fallback: legacyTheme),
-      messagesStyle: _normalizeSocialTheme(json['messagesStyle'], fallback: 'Compact'),
-      reelsStyle: _normalizeSocialTheme(json['reelsStyle'], fallback: 'Minimalist'),
-      socialNavPosition: const ['Top', 'Left', 'Right'].contains(rawPosition) ? rawPosition : 'Top',
+      feedStyle:
+          _normalizeSocialTheme(json['feedStyle'], fallback: legacyTheme),
+      profilePageStyle: _normalizeSocialTheme(json['profilePageStyle'],
+          fallback: legacyTheme),
+      communitiesStyle:
+          _normalizeSocialTheme(json['communitiesStyle'], fallback: 'Material'),
+      friendsStyle:
+          _normalizeSocialTheme(json['friendsStyle'], fallback: legacyTheme),
+      messagesStyle:
+          _normalizeSocialTheme(json['messagesStyle'], fallback: 'Compact'),
+      reelsStyle:
+          _normalizeSocialTheme(json['reelsStyle'], fallback: 'Minimalist'),
+      socialNavPosition: const ['Top', 'Left', 'Right'].contains(rawPosition)
+          ? rawPosition
+          : 'Top',
       socialNavOrder: normalizedOrder,
-      profilePageViewMode: json['profilePageViewMode']?.toString() == 'Post cards' ? 'Post cards' : 'Timeline',
-      profilePostsSortOrder: json['profilePostsSortOrder']?.toString() == 'Oldest to Newest' ? 'Oldest to Newest' : 'Newest to Oldest',
-      friendsViewMode: json['friendsViewMode']?.toString() == 'Cards' ? 'Cards' : 'List',
-      friendsSortOrder: const ['Newest to Oldest', 'Oldest to Newest', 'A-Z', 'Z-A'].contains(rawFriendsSort) ? rawFriendsSort : 'A-Z',
-      communitiesViewMode: json['communitiesViewMode']?.toString() == 'List' ? 'List' : 'Cards',
-      communitiesMembershipFilter: const ['All', 'Joined', 'Created'].contains(rawCommunityFilter) ? rawCommunityFilter : 'All',
-      communitiesSortOrder: const ['Newest to Oldest', 'Oldest to Newest', 'Movies', 'Shows', 'Music', 'Joined', 'Created'].contains(rawCommunitySort) ? rawCommunitySort : 'Newest to Oldest',
+      profilePageViewMode:
+          json['profilePageViewMode']?.toString() == 'Post cards'
+              ? 'Post cards'
+              : 'Timeline',
+      profilePostsSortOrder:
+          json['profilePostsSortOrder']?.toString() == 'Oldest to Newest'
+              ? 'Oldest to Newest'
+              : 'Newest to Oldest',
+      friendsViewMode:
+          json['friendsViewMode']?.toString() == 'Cards' ? 'Cards' : 'List',
+      friendsSortOrder: const [
+        'Newest to Oldest',
+        'Oldest to Newest',
+        'A-Z',
+        'Z-A'
+      ].contains(rawFriendsSort)
+          ? rawFriendsSort
+          : 'A-Z',
+      communitiesViewMode:
+          json['communitiesViewMode']?.toString() == 'List' ? 'List' : 'Cards',
+      communitiesMembershipFilter:
+          const ['All', 'Joined', 'Created'].contains(rawCommunityFilter)
+              ? rawCommunityFilter
+              : 'All',
+      communitiesSortOrder: const [
+        'Newest to Oldest',
+        'Oldest to Newest',
+        'Movies',
+        'Shows',
+        'Music',
+        'Joined',
+        'Created'
+      ].contains(rawCommunitySort)
+          ? rawCommunitySort
+          : 'Newest to Oldest',
       friendsDisplayStyle: legacyTheme,
     );
   }
@@ -246,7 +297,8 @@ class AppSectionCustomizationStore {
       if (raw == null) continue;
       try {
         _cache[key.substring('app_section_customization_'.length)] =
-            AppSectionCustomization.fromJson(Map<String, dynamic>.from(jsonDecode(raw) as Map));
+            AppSectionCustomization.fromJson(
+                Map<String, dynamic>.from(jsonDecode(raw) as Map));
       } catch (_) {}
     }
   }
@@ -257,13 +309,15 @@ class AppSectionCustomizationStore {
     return _cache[id] ??= AppSectionCustomization();
   }
 
-  static Future<void> save(dynamic profile, AppSectionCustomization value) async {
+  static Future<void> save(
+      dynamic profile, AppSectionCustomization value) async {
     final id = profile?.id?.toString();
     if (id == null || id.isEmpty) return;
     _cache[id] = value;
     final prefs = _prefs ?? await SharedPreferences.getInstance();
     _prefs = prefs;
-    await prefs.setString('app_section_customization_$id', jsonEncode(value.toJson()));
+    await prefs.setString(
+        'app_section_customization_$id', jsonEncode(value.toJson()));
     revision.value++;
   }
 }

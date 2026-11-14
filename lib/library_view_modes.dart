@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'home_arrow_rail.dart';
 
@@ -48,7 +48,8 @@ class LibraryViewPreferenceStore {
   static LibraryViewMode get(
     String scope, {
     LibraryViewMode fallback = LibraryViewMode.grid,
-  }) => _modes[scope] ?? fallback;
+  }) =>
+      _modes[scope] ?? fallback;
 
   static void set(String scope, LibraryViewMode mode) {
     _modes[scope] = mode;
@@ -91,7 +92,8 @@ class LibraryViewModePicker extends StatelessWidget {
                 avatar: Icon(mode.icon, size: 16),
                 label: Text(mode.label),
                 selected: value == mode,
-                visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+                visualDensity:
+                    compact ? VisualDensity.compact : VisualDensity.standard,
                 onSelected: (_) {
                   LibraryViewPreferenceStore.set(scope, mode);
                   onChanged(mode);
@@ -156,7 +158,8 @@ class LibraryCollectionView extends StatelessWidget {
       return Padding(
         padding: padding,
         child: Center(
-          child: Text(emptyMessage, style: const TextStyle(color: Colors.white60)),
+          child:
+              Text(emptyMessage, style: const TextStyle(color: Colors.white60)),
         ),
       );
     }
@@ -186,13 +189,24 @@ class LibraryCollectionView extends StatelessWidget {
                   color: Colors.white.withValues(alpha: .045),
                   clipBehavior: Clip.antiAlias,
                   child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    leading: SizedBox(width: 52, height: 70, child: _artwork(context, entry, BoxFit.contain)),
-                    title: Text(entry.title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    leading: SizedBox(
+                        width: 52,
+                        height: 70,
+                        child: _artwork(context, entry, BoxFit.contain)),
+                    title: Text(entry.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontWeight: FontWeight.w800)),
-                    subtitle: entry.subtitleBuilder?.call(context) ?? Text(entry.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white60, fontSize: 12)),
-                    trailing: entry.trailing ?? const Icon(Icons.chevron_right_rounded),
+                    subtitle: entry.subtitleBuilder?.call(context) ??
+                        Text(entry.subtitle,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                color: Colors.white60, fontSize: 12)),
+                    trailing: entry.trailing ??
+                        const Icon(Icons.chevron_right_rounded),
                     onTap: entry.onTap,
                   ),
                 ),
@@ -203,7 +217,15 @@ class LibraryCollectionView extends StatelessWidget {
 
   Widget _grid(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    final columns = width >= 1300 ? 6 : width >= 1000 ? 5 : width >= 720 ? 4 : width >= 480 ? 3 : 2;
+    final columns = width >= 1300
+        ? 6
+        : width >= 1000
+            ? 5
+            : width >= 720
+                ? 4
+                : width >= 480
+                    ? 3
+                    : 2;
     return Padding(
       padding: padding,
       child: GridView.builder(
@@ -232,13 +254,22 @@ class LibraryCollectionView extends StatelessWidget {
                     Expanded(child: _artwork(context, entry, BoxFit.cover)),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(9, 8, 9, 8),
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(entry.title, maxLines: 2, overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
-                        const SizedBox(height: 3),
-                        entry.subtitleBuilder?.call(context) ?? Text(entry.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: Colors.white60, fontSize: 10)),
-                      ]),
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(entry.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w800, fontSize: 12)),
+                            const SizedBox(height: 3),
+                            entry.subtitleBuilder?.call(context) ??
+                                Text(entry.subtitle,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        color: Colors.white60, fontSize: 10)),
+                          ]),
                     ),
                   ],
                 ),
@@ -322,8 +353,20 @@ class LibraryCollectionView extends StatelessWidget {
               color: Colors.white.withValues(alpha: .05),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
               child: const Row(children: [
-                Expanded(flex: 5, child: Text('TITLE', style: TextStyle(fontSize: 10, color: Colors.white60, fontWeight: FontWeight.w800))),
-                Expanded(flex: 3, child: Text('DETAILS', style: TextStyle(fontSize: 10, color: Colors.white60, fontWeight: FontWeight.w800))),
+                Expanded(
+                    flex: 5,
+                    child: Text('TITLE',
+                        style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.white60,
+                            fontWeight: FontWeight.w800))),
+                Expanded(
+                    flex: 3,
+                    child: Text('DETAILS',
+                        style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.white60,
+                            fontWeight: FontWeight.w800))),
                 SizedBox(width: 24),
               ]),
             ),
@@ -333,11 +376,27 @@ class LibraryCollectionView extends StatelessWidget {
                 InkWell(
                   onTap: entries[i].onTap,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                     child: Row(children: [
-                      Expanded(flex: 5, child: Text(entries[i].title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))),
-                      Expanded(flex: 3, child: entries[i].subtitleBuilder?.call(context) ?? Text(entries[i].subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60, fontSize: 11))),
-                      entries[i].trailing ?? const Icon(Icons.chevron_right_rounded, size: 18, color: Colors.white54),
+                      Expanded(
+                          flex: 5,
+                          child: Text(entries[i].title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w700))),
+                      Expanded(
+                          flex: 3,
+                          child: entries[i].subtitleBuilder?.call(context) ??
+                              Text(entries[i].subtitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      color: Colors.white60, fontSize: 11))),
+                      entries[i].trailing ??
+                          const Icon(Icons.chevron_right_rounded,
+                              size: 18, color: Colors.white54),
                     ]),
                   ),
                 ),
@@ -358,14 +417,23 @@ class LibraryCollectionView extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(2, 10, 0, 8),
               child: Text(ordered[index].year?.toString() ?? 'Year unknown',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Colors.white70)),
+                  style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white70)),
             ),
           Padding(
             padding: const EdgeInsets.only(left: 2, bottom: 8),
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Column(children: [
-                Container(width: 10, height: 10, decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle)),
-                if (index < ordered.length - 1) Container(width: 2, height: 68, color: Colors.white12),
+                Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary,
+                        shape: BoxShape.circle)),
+                if (index < ordered.length - 1)
+                  Container(width: 2, height: 68, color: Colors.white12),
               ]),
               const SizedBox(width: 12),
               Expanded(
@@ -374,9 +442,21 @@ class LibraryCollectionView extends StatelessWidget {
                   Card(
                     color: Colors.white.withValues(alpha: .04),
                     child: ListTile(
-                      leading: SizedBox(width: 42, height: 60, child: _artwork(context, ordered[index], BoxFit.contain)),
-                      title: Text(ordered[index].title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
-                      subtitle: ordered[index].subtitleBuilder?.call(context) ?? Text(ordered[index].subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60, fontSize: 11)),
+                      leading: SizedBox(
+                          width: 42,
+                          height: 60,
+                          child: _artwork(
+                              context, ordered[index], BoxFit.contain)),
+                      title: Text(ordered[index].title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w800)),
+                      subtitle: ordered[index].subtitleBuilder?.call(context) ??
+                          Text(ordered[index].subtitle,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  color: Colors.white60, fontSize: 11)),
                       onTap: ordered[index].onTap,
                     ),
                   ),
@@ -402,11 +482,13 @@ class LibraryCollectionView extends StatelessWidget {
   Widget _artwork(BuildContext context, LibraryViewEntry entry, BoxFit fit) {
     final custom = entry.artworkBuilder;
     if (custom != null) {
-      return ClipRRect(borderRadius: BorderRadius.circular(8), child: custom(context, fit));
+      return ClipRRect(
+          borderRadius: BorderRadius.circular(8), child: custom(context, fit));
     }
     final url = entry.imageUrl?.trim() ?? '';
     if (url.startsWith('https://') || url.startsWith('http://')) {
-      return Image.network(url, fit: fit, errorBuilder: (_, __, ___) => _placeholder(entry));
+      return Image.network(url,
+          fit: fit, errorBuilder: (_, __, ___) => _placeholder(entry));
     }
     return _placeholder(entry);
   }

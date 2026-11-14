@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -39,7 +39,8 @@ class _LibraryProtectionCenterScreenState
   bool _busy = false;
   String? _error;
 
-  String get _profileId => AppController.instance.currentProfile?.id ?? 'default';
+  String get _profileId =>
+      AppController.instance.currentProfile?.id ?? 'default';
   String get _reviewedDuplicateKey => 'moss_duplicate_reviewed_v1_$_profileId';
   String get _reviewedFindingKey => 'moss_repair_reviewed_v1_$_profileId';
   String get _eventKey => 'moss_library_protection_events_v1_$_profileId';
@@ -74,20 +75,21 @@ class _LibraryProtectionCenterScreenState
       );
       final hidden = await membership.loadHiddenMediaIds();
       final pending = await membership.loadPendingOverrides();
-      final reviewedDuplicates = (prefs.getStringList(_reviewedDuplicateKey) ??
-              const <String>[])
-          .toSet();
-      final reviewedFindings = (prefs.getStringList(_reviewedFindingKey) ??
-              const <String>[])
-          .toSet();
+      final reviewedDuplicates =
+          (prefs.getStringList(_reviewedDuplicateKey) ?? const <String>[])
+              .toSet();
+      final reviewedFindings =
+          (prefs.getStringList(_reviewedFindingKey) ?? const <String>[])
+              .toSet();
       final rawEvents = prefs.getString(_eventKey);
       final events = <Map<String, dynamic>>[];
       if (rawEvents != null && rawEvents.isNotEmpty) {
         try {
           final decoded = jsonDecode(rawEvents);
           if (decoded is List) {
-            events.addAll(decoded.whereType<Map>().map(
-                (row) => Map<String, dynamic>.from(row)));
+            events.addAll(decoded
+                .whereType<Map>()
+                .map((row) => Map<String, dynamic>.from(row)));
           }
         } catch (_) {
           // Corrupt audit history should not block access to the collection.
@@ -130,8 +132,9 @@ class _LibraryProtectionCenterScreenState
         try {
           final decoded = jsonDecode(raw);
           if (decoded is List) {
-            entries.addAll(decoded.whereType<Map>().map(
-                (row) => Map<String, dynamic>.from(row)));
+            entries.addAll(decoded
+                .whereType<Map>()
+                .map((row) => Map<String, dynamic>.from(row)));
           }
         } catch (_) {}
       }
@@ -194,21 +197,25 @@ class _LibraryProtectionCenterScreenState
     setState(() => _busy = true);
     File? createdFile;
     try {
-      final file = await const LibraryMetadataSnapshotService().createSnapshot();
+      final file =
+          await const LibraryMetadataSnapshotService().createSnapshot();
       createdFile = file;
       await SharePlus.instance.share(ShareParams(
         title: 'MyOwnStreamingService library snapshot',
-        text: 'Sanitized metadata export for the active library. It includes media metadata, progress IDs, collections, and music playlists/listening counts; it excludes media files, credentials, filesystem paths, and playback URLs. It does not restore remote database rows by itself.',
+        text:
+            'Sanitized metadata export for the active library. It includes media metadata, progress IDs, collections, and music playlists/listening counts; it excludes media files, credentials, filesystem paths, and playback URLs. It does not restore remote database rows by itself.',
         files: <XFile>[XFile(file.path, mimeType: 'application/json')],
       ));
       await _recordEvent(
         'library_snapshot_exported',
         'Created a sanitized snapshot of ${AppController.instance.library.length} library item(s).',
       );
-      _message('Library snapshot created. Save a copy away from this device for off-device recovery.');
+      _message(
+          'Library snapshot created. Save a copy away from this device for off-device recovery.');
     } catch (error) {
       if (createdFile != null) {
-        _message('Snapshot was created at ${createdFile.path}, but sharing failed: $error');
+        _message(
+            'Snapshot was created at ${createdFile.path}, but sharing failed: $error');
       } else {
         _message('Library snapshot export failed: $error');
       }
@@ -271,8 +278,8 @@ class _LibraryProtectionCenterScreenState
     await prefs.setStringList(_reviewedFindingKey, updated.toList()..sort());
     if (!mounted) return;
     setState(() => _reviewedFindings = updated);
-    await _recordEvent('repair_finding_reviewed',
-        '${finding.category}: ${finding.title}');
+    await _recordEvent(
+        'repair_finding_reviewed', '${finding.category}: ${finding.title}');
   }
 
   void _message(String value) {
@@ -288,9 +295,10 @@ class _LibraryProtectionCenterScreenState
 
   @override
   Widget build(BuildContext context) {
-    final findings = LibraryProtectionService.audit(AppController.instance.library)
-        .where((finding) => !_reviewedFindings.contains(finding.id))
-        .toList(growable: false);
+    final findings =
+        LibraryProtectionService.audit(AppController.instance.library)
+            .where((finding) => !_reviewedFindings.contains(finding.id))
+            .toList(growable: false);
     final unreviewedDuplicates = _duplicates
         .where((group) => !_reviewedDuplicates.contains(group.key))
         .length;
@@ -301,7 +309,9 @@ class _LibraryProtectionCenterScreenState
           : (widget.initialTabIndex > 3 ? 3 : widget.initialTabIndex),
       child: Scaffold(
         appBar: AppBar(
-          title: Text(widget.initialTabIndex == 2 ? 'Library Repair Queue' : 'Library Protection & Recovery'),
+          title: Text(widget.initialTabIndex == 2
+              ? 'Library Repair Queue'
+              : 'Library Protection & Recovery'),
           bottom: const TabBar(
             isScrollable: true,
             tabs: [
@@ -328,7 +338,8 @@ class _LibraryProtectionCenterScreenState
                       child: Column(mainAxisSize: MainAxisSize.min, children: [
                         Text(_error!, textAlign: TextAlign.center),
                         const SizedBox(height: 12),
-                        FilledButton(onPressed: _load, child: const Text('Retry')),
+                        FilledButton(
+                            onPressed: _load, child: const Text('Retry')),
                       ]),
                     ),
                   )
@@ -348,7 +359,8 @@ class _LibraryProtectionCenterScreenState
           _metricCard(
             icon: Icons.shield_outlined,
             title: 'Collection protection',
-            detail: 'Potential duplicates are flagged for review only. Nothing in this center automatically deletes or merges media.',
+            detail:
+                'Potential duplicates are flagged for review only. Nothing in this center automatically deletes or merges media.',
             color: Colors.greenAccent,
           ),
           const SizedBox(height: 10),
@@ -357,7 +369,8 @@ class _LibraryProtectionCenterScreenState
             _metricChip('Duplicate groups to review', '$unreviewedDuplicates'),
             _metricChip('Data-quality findings', '$findingCount'),
             _metricChip('Hidden from library', '${_hiddenIds.length}'),
-            _metricChip('Pending sync overrides', '${_pendingMembership.length}'),
+            _metricChip(
+                'Pending sync overrides', '${_pendingMembership.length}'),
             _metricChip('Recovery points', '${_backups.length}'),
           ]),
           const SizedBox(height: 14),
@@ -368,38 +381,67 @@ class _LibraryProtectionCenterScreenState
               return Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Row(children: [
-                      Icon(status.enabled ? Icons.check_circle_outline : Icons.pause_circle_outline,
-                          color: status.enabled ? Colors.greenAccent : Colors.orangeAccent),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(status.enabled ? 'Automatic local backups enabled' : 'Automatic local backups paused', style: const TextStyle(fontWeight: FontWeight.w800))),
-                    ]),
-                    const SizedBox(height: 6),
-                    Text(status.message, style: const TextStyle(color: Colors.white70, height: 1.35)),
-                    if (status.directoryPath != null) ...[
-                      const SizedBox(height: 8),
-                      SelectableText('Local folder: ${status.directoryPath}', style: const TextStyle(fontSize: 11, color: Colors.white54)),
-                    ],
-                    const SizedBox(height: 10),
-                    Wrap(spacing: 8, runSpacing: 8, children: [
-                      FilledButton.icon(
-                        onPressed: _busy ? null : _createBackup,
-                        icon: _busy ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.backup_rounded),
-                        label: Text(_busy ? 'Working…' : 'Back up now'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: () => _backup.setEnabled(!status.enabled),
-                        icon: Icon(status.enabled ? Icons.pause_rounded : Icons.play_arrow_rounded),
-                        label: Text(status.enabled ? 'Pause auto-backup' : 'Enable auto-backup'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _busy ? null : _exportLibrarySnapshot,
-                        icon: const Icon(Icons.ios_share_rounded),
-                        label: const Text('Export library snapshot'),
-                      ),
-                    ]),
-                  ]),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          Icon(
+                              status.enabled
+                                  ? Icons.check_circle_outline
+                                  : Icons.pause_circle_outline,
+                              color: status.enabled
+                                  ? Colors.greenAccent
+                                  : Colors.orangeAccent),
+                          const SizedBox(width: 8),
+                          Expanded(
+                              child: Text(
+                                  status.enabled
+                                      ? 'Automatic local backups enabled'
+                                      : 'Automatic local backups paused',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w800))),
+                        ]),
+                        const SizedBox(height: 6),
+                        Text(status.message,
+                            style: const TextStyle(
+                                color: Colors.white70, height: 1.35)),
+                        if (status.directoryPath != null) ...[
+                          const SizedBox(height: 8),
+                          SelectableText(
+                              'Local folder: ${status.directoryPath}',
+                              style: const TextStyle(
+                                  fontSize: 11, color: Colors.white54)),
+                        ],
+                        const SizedBox(height: 10),
+                        Wrap(spacing: 8, runSpacing: 8, children: [
+                          FilledButton.icon(
+                            onPressed: _busy ? null : _createBackup,
+                            icon: _busy
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2))
+                                : const Icon(Icons.backup_rounded),
+                            label: Text(_busy ? 'Working…' : 'Back up now'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: () =>
+                                _backup.setEnabled(!status.enabled),
+                            icon: Icon(status.enabled
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded),
+                            label: Text(status.enabled
+                                ? 'Pause auto-backup'
+                                : 'Enable auto-backup'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: _busy ? null : _exportLibrarySnapshot,
+                            icon: const Icon(Icons.ios_share_rounded),
+                            label: const Text('Export library snapshot'),
+                          ),
+                        ]),
+                      ]),
                 ),
               );
             },
@@ -408,28 +450,32 @@ class _LibraryProtectionCenterScreenState
           _metricCard(
             icon: Icons.file_download_outlined,
             title: 'Two-layer recovery',
-            detail: 'Automatic checkpoints restore local app preferences. Export library snapshot creates a separate metadata/progress JSON that you can save off-device. Neither artifact restores remote database rows or copies media files; keep an independent server/database backup and media backup.',
+            detail:
+                'Automatic checkpoints restore local app preferences. Export library snapshot creates a separate metadata/progress JSON that you can save off-device. Neither artifact restores remote database rows or copies media files; keep an independent server/database backup and media backup.',
             color: Colors.deepPurpleAccent,
           ),
           const SizedBox(height: 10),
           _metricCard(
             icon: Icons.sync_problem_outlined,
             title: 'Rescan and membership protection',
-            detail: '${_hiddenIds.length} media item(s) are hidden from this profile. ${_pendingMembership.length} change(s) are queued for server sync. Pending overrides stay local until the server confirms them; hidden markers do not delete the underlying media file.',
+            detail:
+                '${_hiddenIds.length} media item(s) are hidden from this profile. ${_pendingMembership.length} change(s) are queued for server sync. Pending overrides stay local until the server confirms them; hidden markers do not delete the underlying media file.',
             color: Colors.lightBlueAccent,
           ),
           const SizedBox(height: 10),
           _metricCard(
             icon: Icons.warning_amber_rounded,
             title: 'Database migration guardrail',
-            detail: 'Before applying schema or database migrations, create a backup of the server database and verify a restore plan. This client-side settings backup is not a substitute for a backend/Supabase backup or an independent media-file copy.',
+            detail:
+                'Before applying schema or database migrations, create a backup of the server database and verify a restore plan. This client-side settings backup is not a substitute for a backend/Supabase backup or an independent media-file copy.',
             color: Colors.orangeAccent,
           ),
           const SizedBox(height: 10),
           _metricCard(
             icon: Icons.lock_outline_rounded,
             title: 'Keep credentials separate',
-            detail: 'Local recovery snapshots exclude credentials and tokens. Store server database backups separately and use access-controlled storage.',
+            detail:
+                'Local recovery snapshots exclude credentials and tokens. Store server database backups separately and use access-controlled storage.',
             color: Colors.blueAccent,
           ),
         ],
@@ -437,38 +483,61 @@ class _LibraryProtectionCenterScreenState
 
   Widget _duplicatesTab() {
     if (_duplicates.isEmpty) {
-      return const Center(child: Padding(padding: EdgeInsets.all(24), child: Text('No exact title/type/year duplicate candidates were found in the currently loaded library. This is a heuristic, not a file-hash scan.')));
+      return const Center(
+          child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text(
+                  'No exact title/type/year duplicate candidates were found in the currently loaded library. This is a heuristic, not a file-hash scan.')));
     }
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
         const Padding(
           padding: EdgeInsets.fromLTRB(4, 2, 4, 10),
-          child: Text('Review candidates before making any changes. Different editions, encodes, and cuts may be intentional.', style: TextStyle(color: Colors.white60, height: 1.4)),
+          child: Text(
+              'Review candidates before making any changes. Different editions, encodes, and cuts may be intentional.',
+              style: TextStyle(color: Colors.white60, height: 1.4)),
         ),
         for (final group in _duplicates)
           Card(
             child: ExpansionTile(
-              leading: Icon(group.containsDifferentEditions ? Icons.collections_bookmark_outlined : Icons.content_copy_rounded),
-              title: Text('${group.items.first.title} (${group.items.length})', maxLines: 2, overflow: TextOverflow.ellipsis),
-              subtitle: Text('${group.mediaType} · ${group.releaseYear?.toString() ?? 'year unknown'}${_reviewedDuplicates.contains(group.key) ? ' · reviewed' : ''}'),
+              leading: Icon(group.containsDifferentEditions
+                  ? Icons.collections_bookmark_outlined
+                  : Icons.content_copy_rounded),
+              title: Text('${group.items.first.title} (${group.items.length})',
+                  maxLines: 2, overflow: TextOverflow.ellipsis),
+              subtitle: Text(
+                  '${group.mediaType} · ${group.releaseYear?.toString() ?? 'year unknown'}${_reviewedDuplicates.contains(group.key) ? ' · reviewed' : ''}'),
               children: [
                 for (final item in group.items)
                   ListTile(
                     dense: true,
                     leading: const Icon(Icons.movie_outlined),
                     title: Text(item.title),
-                    subtitle: Text([item.type, if (item.editionName?.isNotEmpty == true) item.editionName!, if (item.editionType?.isNotEmpty == true) item.editionType!, 'ID: ${item.id}'].join(' · ')),
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => MediaDetailsScreen(media: item))),
+                    subtitle: Text([
+                      item.type,
+                      if (item.editionName?.isNotEmpty == true)
+                        item.editionName!,
+                      if (item.editionType?.isNotEmpty == true)
+                        item.editionType!,
+                      'ID: ${item.id}'
+                    ].join(' · ')),
+                    onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                            builder: (_) => MediaDetailsScreen(media: item))),
                   ),
                 Padding(
                   padding: const EdgeInsets.all(12),
                   child: Align(
                     alignment: Alignment.centerRight,
                     child: TextButton.icon(
-                      onPressed: _reviewedDuplicates.contains(group.key) ? null : () => _reviewDuplicate(group),
+                      onPressed: _reviewedDuplicates.contains(group.key)
+                          ? null
+                          : () => _reviewDuplicate(group),
                       icon: const Icon(Icons.check_circle_outline),
-                      label: Text(_reviewedDuplicates.contains(group.key) ? 'Reviewed' : 'Mark reviewed'),
+                      label: Text(_reviewedDuplicates.contains(group.key)
+                          ? 'Reviewed'
+                          : 'Mark reviewed'),
                     ),
                   ),
                 ),
@@ -481,26 +550,36 @@ class _LibraryProtectionCenterScreenState
 
   Widget _repairTab(List<LibraryAuditFinding> findings) {
     if (findings.isEmpty) {
-      return const Center(child: Padding(padding: EdgeInsets.all(24), child: Text('No unreviewed artwork, description, playback-source, or release-date findings were detected.')));
+      return const Center(
+          child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text(
+                  'No unreviewed artwork, description, playback-source, or release-date findings were detected.')));
     }
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
         const Padding(
           padding: EdgeInsets.fromLTRB(4, 2, 4, 10),
-          child: Text('These checks identify missing fields; they do not guess a replacement match. Open the title to inspect it, then correct the metadata at the authoritative source.', style: TextStyle(color: Colors.white60, height: 1.4)),
+          child: Text(
+              'These checks identify missing fields; they do not guess a replacement match. Open the title to inspect it, then correct the metadata at the authoritative source.',
+              style: TextStyle(color: Colors.white60, height: 1.4)),
         ),
         for (final finding in findings)
           Card(
             child: ListTile(
               leading: Icon(_findingIcon(finding.category)),
-              title: Text(finding.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+              title: Text(finding.title,
+                  maxLines: 2, overflow: TextOverflow.ellipsis),
               subtitle: Text('${finding.category} — ${finding.description}'),
               isThreeLine: true,
               onTap: () {
-                final matches = AppController.instance.library.where((item) => item.id == finding.mediaId);
+                final matches = AppController.instance.library
+                    .where((item) => item.id == finding.mediaId);
                 if (matches.isNotEmpty) {
-                  Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => MediaDetailsScreen(media: matches.first)));
+                  Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) =>
+                          MediaDetailsScreen(media: matches.first)));
                 }
               },
               trailing: PopupMenuButton<String>(
@@ -508,7 +587,9 @@ class _LibraryProtectionCenterScreenState
                 onSelected: (value) {
                   if (value == 'review') unawaited(_reviewFinding(finding));
                 },
-                itemBuilder: (_) => const [PopupMenuItem(value: 'review', child: Text('Mark reviewed'))],
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'review', child: Text('Mark reviewed'))
+                ],
               ),
             ),
           ),
@@ -521,15 +602,21 @@ class _LibraryProtectionCenterScreenState
     rows.add(const Card(
       child: Padding(
         padding: EdgeInsets.all(14),
-        child: Text('This is a local protection-center action log plus automatic settings backup checkpoints. It does not yet provide field-by-field undo for metadata edited elsewhere or remote database rows.', style: TextStyle(color: Colors.white60, height: 1.4)),
+        child: Text(
+            'This is a local protection-center action log plus automatic settings backup checkpoints. It does not yet provide field-by-field undo for metadata edited elsewhere or remote database rows.',
+            style: TextStyle(color: Colors.white60, height: 1.4)),
       ),
     ));
     for (final record in _backups) {
       rows.add(Card(
         child: ListTile(
-          leading: Icon(record.isLatest ? Icons.history_toggle_off_rounded : Icons.restore_rounded),
-          title: Text('${record.isLatest ? 'Latest checkpoint' : 'Recovery point'} · ${_timestamp(record.createdAt)}'),
-          subtitle: Text('${record.preferenceCount} setting(s) · ${record.reason.replaceAll('_', ' ')}'),
+          leading: Icon(record.isLatest
+              ? Icons.history_toggle_off_rounded
+              : Icons.restore_rounded),
+          title: Text(
+              '${record.isLatest ? 'Latest checkpoint' : 'Recovery point'} · ${_timestamp(record.createdAt)}'),
+          subtitle: Text(
+              '${record.preferenceCount} setting(s) · ${record.reason.replaceAll('_', ' ')}'),
           trailing: TextButton(
             onPressed: _busy ? null : () => _restore(record),
             child: const Text('Restore'),
@@ -539,18 +626,24 @@ class _LibraryProtectionCenterScreenState
     }
     rows.add(const Padding(
       padding: EdgeInsets.fromLTRB(4, 12, 4, 6),
-      child: Text('Recent protection-center actions', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+      child: Text('Recent protection-center actions',
+          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
     ));
     if (_events.isEmpty) {
-      rows.add(const Card(child: Padding(padding: EdgeInsets.all(14), child: Text('No actions recorded in this center yet.'))));
+      rows.add(const Card(
+          child: Padding(
+              padding: EdgeInsets.all(14),
+              child: Text('No actions recorded in this center yet.'))));
     }
     for (final event in _events) {
       final at = DateTime.tryParse(event['at']?.toString() ?? '');
       rows.add(Card(
         child: ListTile(
           leading: const Icon(Icons.receipt_long_outlined),
-          title: Text((event['action']?.toString() ?? 'action').replaceAll('_', ' ')),
-          subtitle: Text('${event['detail'] ?? ''}${at == null ? '' : '\n${_timestamp(at)}'}'),
+          title: Text(
+              (event['action']?.toString() ?? 'action').replaceAll('_', ' ')),
+          subtitle: Text(
+              '${event['detail'] ?? ''}${at == null ? '' : '\n${_timestamp(at)}'}'),
           isThreeLine: true,
         ),
       ));
@@ -571,17 +664,29 @@ class _LibraryProtectionCenterScreenState
         label: Text('$label: $value'),
       );
 
-  Widget _metricCard({required IconData icon, required String title, required String detail, required Color color}) => Card(
+  Widget _metricCard(
+          {required IconData icon,
+          required String title,
+          required String detail,
+          required Color color}) =>
+      Card(
         child: Padding(
           padding: const EdgeInsets.all(15),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Icon(icon, color: color, size: 25),
             const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
-              const SizedBox(height: 5),
-              Text(detail, style: const TextStyle(color: Colors.white60, height: 1.4, fontSize: 12)),
-            ])),
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text(title,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w900, fontSize: 15)),
+                  const SizedBox(height: 5),
+                  Text(detail,
+                      style: const TextStyle(
+                          color: Colors.white60, height: 1.4, fontSize: 12)),
+                ])),
           ]),
         ),
       );

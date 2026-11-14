@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'backend_api.dart';
 import 'app_core.dart';
 import 'core/models/profile_governance.dart';
@@ -252,20 +252,23 @@ class _ProfileAdministrationScreenState
                 ),
                 SwitchListTile(
                   title: const UniversalText('Require profile PIN protection'),
-                  subtitle: const UniversalText('The profile is locked on this device until its PIN is entered. Configure the PIN on every device that uses this profile.'),
+                  subtitle: const UniversalText(
+                      'The profile is locked on this device until its PIN is entered. Configure the PIN on every device that uses this profile.'),
                   value: _governance.profilePinEnabled,
                   onChanged: _saving
                       ? null
                       : (value) async {
                           if (!value) {
-                            await _save(_governance.copyWith(profilePinEnabled: false));
+                            await _save(
+                                _governance.copyWith(profilePinEnabled: false));
                             return;
                           }
                           if (!_pinConfigured) {
                             final configured = await _configureProfilePin();
                             if (!configured) return;
                           }
-                          await _save(_governance.copyWith(profilePinEnabled: true));
+                          await _save(
+                              _governance.copyWith(profilePinEnabled: true));
                         },
                 ),
               ],

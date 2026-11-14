@@ -2,7 +2,7 @@
 // Purpose: Sourced, spoiler-aware facts, stories, and discovery trails for the
 // universal media knowledge layer.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'backend_api.dart';
 import 'app_core.dart';

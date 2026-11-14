@@ -1,9 +1,10 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'backend_api.dart';
 import 'app_core.dart';
 import 'localization.dart';
 
 import 'backend_api_compatibility.dart';
+
 /// Account-scoped presentation and editing surface for canonical versions,
 /// version-specific scenes, and typed story relationships.
 class MediaContinuityPanel extends StatefulWidget {

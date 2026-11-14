@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../app_core.dart';
 import '../backend_api.dart';
@@ -18,6 +18,7 @@ import '../player.dart';
 import '../presence/account_profile_presence_service.dart';
 import '../smart_search.dart';
 import '../widgets/account_profile_presence_strip.dart';
+import '../widgets/media_status_badges.dart';
 import 'entertainment_command_center_screen.dart';
 import 'personal_discovery_lists_screen.dart';
 import 'smart_media_import_center_screen.dart';
@@ -88,7 +89,9 @@ class _MyMediaHubScreenState extends State<MyMediaHubScreen> {
       unawaited(MusicLibraryStore.instance.initializeForProfile(profileId));
       unawaited(_loadRecent());
       if (profileId != null) {
-        if (_app.backendApi.isAuthenticated) unawaited(_app.loadRecommendations());
+        if (_app.backendApi.isAuthenticated) {
+          unawaited(_app.loadRecommendations());
+        }
         AccountProfilePresenceService.instance.start(
           profileId: profileId,
           activityType: 'browsing',
@@ -101,8 +104,10 @@ class _MyMediaHubScreenState extends State<MyMediaHubScreen> {
 
   void _onPresenceChanged() {
     final active = AccountProfilePresenceService.instance.otherActiveProfiles;
-    final next = active.map((profile) =>
-      '${profile.profileId}|${profile.activityType ?? ""}|${profile.activityText ?? ""}').toSet();
+    final next = active
+        .map((profile) =>
+            '${profile.profileId}|${profile.activityType ?? ""}|${profile.activityText ?? ""}')
+        .toSet();
     if (!_presenceSnapshotReady) {
       _presenceSnapshotReady = true;
       _knownPresenceActivity = next;
@@ -114,7 +119,8 @@ class _MyMediaHubScreenState extends State<MyMediaHubScreen> {
     if (!mounted) return;
     setState(() {});
     for (final profile in active) {
-      final key = '${profile.profileId}|${profile.activityType ?? ""}|${profile.activityText ?? ""}';
+      final key =
+          '${profile.profileId}|${profile.activityType ?? ""}|${profile.activityText ?? ""}';
       if (!newlyActive.contains(key)) continue;
       final type = profile.activityType;
       if (type != 'watching' && type != 'listening') continue;
@@ -135,7 +141,12 @@ class _MyMediaHubScreenState extends State<MyMediaHubScreen> {
     }
     final profileId = _app.currentProfile?.id;
     if (profileId == null || profileId.trim().isEmpty) {
-      if (mounted) setState(() { _recent = const <RecentPlaybackEntry>[]; _loadingRecent = false; });
+      if (mounted) {
+        setState(() {
+          _recent = const <RecentPlaybackEntry>[];
+          _loadingRecent = false;
+        });
+      }
       return;
     }
     _syncingContinuity = true;
@@ -206,20 +217,22 @@ class _MyMediaHubScreenState extends State<MyMediaHubScreen> {
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not save recommendation feedback: $error')),
+        SnackBar(
+            content: Text('Could not save recommendation feedback: $error')),
       );
     }
   }
 
-  List<MusicTrack> get _continueListening => MusicLibraryStore.instance.tracks
-      .where((track) {
+  List<MusicTrack> get _continueListening =>
+      MusicLibraryStore.instance.tracks.where((track) {
         final progress = _app.getPlaybackProgress(track.id);
-        return progress > 0.01 && progress < 0.95 &&
+        return progress > 0.01 &&
+            progress < 0.95 &&
             track.audioUrl?.trim().isNotEmpty == true;
-      })
-      .toList(growable: false)
-    ..sort((a, b) => _app.getPlaybackProgress(b.id)
-        .compareTo(_app.getPlaybackProgress(a.id)));
+      }).toList(growable: false)
+        ..sort((a, b) => _app
+            .getPlaybackProgress(b.id)
+            .compareTo(_app.getPlaybackProgress(a.id)));
 
   Widget _musicResumeRail(List<MusicTrack> tracks) {
     if (tracks.isEmpty) {
@@ -252,11 +265,13 @@ class _MyMediaHubScreenState extends State<MyMediaHubScreen> {
                         ClipRRect(
                           borderRadius: BorderRadius.circular(9),
                           child: (track.artworkUrl?.trim().isNotEmpty == true)
-                              ? Image.network(track.artworkUrl!, fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => const ColoredBox(
-                                    color: Colors.black12,
-                                    child: Icon(Icons.album_rounded),
-                                  ))
+                              ? Image.network(track.artworkUrl!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) =>
+                                      const ColoredBox(
+                                        color: Colors.black12,
+                                        child: Icon(Icons.album_rounded),
+                                      ))
                               : const ColoredBox(
                                   color: Colors.black12,
                                   child: Icon(Icons.album_rounded),
@@ -266,16 +281,22 @@ class _MyMediaHubScreenState extends State<MyMediaHubScreen> {
                           left: 0,
                           right: 0,
                           bottom: 0,
-                          child: LinearProgressIndicator(value: progress, minHeight: 4),
+                          child: LinearProgressIndicator(
+                              value: progress, minHeight: 4),
                         ),
                       ],
                     ),
                   ),
                 ),
                 const SizedBox(height: 5),
-                Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
-                Text(track.artist, maxLines: 1, overflow: TextOverflow.ellipsis,
+                Text(track.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.w800)),
+                Text(track.artist,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall),
               ],
             ),
@@ -310,7 +331,9 @@ class _MyMediaHubScreenState extends State<MyMediaHubScreen> {
     final profileId = _app.currentProfile?.id;
     if (profileId == null || profileId.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select a profile before starting a shared session.')),
+        const SnackBar(
+            content:
+                Text('Select a profile before starting a shared session.')),
       );
       return;
     }
@@ -326,7 +349,9 @@ class _MyMediaHubScreenState extends State<MyMediaHubScreen> {
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not start shared viewing: ${error.toString().replaceFirst('Exception: ', '')}')),
+        SnackBar(
+            content: Text(
+                'Could not start shared viewing: ${error.toString().replaceFirst('Exception: ', '')}')),
       );
     }
   }
@@ -336,7 +361,9 @@ class _MyMediaHubScreenState extends State<MyMediaHubScreen> {
     if (!mounted) return;
     if (!MusicPlaybackController.instance.isPlaying) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('This track does not currently have a playable audio stream.')),
+        const SnackBar(
+            content: Text(
+                'This track does not currently have a playable audio stream.')),
       );
     }
   }
@@ -351,8 +378,15 @@ class _MyMediaHubScreenState extends State<MyMediaHubScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
-                  Text(subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                  Text(title,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w900)),
+                  Text(subtitle,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant)),
                 ],
               ),
             ),
@@ -360,7 +394,10 @@ class _MyMediaHubScreenState extends State<MyMediaHubScreen> {
         ),
       );
 
-  Widget _mediaRail(List<MediaItem> items, {bool showProgress = false, bool allowGroup = false, bool allowFeedback = false}) {
+  Widget _mediaRail(List<MediaItem> items,
+      {bool showProgress = false,
+      bool allowGroup = false,
+      bool allowFeedback = false}) {
     if (items.isEmpty) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 12),
@@ -383,14 +420,21 @@ class _MyMediaHubScreenState extends State<MyMediaHubScreen> {
               children: [
                 Expanded(
                   child: InkWell(
-                    onTap: () => showProgress ? _playMedia(media) : _openMedia(media),
+                    onTap: () =>
+                        showProgress ? _playMedia(media) : _openMedia(media),
                     borderRadius: BorderRadius.circular(10),
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(10),
-                          child: CatalogPosterImage(media: media, fit: BoxFit.cover),
+                          child: CatalogPosterImage(
+                              media: media, fit: BoxFit.cover),
+                        ),
+                        Positioned(
+                          top: 5,
+                          right: 5,
+                          child: MediaStatusBadgeRow(media: media, dense: true),
                         ),
                         if (showProgress)
                           Positioned(
@@ -408,8 +452,10 @@ class _MyMediaHubScreenState extends State<MyMediaHubScreen> {
                           bottom: 8,
                           child: CircleAvatar(
                             radius: 15,
-                            backgroundColor: Colors.black.withValues(alpha: .78),
-                            child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 19),
+                            backgroundColor:
+                                Colors.black.withValues(alpha: .78),
+                            child: const Icon(Icons.play_arrow_rounded,
+                                color: Colors.white, size: 19),
                           ),
                         ),
                       ],
@@ -417,7 +463,11 @@ class _MyMediaHubScreenState extends State<MyMediaHubScreen> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                Text(media.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
+                Text(media.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.w800)),
                 if (allowGroup)
                   Align(
                     alignment: Alignment.centerLeft,
@@ -425,7 +475,9 @@ class _MyMediaHubScreenState extends State<MyMediaHubScreen> {
                       onPressed: () => _watchTogether(media),
                       icon: const Icon(Icons.groups_rounded, size: 14),
                       label: const Text('Watch together'),
-                      style: TextButton.styleFrom(padding: EdgeInsets.zero, visualDensity: VisualDensity.compact),
+                      style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          visualDensity: VisualDensity.compact),
                     ),
                   ),
                 if (allowFeedback)
@@ -434,14 +486,17 @@ class _MyMediaHubScreenState extends State<MyMediaHubScreen> {
                       IconButton(
                         tooltip: 'Recommend more like this',
                         visualDensity: VisualDensity.compact,
-                        onPressed: () => _recommendationFeedback(media, 'moreLikeThis'),
+                        onPressed: () =>
+                            _recommendationFeedback(media, 'moreLikeThis'),
                         icon: const Icon(Icons.thumb_up_alt_outlined, size: 17),
                       ),
                       IconButton(
                         tooltip: 'Show me less of this',
                         visualDensity: VisualDensity.compact,
-                        onPressed: () => _recommendationFeedback(media, 'notInterested'),
-                        icon: const Icon(Icons.thumb_down_alt_outlined, size: 17),
+                        onPressed: () =>
+                            _recommendationFeedback(media, 'notInterested'),
+                        icon:
+                            const Icon(Icons.thumb_down_alt_outlined, size: 17),
                       ),
                     ],
                   ),
@@ -463,7 +518,8 @@ class _MyMediaHubScreenState extends State<MyMediaHubScreen> {
     if (_recent.isEmpty) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 12),
-        child: Text('Your recently played movies, shows and music will appear here.'),
+        child: Text(
+            'Your recently played movies, shows and music will appear here.'),
       );
     }
     final mediaById = _mediaById;
@@ -485,12 +541,22 @@ class _MyMediaHubScreenState extends State<MyMediaHubScreen> {
                   child: video != null
                       ? CatalogPosterImage(media: video, fit: BoxFit.cover)
                       : (entry.artworkUrl?.trim().isNotEmpty == true
-                          ? Image.network(entry.artworkUrl!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12, child: Icon(Icons.music_note_rounded)))
-                          : const ColoredBox(color: Colors.black12, child: Icon(Icons.play_circle_outline_rounded))),
+                          ? Image.network(entry.artworkUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const ColoredBox(
+                                  color: Colors.black12,
+                                  child: Icon(Icons.music_note_rounded)))
+                          : const ColoredBox(
+                              color: Colors.black12,
+                              child: Icon(Icons.play_circle_outline_rounded))),
                 ),
               ),
-              title: Text(entry.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: Text(entry.subtitle ?? (entry.kind == 'audio' ? 'Music' : 'Video'), maxLines: 1, overflow: TextOverflow.ellipsis),
+              title: Text(entry.title,
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text(
+                  entry.subtitle ?? (entry.kind == 'audio' ? 'Music' : 'Video'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
               trailing: IconButton(
                 tooltip: 'Play again',
                 onPressed: video != null
@@ -518,7 +584,8 @@ class _MyMediaHubScreenState extends State<MyMediaHubScreen> {
     final continueWatching = _continueWatching;
     final recommendations = _recommended;
     final musicTracks = MusicLibraryStore.instance.tracks
-        .where((track) => (MusicLibraryStore.instance.listenCounts[track.id] ?? 0) > 0)
+        .where((track) =>
+            (MusicLibraryStore.instance.listenCounts[track.id] ?? 0) > 0)
         .toList()
       ..sort((a, b) => (MusicLibraryStore.instance.listenCounts[b.id] ?? 0)
           .compareTo(MusicLibraryStore.instance.listenCounts[a.id] ?? 0));
@@ -537,9 +604,12 @@ class _MyMediaHubScreenState extends State<MyMediaHubScreen> {
               runSpacing: 8,
               children: [
                 _summaryChip(Icons.movie_outlined, '${_library.length} titles'),
-                _summaryChip(Icons.play_circle_outline_rounded, '${continueWatching.length} in progress'),
-                _summaryChip(Icons.history_rounded, '${_recent.length} recent plays'),
-                _summaryChip(Icons.headphones_rounded, '${MusicLibraryStore.instance.listenCounts.values.fold<int>(0, (sum, count) => sum + count)} music plays'),
+                _summaryChip(Icons.play_circle_outline_rounded,
+                    '${continueWatching.length} in progress'),
+                _summaryChip(
+                    Icons.history_rounded, '${_recent.length} recent plays'),
+                _summaryChip(Icons.headphones_rounded,
+                    '${MusicLibraryStore.instance.listenCounts.values.fold<int>(0, (sum, count) => sum + count)} music plays'),
               ],
             ),
             Card(
@@ -550,47 +620,71 @@ class _MyMediaHubScreenState extends State<MyMediaHubScreen> {
                   runSpacing: 9,
                   children: [
                     FilledButton.tonalIcon(
-                      onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const EntertainmentCommandCenterScreen())),
+                      onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  const EntertainmentCommandCenterScreen())),
                       icon: const Icon(Icons.dashboard_customize_rounded),
                       label: const Text('Command Center'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const SmartSearchScreen())),
+                      onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                              builder: (_) => const SmartSearchScreen())),
                       icon: const Icon(Icons.search_rounded),
                       label: const Text('Universal Search'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const PersonalDiscoveryListsScreen())),
+                      onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  const PersonalDiscoveryListsScreen())),
                       icon: const Icon(Icons.bookmarks_outlined),
                       label: const Text('My Lists'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const SmartMediaImportCenterScreen())),
+                      onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  const SmartMediaImportCenterScreen())),
                       icon: const Icon(Icons.library_add_rounded),
                       label: const Text('Import Media'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const OfflineSyncCenterScreen())),
+                      onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                              builder: (_) => const OfflineSyncCenterScreen())),
                       icon: const Icon(Icons.cloud_sync_rounded),
                       label: const Text('Offline & Sync'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const MediaHealthScreen())),
+                      onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                              builder: (_) => const MediaHealthScreen())),
                       icon: const Icon(Icons.health_and_safety_rounded),
                       label: const Text('Media Health'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const LibraryProtectionCenterScreen())),
+                      onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  const LibraryProtectionCenterScreen())),
                       icon: const Icon(Icons.backup_rounded),
                       label: const Text('Backup & Recovery'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const LivingRoomControlsScreen())),
+                      onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  const LivingRoomControlsScreen())),
                       icon: const Icon(Icons.gamepad_rounded),
                       label: const Text('Controller Controls'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const MediaWrappedCollectionsScreen())),
+                      onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  const MediaWrappedCollectionsScreen())),
                       icon: const Icon(Icons.auto_awesome_rounded),
                       label: const Text('Entertainment Wrapped'),
                     ),
@@ -599,27 +693,44 @@ class _MyMediaHubScreenState extends State<MyMediaHubScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            _sectionTitle('Continue Watching', 'Resume movies and episodes using saved playback progress.', Icons.play_circle_outline_rounded),
+            _sectionTitle(
+                'Continue Watching',
+                'Resume movies and episodes using saved playback progress.',
+                Icons.play_circle_outline_rounded),
             _mediaRail(continueWatching, showProgress: true, allowGroup: true),
             const SizedBox(height: 22),
-            _sectionTitle('Continue Listening', 'Resume imported music at its saved position on this profile.', Icons.headphones_rounded),
+            _sectionTitle(
+                'Continue Listening',
+                'Resume imported music at its saved position on this profile.',
+                Icons.headphones_rounded),
             _musicResumeRail(_continueListening),
             const SizedBox(height: 22),
-            _sectionTitle('Recently Played', 'Recent playback metadata synced for this profile when account connectivity is available.', Icons.history_rounded),
+            _sectionTitle(
+                'Recently Played',
+                'Recent playback metadata synced for this profile when account connectivity is available.',
+                Icons.history_rounded),
             _recentList(),
             const SizedBox(height: 22),
-            _sectionTitle('Recommended for You', 'Profile recommendations with feedback controls; local suggestions appear when the backend is unavailable.', Icons.auto_awesome_rounded),
+            _sectionTitle(
+                'Recommended for You',
+                'Profile recommendations with feedback controls; local suggestions appear when the backend is unavailable.',
+                Icons.auto_awesome_rounded),
             _mediaRail(recommendations, allowGroup: true, allowFeedback: true),
             if (musicTracks.isNotEmpty) ...[
               const SizedBox(height: 22),
-              _sectionTitle('Most Played Music', 'Your most-listened imported tracks.', Icons.headphones_rounded),
+              _sectionTitle(
+                  'Most Played Music',
+                  'Your most-listened imported tracks.',
+                  Icons.headphones_rounded),
               for (final track in musicTracks.take(8))
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const CircleAvatar(child: Icon(Icons.music_note_rounded)),
+                  leading:
+                      const CircleAvatar(child: Icon(Icons.music_note_rounded)),
                   title: Text(track.title),
                   subtitle: Text('${track.artist} · ${track.album}'),
-                  trailing: Text('${MusicLibraryStore.instance.listenCounts[track.id] ?? 0} plays'),
+                  trailing: Text(
+                      '${MusicLibraryStore.instance.listenCounts[track.id] ?? 0} plays'),
                   onTap: () => _playTrack(track),
                 ),
             ],

@@ -6,7 +6,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'backend_api.dart';
 import 'app_core.dart';
 import 'details.dart';
@@ -146,7 +146,11 @@ class _SurpriseMeScreenState extends State<SurpriseMeScreen> {
   MediaItem? selected;
   String mode = 'Random Everything';
   void pick() {
-    final library = AppController.instance.library;
+    final app = AppController.instance;
+    final profile = app.currentProfile;
+    final library = app.library
+        .where((media) => media.isAccessibleTo(profile))
+        .toList(growable: false);
     if (library.isEmpty) return;
     final candidates = mode == 'Random Everything'
         ? library
@@ -314,7 +318,8 @@ class _LibraryHealthScreenState extends State<LibraryHealthScreen> {
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() => _repairMessage = 'Artwork repair could not finish: $error');
+      setState(
+          () => _repairMessage = 'Artwork repair could not finish: $error');
     } finally {
       if (mounted) setState(() => _repairingArtwork = false);
     }
@@ -326,30 +331,49 @@ class _LibraryHealthScreenState extends State<LibraryHealthScreen> {
       animation: AppController.instance,
       builder: (context, _) {
         final library = AppController.instance.library.toList(growable: false);
-        final missingArtwork = library.where((media) =>
-          (media.imageUrl?.trim().isNotEmpty != true) &&
-          (MediaArtworkAutoResolver.isMovieOrShow(media) || MediaArtworkAutoResolver.isAlbum(media))).toList(growable: false);
-        final physical = library.where((media) => media.discType != null).length;
+        final missingArtwork = library
+            .where((media) =>
+                (media.imageUrl?.trim().isNotEmpty != true) &&
+                (MediaArtworkAutoResolver.isMovieOrShow(media) ||
+                    MediaArtworkAutoResolver.isAlbum(media)))
+            .toList(growable: false);
+        final physical =
+            library.where((media) => media.discType != null).length;
         final duplicateGroups = <String, List<MediaItem>>{};
         for (final media in library) {
           final normalized = _normalizeTitle(media.title);
           if (normalized.isEmpty) continue;
-          duplicateGroups.putIfAbsent('${media.type.toLowerCase()}|$normalized', () => <MediaItem>[]).add(media);
+          duplicateGroups
+              .putIfAbsent('${media.type.toLowerCase()}|$normalized',
+                  () => <MediaItem>[])
+              .add(media);
         }
         final duplicateCount = duplicateGroups.values
             .where((items) => items.length > 1)
             .fold<int>(0, (sum, items) => sum + items.length - 1);
-        final series = library.where((media) => media.isSeries ||
-          const <String>{'show', 'tvshow', 'tv show', 'series', 'television'}
-              .contains(media.type.toLowerCase().trim())).toList(growable: false);
+        final series = library
+            .where((media) =>
+                media.isSeries ||
+                const <String>{
+                  'show',
+                  'tvshow',
+                  'tv show',
+                  'series',
+                  'television'
+                }.contains(media.type.toLowerCase().trim()))
+            .toList(growable: false);
         final seriesWithoutEpisodes = series.where((media) {
           if (media.seasons.isEmpty) return true;
-          return !media.seasons.any((season) => season['episodes'] is List &&
+          return !media.seasons.any((season) =>
+              season['episodes'] is List &&
               (season['episodes'] as List).isNotEmpty);
         }).length;
-        final thinMetadata = library.where((media) =>
-          (media.description?.trim().isNotEmpty != true) &&
-          media.genres.isEmpty && media.tags.isEmpty).length;
+        final thinMetadata = library
+            .where((media) =>
+                (media.description?.trim().isNotEmpty != true) &&
+                media.genres.isEmpty &&
+                media.tags.isEmpty)
+            .length;
         return Scaffold(
           appBar: AppBar(title: const UniversalText('Library Health')),
           body: ListView(
@@ -365,11 +389,16 @@ class _LibraryHealthScreenState extends State<LibraryHealthScreen> {
                 style: TextStyle(color: Colors.white60, height: 1.4),
               ),
               const SizedBox(height: 16),
-              _metric('Media items', '${library.length}', Icons.video_library_outlined),
-              _metric('Missing poster/cover', '${missingArtwork.length}', Icons.image_not_supported_outlined),
-              _metric('Potential duplicate entries', '$duplicateCount', Icons.content_copy_rounded),
-              _metric('Shows without episode metadata', '$seriesWithoutEpisodes', Icons.live_tv_outlined),
-              _metric('Titles with sparse metadata', '$thinMetadata', Icons.info_outline_rounded),
+              _metric('Media items', '${library.length}',
+                  Icons.video_library_outlined),
+              _metric('Missing poster/cover', '${missingArtwork.length}',
+                  Icons.image_not_supported_outlined),
+              _metric('Potential duplicate entries', '$duplicateCount',
+                  Icons.content_copy_rounded),
+              _metric('Shows without episode metadata',
+                  '$seriesWithoutEpisodes', Icons.live_tv_outlined),
+              _metric('Titles with sparse metadata', '$thinMetadata',
+                  Icons.info_outline_rounded),
               _metric('Physical imports', '$physical', Icons.album_outlined),
               const SizedBox(height: 16),
               FilledButton.icon(
@@ -377,7 +406,10 @@ class _LibraryHealthScreenState extends State<LibraryHealthScreen> {
                     ? null
                     : () => unawaited(_repairMissingArtwork(missingArtwork)),
                 icon: _repairingArtwork
-                    ? const SizedBox(width: 17, height: 17, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(
+                        width: 17,
+                        height: 17,
+                        child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.auto_fix_high_rounded),
                 label: Text(_repairingArtwork
                     ? 'Queueing artwork repair…'
@@ -387,7 +419,8 @@ class _LibraryHealthScreenState extends State<LibraryHealthScreen> {
               ),
               if (_repairMessage != null) ...[
                 const SizedBox(height: 10),
-                Text(_repairMessage!, style: const TextStyle(color: Colors.white70, height: 1.4)),
+                Text(_repairMessage!,
+                    style: const TextStyle(color: Colors.white70, height: 1.4)),
               ],
               const SizedBox(height: 20),
               const UniversalText('What the checks mean',
@@ -408,7 +441,8 @@ class _LibraryHealthScreenState extends State<LibraryHealthScreen> {
         child: ListTile(
           leading: Icon(icon),
           title: Text(title),
-          trailing: Text(value, style: const TextStyle(fontWeight: FontWeight.w800)),
+          trailing:
+              Text(value, style: const TextStyle(fontWeight: FontWeight.w800)),
         ),
       );
 }
@@ -504,7 +538,8 @@ class MediaPassportItemScreen extends StatelessWidget {
   const MediaPassportItemScreen({super.key, required this.item});
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: LocalizedMediaText(item.title, preserveOriginal: true)),
+        appBar: AppBar(
+            title: LocalizedMediaText(item.title, preserveOriginal: true)),
         body: ListView(
           padding: const EdgeInsets.all(18),
           children: [

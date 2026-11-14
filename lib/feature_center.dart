@@ -2,7 +2,7 @@
 // Purpose: Implements the feature center portion of the streaming service.
 // Part of the documented Flutter/home-server architecture.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app_core.dart';
 import 'collection_details.dart';
@@ -16,12 +16,10 @@ class FeatureCenterScreen extends StatefulWidget {
   const FeatureCenterScreen({super.key});
 
   @override
-  State<FeatureCenterScreen> createState() =>
-      _FeatureCenterScreenState();
+  State<FeatureCenterScreen> createState() => _FeatureCenterScreenState();
 }
 
-class _FeatureCenterScreenState
-    extends State<FeatureCenterScreen> {
+class _FeatureCenterScreenState extends State<FeatureCenterScreen> {
   int tab = 0;
 
   @override
@@ -121,8 +119,7 @@ class RecommendationsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = AppController.instance;
-    final profiles =
-        controller.currentAccount?.profiles ?? [];
+    final profiles = controller.currentAccount?.profiles ?? [];
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(
@@ -143,24 +140,24 @@ class RecommendationsPanel extends StatelessWidget {
           _EmptyFeatureCard(
             icon: Icons.people_outline,
             title: 'More profiles are needed',
-            message:
-                'Add at least two profiles to compare viewing interests.',
+            message: 'Add at least two profiles to compare viewing interests.',
           )
         else
           ...profiles.map(
             (profile) {
-              final watchedCount =
-                  controller.watched.where(
-                (item) => item.id.isNotEmpty,
-              ).length;
+              final watchedCount = controller.watched
+                  .where(
+                    (item) => item.id.isNotEmpty,
+                  )
+                  .length;
 
-              final likedCount =
-                  controller.liked.where(
-                (item) => item.id.isNotEmpty,
-              ).length;
+              final likedCount = controller.liked
+                  .where(
+                    (item) => item.id.isNotEmpty,
+                  )
+                  .length;
 
-              final recommendations =
-                  _recommendationsForProfile(
+              final recommendations = _recommendationsForProfile(
                 controller,
                 profile.id,
               );
@@ -214,8 +211,7 @@ class RecommendationsPanel extends StatelessWidget {
           ),
         const SizedBox(height: 8),
         FilledButton.icon(
-          onPressed: () =>
-              _showCreateRecommendation(context),
+          onPressed: () => _showCreateRecommendation(context),
           icon: const Icon(Icons.add_rounded),
           label: const UniversalText(
             'Create recommendation vote',
@@ -367,12 +363,10 @@ class _CreateVoteDialog extends StatefulWidget {
   const _CreateVoteDialog();
 
   @override
-  State<_CreateVoteDialog> createState() =>
-      _CreateVoteDialogState();
+  State<_CreateVoteDialog> createState() => _CreateVoteDialogState();
 }
 
-class _CreateVoteDialogState
-    extends State<_CreateVoteDialog> {
+class _CreateVoteDialogState extends State<_CreateVoteDialog> {
   final controller = TextEditingController();
 
   @override
@@ -391,8 +385,7 @@ class _CreateVoteDialogState
     AppController.instance.activity.add(
       ActivityItem(
         id: 'recommendation_create_${DateTime.now().microsecondsSinceEpoch}',
-        action:
-            'Recommendation created • votes open to everyone',
+        action: 'Recommendation created • votes open to everyone',
         title: title,
         timestamp: DateTime.now(),
       ),
@@ -444,19 +437,18 @@ class CollectionsPanel extends StatefulWidget {
   const CollectionsPanel({super.key});
 
   @override
-  State<CollectionsPanel> createState() =>
-      _CollectionsPanelState();
+  State<CollectionsPanel> createState() => _CollectionsPanelState();
 }
 
-class _CollectionsPanelState
-    extends State<CollectionsPanel> {
+class _CollectionsPanelState extends State<CollectionsPanel> {
   String _searchQuery = '';
   late LibraryViewMode _collectionViewMode;
 
   @override
   void initState() {
     super.initState();
-    final defaultLayout = AppController.instance.currentCollectionPreferences.layout;
+    final defaultLayout =
+        AppController.instance.currentCollectionPreferences.layout;
     _collectionViewMode = LibraryViewPreferenceStore.get(
       'collections-library',
       fallback: defaultLayout.toLowerCase() == 'list'
@@ -477,11 +469,9 @@ class _CollectionsPanelState
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
-        final prefs =
-            controller.currentCollectionPreferences;
+        final prefs = controller.currentCollectionPreferences;
 
-        final normalizedSearch =
-            _searchQuery.trim().toLowerCase();
+        final normalizedSearch = _searchQuery.trim().toLowerCase();
 
         final all = controller.collections.where(
           (collection) {
@@ -489,11 +479,9 @@ class _CollectionsPanelState
               return true;
             }
 
-            final name =
-                collection.name.toLowerCase();
+            final name = collection.name.toLowerCase();
 
-            final description =
-                collection.description.toLowerCase();
+            final description = collection.description.toLowerCase();
 
             return name.contains(normalizedSearch) ||
                 description.contains(normalizedSearch);
@@ -502,14 +490,12 @@ class _CollectionsPanelState
 
         final mine = all.where(
           (collection) =>
-              collection.createdByProfileId ==
-              controller.currentProfile?.id,
+              collection.createdByProfileId == controller.currentProfile?.id,
         );
 
         final liked = all.where(
           (collection) =>
-              collection.isLikedByCurrentProfile &&
-              !mine.contains(collection),
+              collection.isLikedByCurrentProfile && !mine.contains(collection),
         );
 
         final automatic = all.where(
@@ -526,8 +512,7 @@ class _CollectionsPanelState
         );
 
         return Scaffold(
-          backgroundColor:
-              Theme.of(context).scaffoldBackgroundColor,
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           appBar: AppBar(
             title: const UniversalText('Collections'),
             actions: const [PageCustomizeButton(pageId: 'collections')],
@@ -577,8 +562,7 @@ class _CollectionsPanelState
                   });
                 },
                 decoration: InputDecoration(
-                  prefixIcon:
-                      const Icon(Icons.search_rounded),
+                  prefixIcon: const Icon(Icons.search_rounded),
                   hintText: tr('Search collections'),
                   border: const OutlineInputBorder(),
                   suffixIcon: _searchQuery.isEmpty
@@ -680,8 +664,7 @@ class _CollectionsPanelState
   ) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns =
-            constraints.maxWidth >= 800 ? 4 : 2;
+        final columns = constraints.maxWidth >= 800 ? 4 : 2;
 
         final cards = [
           _collectionStat(
@@ -712,8 +695,7 @@ class _CollectionsPanelState
           mainAxisSpacing: 10,
           childAspectRatio: 2.2,
           shrinkWrap: true,
-          physics:
-              const NeverScrollableScrollPhysics(),
+          physics: const NeverScrollableScrollPhysics(),
           children: cards,
         );
       },
@@ -761,8 +743,7 @@ class _CollectionsPanelState
     List<dynamic> mine,
     List<dynamic> liked,
   ) {
-    final sections =
-        controller.collectionSectionOrder;
+    final sections = controller.collectionSectionOrder;
 
     final widgets = <Widget>[];
 
@@ -813,12 +794,10 @@ class _CollectionsPanelState
 
     switch (title) {
       case 'My Collections':
-        description =
-            'Collections created by profiles on this account.';
+        description = 'Collections created by profiles on this account.';
         break;
       case 'Liked Collections':
-        description =
-            'Collections liked by the current profile.';
+        description = 'Collections liked by the current profile.';
         break;
       default:
         description =
@@ -831,13 +810,11 @@ class _CollectionsPanelState
         bottom: 10,
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
@@ -887,7 +864,8 @@ class _CollectionsPanelState
         final editable = collection.canCurrentProfileEdit();
         return LibraryViewEntry(
           title: collection.name,
-          subtitle: '${members.length} title${members.length == 1 ? '' : 's'} · ${collection.isAutomatic ? 'Automatic' : 'Custom'}${collection.description.trim().isEmpty ? '' : ' · ${collection.description.trim()}'}',
+          subtitle:
+              '${members.length} title${members.length == 1 ? '' : 's'} · ${collection.isAutomatic ? 'Automatic' : 'Custom'}${collection.description.trim().isEmpty ? '' : ' · ${collection.description.trim()}'}',
           year: collection.createdAt.year,
           imageUrl: imageUrl,
           fallbackIcon: collection.isAutomatic
@@ -898,9 +876,13 @@ class _CollectionsPanelState
             spacing: 0,
             children: [
               IconButton(
-                tooltip: collection.isLikedByCurrentProfile ? tr('Unlike collection') : tr('Like collection'),
+                tooltip: collection.isLikedByCurrentProfile
+                    ? tr('Unlike collection')
+                    : tr('Like collection'),
                 onPressed: () => controller.toggleCollectionLike(collection.id),
-                icon: Icon(collection.isLikedByCurrentProfile ? Icons.favorite_rounded : Icons.favorite_border_rounded),
+                icon: Icon(collection.isLikedByCurrentProfile
+                    ? Icons.favorite_rounded
+                    : Icons.favorite_border_rounded),
               ),
               PopupMenuButton<String>(
                 tooltip: tr('Collection actions'),
@@ -912,14 +894,23 @@ class _CollectionsPanelState
                   }
                 },
                 itemBuilder: (context) => [
-                  const PopupMenuItem(value: 'play', child: UniversalText('Play')),
-                  const PopupMenuItem(value: 'browse', child: UniversalText('Browse titles')),
-                  if (!collection.isAutomatic && collection.canCurrentProfileAdd())
-                    const PopupMenuItem(value: 'add', child: UniversalText('Add title')),
-                  if (collection.isShared && editable && !collection.isAutomatic)
-                    const PopupMenuItem(value: 'contributors', child: UniversalText('Manage contributors')),
+                  const PopupMenuItem(
+                      value: 'play', child: UniversalText('Play')),
+                  const PopupMenuItem(
+                      value: 'browse', child: UniversalText('Browse titles')),
+                  if (!collection.isAutomatic &&
+                      collection.canCurrentProfileAdd())
+                    const PopupMenuItem(
+                        value: 'add', child: UniversalText('Add title')),
+                  if (collection.isShared &&
+                      editable &&
+                      !collection.isAutomatic)
+                    const PopupMenuItem(
+                        value: 'contributors',
+                        child: UniversalText('Manage contributors')),
                   if (!collection.isOfficial && editable)
-                    const PopupMenuItem(value: 'delete', child: UniversalText('Delete')),
+                    const PopupMenuItem(
+                        value: 'delete', child: UniversalText('Delete')),
                 ],
               ),
             ],
@@ -935,16 +926,13 @@ class _CollectionsPanelState
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns =
-            constraints.maxWidth > 700 ? 4 : 2;
+        final columns = constraints.maxWidth > 700 ? 4 : 2;
 
         return GridView.builder(
           itemCount: collections.length,
           shrinkWrap: true,
-          physics:
-              const NeverScrollableScrollPhysics(),
-          gridDelegate:
-              SliverGridDelegateWithFixedCrossAxisCount(
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
@@ -988,8 +976,7 @@ class _CollectionsPanelState
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
@@ -997,8 +984,7 @@ class _CollectionsPanelState
                     width: 38,
                     height: 38,
                     decoration: BoxDecoration(
-                      borderRadius:
-                          BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(10),
                       color: Theme.of(context)
                           .colorScheme
                           .primary
@@ -1008,9 +994,7 @@ class _CollectionsPanelState
                       automatic
                           ? Icons.auto_awesome
                           : Icons.collections_bookmark,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .primary,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -1018,8 +1002,7 @@ class _CollectionsPanelState
                     child: Text(
                       name,
                       maxLines: 2,
-                      overflow:
-                          TextOverflow.ellipsis,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontWeight: FontWeight.w900,
                       ),
@@ -1041,22 +1024,22 @@ class _CollectionsPanelState
                       ),
                       const PopupMenuItem(
                         value: 'browse',
-                        child: UniversalText('Browse titles',
+                        child: UniversalText(
+                          'Browse titles',
                         ),
                       ),
-                      if (shared &&
-                          editable &&
-                          !automatic)
+                      if (shared && editable && !automatic)
                         const PopupMenuItem(
                           value: 'contributors',
-                          child: UniversalText('Manage contributors',
+                          child: UniversalText(
+                            'Manage contributors',
                           ),
                         ),
-                      if (!collection.isOfficial &&
-                          editable)
+                      if (!collection.isOfficial && editable)
                         const PopupMenuItem(
                           value: 'delete',
-                          child: UniversalText('Delete',
+                          child: UniversalText(
+                            'Delete',
                           ),
                         ),
                     ],
@@ -1066,12 +1049,9 @@ class _CollectionsPanelState
               const SizedBox(height: 12),
               Expanded(
                 child: Text(
-                  description.isEmpty
-                      ? 'Library collection'
-                      : description,
+                  description.isEmpty ? 'Library collection' : description,
                   maxLines: 4,
-                  overflow:
-                      TextOverflow.ellipsis,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Colors.white60,
                     fontSize: 12,
@@ -1089,12 +1069,8 @@ class _CollectionsPanelState
                     Icons.movie_outlined,
                   ),
                   _collectionPill(
-                    automatic
-                        ? 'Automatic'
-                        : 'Custom',
-                    automatic
-                        ? Icons.auto_awesome
-                        : Icons.edit_outlined,
+                    automatic ? 'Automatic' : 'Custom',
+                    automatic ? Icons.auto_awesome : Icons.edit_outlined,
                   ),
                   if (shared)
                     _collectionPill(
@@ -1112,8 +1088,7 @@ class _CollectionsPanelState
               Row(
                 children: [
                   IconButton(
-                    tooltip: collection
-                            .isLikedByCurrentProfile
+                    tooltip: collection.isLikedByCurrentProfile
                         ? tr('Unlike collection')
                         : tr('Like collection'),
                     onPressed: () {
@@ -1122,8 +1097,7 @@ class _CollectionsPanelState
                       );
                     },
                     icon: Icon(
-                      collection
-                              .isLikedByCurrentProfile
+                      collection.isLikedByCurrentProfile
                           ? Icons.favorite_rounded
                           : Icons.favorite_border_rounded,
                     ),
@@ -1176,8 +1150,7 @@ class _CollectionsPanelState
         vertical: 5,
       ),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(20),
         color: Colors.white.withValues(
           alpha: 0.06,
         ),
@@ -1300,8 +1273,7 @@ class _CollectionsPanelState
               Navigator.pop(context);
 
               try {
-                AppController.instance
-                    .deleteCollection(
+                AppController.instance.deleteCollection(
                   collection.id,
                 );
               } catch (_) {}
@@ -1360,11 +1332,9 @@ class _CreateCollectionDialog extends StatefulWidget {
       _CreateCollectionDialogState();
 }
 
-class _CreateCollectionDialogState
-    extends State<_CreateCollectionDialog> {
+class _CreateCollectionDialogState extends State<_CreateCollectionDialog> {
   final nameController = TextEditingController();
-  final descriptionController =
-      TextEditingController();
+  final descriptionController = TextEditingController();
 
   @override
   void dispose() {
@@ -1374,16 +1344,14 @@ class _CreateCollectionDialogState
   }
 
   void _create() {
-    final name =
-        nameController.text.trim();
+    final name = nameController.text.trim();
 
     if (name.isEmpty) return;
 
     try {
       AppController.instance.createCollection(
         name: name,
-        description:
-            descriptionController.text.trim(),
+        description: descriptionController.text.trim(),
       );
     } catch (_) {}
 
@@ -1404,8 +1372,7 @@ class _CreateCollectionDialogState
             TextField(
               controller: nameController,
               autofocus: true,
-              decoration:
-                  const InputDecoration(
+              decoration: const InputDecoration(
                 labelText: 'Collection name',
                 border: OutlineInputBorder(),
               ),
@@ -1414,8 +1381,7 @@ class _CreateCollectionDialogState
             TextField(
               controller: descriptionController,
               maxLines: 3,
-              decoration:
-                  const InputDecoration(
+              decoration: const InputDecoration(
                 labelText: 'Description',
                 border: OutlineInputBorder(),
               ),
@@ -1439,8 +1405,7 @@ class _CreateCollectionDialogState
 }
 
 /// Collection organization preferences.
-class _CollectionPreferencesDialog
-    extends StatelessWidget {
+class _CollectionPreferencesDialog extends StatelessWidget {
   const _CollectionPreferencesDialog();
 
   @override
@@ -1455,8 +1420,7 @@ class _CollectionPreferencesDialog
         width: 500,
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const UniversalText(
               'Choose how collections are organized for the current profile.',
@@ -1478,13 +1442,13 @@ class _CollectionPreferencesDialog
                 if (value == null) return;
 
                 try {
-                  final preferences = controller.currentCollectionPreferences.copy();
+                  final preferences =
+                      controller.currentCollectionPreferences.copy();
                   preferences.collectionOrder = value;
                   controller.updateCollectionPreferences(preferences);
                 } catch (_) {}
               },
-              decoration:
-                  const InputDecoration(
+              decoration: const InputDecoration(
                 labelText: 'Ordering',
                 border: OutlineInputBorder(),
               ),
@@ -1506,13 +1470,13 @@ class _CollectionPreferencesDialog
                 if (value == null) return;
 
                 try {
-                  final preferences = controller.currentCollectionPreferences.copy();
+                  final preferences =
+                      controller.currentCollectionPreferences.copy();
                   preferences.layout = value;
                   controller.updateCollectionPreferences(preferences);
                 } catch (_) {}
               },
-              decoration:
-                  const InputDecoration(
+              decoration: const InputDecoration(
                 labelText: 'Layout',
                 border: OutlineInputBorder(),
               ),
@@ -1543,19 +1507,14 @@ class WrappedPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = AppController.instance;
 
-    final title = monthly
-        ? 'Monthly Wrapped'
-        : 'Year End Wrapped';
+    final title = monthly ? 'Monthly Wrapped' : 'Year End Wrapped';
 
-    final icon = monthly
-        ? Icons.calendar_month_rounded
-        : Icons.auto_graph_rounded;
+    final icon =
+        monthly ? Icons.calendar_month_rounded : Icons.auto_graph_rounded;
 
-    final activityCount =
-        controller.watched.length;
+    final activityCount = controller.watched.length;
 
-    final likedCount =
-        controller.liked.length;
+    final likedCount = controller.liked.length;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(
@@ -1575,8 +1534,7 @@ class WrappedPanel extends StatelessWidget {
         const SizedBox(height: 18),
         LayoutBuilder(
           builder: (context, constraints) {
-            final columns =
-                constraints.maxWidth >= 800 ? 3 : 1;
+            final columns = constraints.maxWidth >= 800 ? 3 : 1;
 
             final cards = [
               _MetricCard(
@@ -1592,8 +1550,7 @@ class WrappedPanel extends StatelessWidget {
               _MetricCard(
                 icon: Icons.insights_outlined,
                 label: 'Profiles',
-                value:
-                    '${controller.currentAccount?.profiles.length ?? 0}',
+                value: '${controller.currentAccount?.profiles.length ?? 0}',
               ),
             ];
 
@@ -1602,8 +1559,7 @@ class WrappedPanel extends StatelessWidget {
                 children: cards
                     .map(
                       (card) => Padding(
-                        padding:
-                            const EdgeInsets.only(
+                        padding: const EdgeInsets.only(
                           bottom: 10,
                         ),
                         child: card,
@@ -1619,8 +1575,7 @@ class WrappedPanel extends StatelessWidget {
               mainAxisSpacing: 10,
               childAspectRatio: 1.9,
               shrinkWrap: true,
-              physics:
-                  const NeverScrollableScrollPhysics(),
+              physics: const NeverScrollableScrollPhysics(),
               children: cards,
             );
           },
@@ -1630,8 +1585,7 @@ class WrappedPanel extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const UniversalText(
                   'YOUR STREAMING STORY',
@@ -1686,8 +1640,7 @@ class SharedActorsPanel extends StatelessWidget {
           const _EmptyFeatureCard(
             icon: Icons.people_outline,
             title: 'No library titles yet',
-            message:
-                'Import or add media to discover shared actors.',
+            message: 'Import or add media to discover shared actors.',
           )
         else
           _SharedActorsSummary(
@@ -1716,16 +1669,13 @@ class _SharedActorsSummary extends StatelessWidget {
 
         if (cast is Iterable) {
           for (final person in cast) {
-            final name = person is String
-                ? person
-                : _personName(person);
+            final name = person is String ? person : _personName(person);
 
             if (name == null || name.trim().isEmpty) {
               continue;
             }
 
-            actors[name] =
-                (actors[name] ?? 0) + 1;
+            actors[name] = (actors[name] ?? 0) + 1;
           }
         }
       } catch (_) {}
@@ -1769,8 +1719,7 @@ class _SharedActorsSummary extends StatelessWidget {
             (entry) => ListTile(
               leading: CircleAvatar(
                 child: Text(
-                  entry.key.characters.first
-                      .toUpperCase(),
+                  entry.key.characters.first.toUpperCase(),
                 ),
               ),
               title: Text(entry.key),
@@ -1825,8 +1774,7 @@ class _FeatureHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme =
-        Theme.of(context).colorScheme;
+    final scheme = Theme.of(context).colorScheme;
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -1847,15 +1795,13 @@ class _FeatureHero extends StatelessWidget {
           ),
         ),
         child: Row(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
               width: 50,
               height: 50,
               decoration: BoxDecoration(
-                borderRadius:
-                    BorderRadius.circular(15),
+                borderRadius: BorderRadius.circular(15),
                 color: scheme.primary.withValues(
                   alpha: 0.14,
                 ),
@@ -1869,8 +1815,7 @@ class _FeatureHero extends StatelessWidget {
             const SizedBox(width: 14),
             Expanded(
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,

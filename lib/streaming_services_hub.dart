@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_core.dart';
@@ -18,6 +18,8 @@ import 'release_order_timeline.dart';
 import 'smart_search.dart';
 import 'streaming_intelligence_hub.dart';
 import 'weekly_top10.dart';
+import 'screens/group_watch_library_picker_screen.dart';
+import 'screens/offline_sync_center_screen.dart';
 
 /// One entry point for the strongest, service-inspired discovery features.
 /// Provider-specific services remain catalog links; the app never claims that
@@ -45,12 +47,66 @@ class StreamingServicesHubScreen extends StatelessWidget {
         : 0;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Streaming Services Hub')),
+      appBar: AppBar(title: const Text('Streaming Experience Hub')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
         children: [
           _hero(context, profile?.name ?? 'Current profile', library.length,
               videoCount, shows, musicCount),
+          const SizedBox(height: 20),
+          _heading(context, 'Inspired streaming experiences',
+              'Original features that bring your library, profiles and playback together.'),
+          _featureTile(
+            context,
+            icon: Icons.shuffle_rounded,
+            title: 'Surprise Me',
+            subtitle:
+                'Choose something at random from your eligible library, across movies, shows, music and physical media.',
+            onTap: () => _open(context, const SurpriseMeScreen()),
+          ),
+          _featureTile(
+            context,
+            icon: Icons.groups_rounded,
+            title: 'Watch Together',
+            subtitle:
+                'Start a synchronized session with an accessible movie or show. Invitations and playback sync require an authenticated backend.',
+            onTap: () => _open(context, const GroupWatchLibraryPickerScreen()),
+          ),
+          _featureTile(
+            context,
+            icon: Icons.auto_awesome_rounded,
+            title: 'Entertainment X-Ray',
+            subtitle:
+                'Explore cast, crew, soundtrack and connected-title information; in-player timing depends on available metadata.',
+            onTap: () => _open(context, const StreamingIntelligenceHubScreen()),
+          ),
+          _featureTile(
+            context,
+            icon: Icons.play_circle_outline_rounded,
+            title: 'Previews & playback behavior',
+            subtitle:
+                'Configure trailer/preview behavior, autoplay, data use and reduced-motion preferences.',
+            onTap: () => _open(context, const PowerPerformanceScreen()),
+          ),
+          _featureTile(
+            context,
+            icon: Icons.hub_rounded,
+            title: 'Curated hubs & franchises',
+            subtitle:
+                'Browse studio, franchise, genre and cinematic-universe connections from available metadata.',
+            onTap: () => _open(
+                context,
+                const FranchiseUniverseBrowseHubScreen(
+                    mode: FranchiseUniverseBrowseMode.franchises)),
+          ),
+          const Card(
+            child: ListTile(
+              leading: Icon(Icons.sell_outlined),
+              title: Text('Media status indicators'),
+              subtitle: Text(
+                  'Poster and case cards can show NEW, NEW EPISODE, RECENTLY ADDED, UNWATCHED, CONTINUE, FINISHED, UNLISTENED, CONTINUE LISTENING or LISTENED when library metadata and profile progress are available.'),
+            ),
+          ),
           const SizedBox(height: 20),
           _heading(context, 'Discover anything',
               'Search across your library and available metadata.'),
@@ -73,9 +129,9 @@ class StreamingServicesHubScreen extends StatelessWidget {
           _featureTile(
             context,
             icon: Icons.leaderboard_rounded,
-            title: 'Your Library Top 10',
+            title: 'Your Library Trending & Top 10',
             subtitle:
-                'Personalized rankings for owned movies, shows, albums, songs and credited people.',
+                'Popularity and personalized rankings for owned movies, shows, albums, songs and credited people.',
             onTap: () => _open(context, const WeeklyTop10RankingsScreen()),
           ),
           _featureTile(
@@ -170,6 +226,14 @@ class StreamingServicesHubScreen extends StatelessWidget {
           const SizedBox(height: 20),
           _heading(context, 'Your household and playback',
               'Personalize each profile and control resource use.'),
+          _featureTile(
+            context,
+            icon: Icons.devices_rounded,
+            title: 'Cross-device playback continuity',
+            subtitle:
+                'Review pending playback-progress synchronization, cached metadata and authorized offline access for the active profile.',
+            onTap: () => _open(context, const OfflineSyncCenterScreen()),
+          ),
           _featureTile(
             context,
             icon: Icons.family_restroom_rounded,

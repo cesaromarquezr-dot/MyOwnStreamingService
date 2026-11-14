@@ -4,13 +4,12 @@ import 'dart:async';
 // Purpose: Displays provider ratings and profile-private 0–100 personal scores.
 // Provider scores and personal scores are never combined.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'backend_api.dart';
 import 'app_core.dart';
 import 'localization.dart';
 import 'user_rating_store.dart';
 import 'core/services/cinematic_title_metadata_service.dart';
-
 
 /// Caches verified TMDB audience ratings for compact library cards and sorting.
 /// Missing matches are cached for this app session; failed requests remain retryable.
@@ -62,8 +61,7 @@ class TmdbMediaRatingStore {
     final request = () async {
       await _acquireRequestSlot();
       try {
-        final metadata =
-            await CinematicTitleMetadataService.lookupHomeMetadata(
+        final metadata = await CinematicTitleMetadataService.lookupHomeMetadata(
           title: cleanTitle,
           isTv: isTv,
           year: year,
@@ -102,7 +100,9 @@ class TmdbMediaRatingStore {
       await ratingFor(
         title: media.title,
         isTv: isTv,
-        year: isTv ? (media.seriesStartYear ?? media.releaseYear) : media.releaseYear,
+        year: isTv
+            ? (media.seriesStartYear ?? media.releaseYear)
+            : media.releaseYear,
       );
     }));
   }
@@ -304,10 +304,11 @@ class _MediaRatingsPanelState extends State<MediaRatingsPanel> {
           : rawUser is Map && rawUser['stars'] is num
               ? (rawUser['stars'] as num).toDouble() * 20
               : null;
-      final parsedScore = remoteScore ?? UserMediaRatingStore.scoreFor(
-        AppController.instance.currentProfile?.id,
-        widget.mediaId,
-      );
+      final parsedScore = remoteScore ??
+          UserMediaRatingStore.scoreFor(
+            AppController.instance.currentProfile?.id,
+            widget.mediaId,
+          );
       if (parsedScore != null) {
         await UserMediaRatingStore.rememberScore(
           profileId: AppController.instance.currentProfile?.id,
@@ -389,10 +390,10 @@ class _MediaRatingsPanelState extends State<MediaRatingsPanel> {
             IconButton(
                 tooltip: 'Customize personal rating colors',
                 onPressed: () => Navigator.of(context).push<void>(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const RatingColorSettingsScreen(),
-                  ),
-                ),
+                      MaterialPageRoute<void>(
+                        builder: (_) => const RatingColorSettingsScreen(),
+                      ),
+                    ),
                 icon: const Icon(Icons.palette_outlined)),
             IconButton(
                 tooltip: tr('Refresh ratings'),
@@ -425,7 +426,9 @@ class _MediaRatingsPanelState extends State<MediaRatingsPanel> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    const Expanded(child: UniversalText('Your personal score is private to this profile.')),
+                    const Expanded(
+                        child: UniversalText(
+                            'Your personal score is private to this profile.')),
                   ]),
             trailing: OutlinedButton.icon(
                 onPressed: _rate,
@@ -446,8 +449,8 @@ class _MediaRatingsPanelState extends State<MediaRatingsPanel> {
     final scale =
         rating['scale'] is num ? (rating['scale'] as num).toDouble() : 10;
     final votes = rating['voteCount'];
-    final isTmdbTenPoint = provider.toLowerCase() == 'tmdb' &&
-        (scale - 10).abs() < 0.0001;
+    final isTmdbTenPoint =
+        provider.toLowerCase() == 'tmdb' && (scale - 10).abs() < 0.0001;
     final scoreText = isTmdbTenPoint
         ? '${value.toStringAsFixed(1)} / 10 · ${(value * 10).round().clamp(0, 100)}%'
         : '${value.toStringAsFixed(value.truncateToDouble() == value ? 0 : 1)} / ${scale.toStringAsFixed(0)}';
@@ -461,8 +464,7 @@ class _MediaRatingsPanelState extends State<MediaRatingsPanel> {
                     : kind == 'community'
                         ? ' Community'
                         : ''))),
-        Text(scoreText,
-            style: const TextStyle(fontWeight: FontWeight.w900)),
+        Text(scoreText, style: const TextStyle(fontWeight: FontWeight.w900)),
         if (votes != null) ...[
           const SizedBox(width: 8),
           Text('($votes)', style: const TextStyle(color: Colors.white54))
@@ -491,9 +493,10 @@ class _MediaRatingsPanelState extends State<MediaRatingsPanel> {
 Future<double?> showMediaScoreDialog(
   BuildContext context, {
   double? initial,
-}) => showDialog<double>(
-      context: context,
-      builder: (context) => _PercentRatingDialog(initial: initial));
+}) =>
+    showDialog<double>(
+        context: context,
+        builder: (context) => _PercentRatingDialog(initial: initial));
 
 class _PercentRatingDialog extends StatefulWidget {
   final double? initial;
@@ -551,7 +554,8 @@ class _PercentRatingDialogState extends State<_PercentRatingDialog> {
           TextField(
             controller: _valueController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Score', suffixText: '%'),
+            decoration:
+                const InputDecoration(labelText: 'Score', suffixText: '%'),
             onChanged: (raw) {
               final parsed = double.tryParse(raw);
               if (parsed != null && parsed >= 0 && parsed <= 100) {
@@ -560,7 +564,8 @@ class _PercentRatingDialogState extends State<_PercentRatingDialog> {
             },
           ),
           const SizedBox(height: 8),
-          const Text('This score is private to your selected profile and does not change provider or critic ratings.',
+          const Text(
+              'This score is private to your selected profile and does not change provider or critic ratings.',
               style: TextStyle(color: Colors.white60, fontSize: 12)),
         ],
       ),
@@ -570,7 +575,8 @@ class _PercentRatingDialogState extends State<_PercentRatingDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: () => Navigator.of(context).pop(value.clamp(0, 100).toDouble()),
+          onPressed: () =>
+              Navigator.of(context).pop(value.clamp(0, 100).toDouble()),
           child: const Text('Save score'),
         ),
       ],

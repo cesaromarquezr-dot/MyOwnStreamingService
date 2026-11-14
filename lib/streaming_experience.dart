@@ -7,7 +7,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 import 'backend_api.dart';
@@ -32,6 +32,7 @@ class StreamingExperiencePreferences {
 
   bool dataSaver;
   int maxResolution;
+
   /// Remembers the user's previous cap so Data Saver can be turned off
   /// without permanently overwriting their preferred streaming quality.
   int dataSaverPreviousResolution;
@@ -98,7 +99,38 @@ class StreamingExperiencePreferences {
       'mos_streaming_experience_${profileId.trim().isEmpty ? 'default' : profileId.trim()}';
 
   static String _supportedLanguage(dynamic value) {
-    const supported = <String>{'', 'en', 'es', 'fr', 'de', 'it', 'pt', 'ja', 'ko', 'zh', 'hi', 'ru', 'ar', 'tr', 'nl', 'pl', 'el', 'th', 'vi', 'id', 'sv', 'no', 'da', 'fi', 'he', 'uk', 'cs', 'ro', 'hu', 'fa'};
+    const supported = <String>{
+      '',
+      'en',
+      'es',
+      'fr',
+      'de',
+      'it',
+      'pt',
+      'ja',
+      'ko',
+      'zh',
+      'hi',
+      'ru',
+      'ar',
+      'tr',
+      'nl',
+      'pl',
+      'el',
+      'th',
+      'vi',
+      'id',
+      'sv',
+      'no',
+      'da',
+      'fi',
+      'he',
+      'uk',
+      'cs',
+      'ro',
+      'hu',
+      'fa'
+    };
     final normalized = value?.toString().trim().toLowerCase() ?? '';
     return supported.contains(normalized) ? normalized : '';
   }
@@ -117,14 +149,16 @@ class StreamingExperiencePreferences {
     try {
       final map = Map<String, dynamic>.from(jsonDecode(raw) as Map);
       final resolution = (map['maxResolution'] as num?)?.toInt() ?? 0;
-      final savedResolution =
-          supportedResolutionCaps.contains(resolution) ? resolution : automaticResolution;
+      final savedResolution = supportedResolutionCaps.contains(resolution)
+          ? resolution
+          : automaticResolution;
       final dataSaverEnabled = map['dataSaver'] == true;
       final rawPreviousResolution =
           (map['dataSaverPreviousResolution'] as num?)?.toInt();
-      final previousResolution = supportedResolutionCaps.contains(rawPreviousResolution)
-          ? rawPreviousResolution!
-          : (dataSaverEnabled ? savedResolution : automaticResolution);
+      final previousResolution =
+          supportedResolutionCaps.contains(rawPreviousResolution)
+              ? rawPreviousResolution!
+              : (dataSaverEnabled ? savedResolution : automaticResolution);
       final effectiveResolution = dataSaverEnabled &&
               (savedResolution == automaticResolution || savedResolution > 480)
           ? 480
@@ -138,13 +172,17 @@ class StreamingExperiencePreferences {
         subtitlesEnabled: map['subtitlesEnabled'] != false,
         // Read the former combined preference for existing profiles.
         preferOriginalAudio: (map['preferOriginalAudio'] ??
-                map['preferOriginalLanguageTracks']) != false,
+                map['preferOriginalLanguageTracks']) !=
+            false,
         preferOriginalSubtitles: (map['preferOriginalSubtitles'] ??
-                map['preferOriginalLanguageTracks']) != false,
+                map['preferOriginalLanguageTracks']) !=
+            false,
         subtitleScale: scale.clamp(0.75, 2.0).toDouble(),
         audioDescriptions: map['audioDescriptions'] == true,
-        preferredAudioLanguage: _supportedLanguage(map['preferredAudioLanguage']),
-        preferredSubtitleLanguage: _supportedLanguage(map['preferredSubtitleLanguage']),
+        preferredAudioLanguage:
+            _supportedLanguage(map['preferredAudioLanguage']),
+        preferredSubtitleLanguage:
+            _supportedLanguage(map['preferredSubtitleLanguage']),
         playbackSpeed: _supportedPlaybackSpeed(map['playbackSpeed']),
         skipKnownIntros: map['skipKnownIntros'] == true,
         skipKnownCredits: map['skipKnownCredits'] == true,
@@ -172,11 +210,13 @@ class StreamingExperiencePreferences {
         'preferOriginalAudio': preferOriginalAudio,
         'preferOriginalSubtitles': preferOriginalSubtitles,
         // Write a compatibility value for older app builds.
-        'preferOriginalLanguageTracks': preferOriginalAudio && preferOriginalSubtitles,
+        'preferOriginalLanguageTracks':
+            preferOriginalAudio && preferOriginalSubtitles,
         'subtitleScale': subtitleScale.clamp(0.75, 2.0),
         'audioDescriptions': audioDescriptions,
         'preferredAudioLanguage': _supportedLanguage(preferredAudioLanguage),
-        'preferredSubtitleLanguage': _supportedLanguage(preferredSubtitleLanguage),
+        'preferredSubtitleLanguage':
+            _supportedLanguage(preferredSubtitleLanguage),
         'playbackSpeed': _supportedPlaybackSpeed(playbackSpeed),
         'skipKnownIntros': skipKnownIntros,
         'skipKnownCredits': skipKnownCredits,
@@ -192,12 +232,14 @@ class StreamingExperiencePreferences {
 /// A saved label is used only if that item still exposes the same track.
 class PlaybackTrackSelectionStore {
   static String _key(String profileId, String mediaId) {
-    String encoded(String value) => base64Url.encode(utf8.encode(value)).replaceAll('=', '');
+    String encoded(String value) =>
+        base64Url.encode(utf8.encode(value)).replaceAll('=', '');
     final profile = profileId.trim().isEmpty ? 'default' : profileId.trim();
     return 'mos_playback_track_selection_v1_${encoded(profile)}_${encoded(mediaId.trim())}';
   }
 
-  static Future<Map<String, String>> load({required String profileId, required String mediaId}) async {
+  static Future<Map<String, String>> load(
+      {required String profileId, required String mediaId}) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_key(profileId, mediaId));
     if (raw == null || raw.isEmpty) return <String, String>{};
@@ -206,15 +248,22 @@ class PlaybackTrackSelectionStore {
       if (decoded is! Map) return <String, String>{};
       return <String, String>{
         for (final entry in decoded.entries)
-          if (entry.value is String) entry.key.toString(): entry.value as String,
+          if (entry.value is String)
+            entry.key.toString(): entry.value as String,
       };
     } catch (_) {
       return <String, String>{};
     }
   }
 
-  static Future<void> save({required String profileId, required String mediaId, required String kind, required String value}) async {
-    if (mediaId.trim().isEmpty || (kind != 'audio' && kind != 'subtitle')) return;
+  static Future<void> save(
+      {required String profileId,
+      required String mediaId,
+      required String kind,
+      required String value}) async {
+    if (mediaId.trim().isEmpty || (kind != 'audio' && kind != 'subtitle')) {
+      return;
+    }
     final selections = await load(profileId: profileId, mediaId: mediaId);
     selections[kind] = value;
     final prefs = await SharedPreferences.getInstance();
@@ -503,12 +552,13 @@ class _StreamingExperienceSettingsScreenState
                       title: const UniversalText('Prefer Original Audio'),
                       subtitle: const UniversalText(
                           'Automatically choose the original production-language audio track when it exists. All other tracks, including dubs such as Spanish for Coco, remain available for manual selection. Production origin is separate from cultural setting and inspiration.'),
-                      onChanged: (value) => _update(
-                          () => settings.preferOriginalAudio = value),
+                      onChanged: (value) =>
+                          _update(() => settings.preferOriginalAudio = value),
                     ),
                     SwitchListTile(
                       value: settings.preferOriginalSubtitles,
-                      title: const UniversalText('Prefer original-language subtitles'),
+                      title: const UniversalText(
+                          'Prefer original-language subtitles'),
                       subtitle: const UniversalText(
                           'Subtitle selection is independent of audio. Turn this off to use your preferred subtitle language instead.'),
                       onChanged: (value) => _update(
@@ -563,18 +613,22 @@ class _StreamingExperienceSettingsScreenState
                     ),
                     ListTile(
                       title: const UniversalText('Preferred audio language'),
-                      subtitle: const UniversalText('Optional profile-wide override. Leave Auto / original to use each title’s original production language; other audio tracks remain selectable per title.'),
+                      subtitle: const UniversalText(
+                          'Optional profile-wide override. Leave Auto / original to use each title’s original production language; other audio tracks remain selectable per title.'),
                       trailing: DropdownButton<String>(
                         value: settings.preferredAudioLanguage,
                         items: const <DropdownMenuItem<String>>[
-                          DropdownMenuItem(value: '', child: Text('Auto / original')),
+                          DropdownMenuItem(
+                              value: '', child: Text('Auto / original')),
                           DropdownMenuItem(value: 'en', child: Text('English')),
                           DropdownMenuItem(value: 'es', child: Text('Spanish')),
                           DropdownMenuItem(value: 'fr', child: Text('French')),
                           DropdownMenuItem(value: 'de', child: Text('German')),
                           DropdownMenuItem(value: 'it', child: Text('Italian')),
-                          DropdownMenuItem(value: 'pt', child: Text('Portuguese')),
-                          DropdownMenuItem(value: 'ja', child: Text('Japanese')),
+                          DropdownMenuItem(
+                              value: 'pt', child: Text('Portuguese')),
+                          DropdownMenuItem(
+                              value: 'ja', child: Text('Japanese')),
                           DropdownMenuItem(value: 'ko', child: Text('Korean')),
                           DropdownMenuItem(value: 'zh', child: Text('Chinese')),
                           DropdownMenuItem(value: 'hi', child: Text('Hindi')),
@@ -584,37 +638,52 @@ class _StreamingExperienceSettingsScreenState
                           DropdownMenuItem(value: 'pl', child: Text('Polish')),
                           DropdownMenuItem(value: 'el', child: Text('Greek')),
                           DropdownMenuItem(value: 'th', child: Text('Thai')),
-                          DropdownMenuItem(value: 'vi', child: Text('Vietnamese')),
-                          DropdownMenuItem(value: 'id', child: Text('Indonesian')),
+                          DropdownMenuItem(
+                              value: 'vi', child: Text('Vietnamese')),
+                          DropdownMenuItem(
+                              value: 'id', child: Text('Indonesian')),
                           DropdownMenuItem(value: 'sv', child: Text('Swedish')),
-                          DropdownMenuItem(value: 'no', child: Text('Norwegian')),
+                          DropdownMenuItem(
+                              value: 'no', child: Text('Norwegian')),
                           DropdownMenuItem(value: 'da', child: Text('Danish')),
                           DropdownMenuItem(value: 'fi', child: Text('Finnish')),
                           DropdownMenuItem(value: 'he', child: Text('Hebrew')),
-                          DropdownMenuItem(value: 'uk', child: Text('Ukrainian')),
+                          DropdownMenuItem(
+                              value: 'uk', child: Text('Ukrainian')),
                           DropdownMenuItem(value: 'cs', child: Text('Czech')),
-                          DropdownMenuItem(value: 'ro', child: Text('Romanian')),
-                          DropdownMenuItem(value: 'hu', child: Text('Hungarian')),
+                          DropdownMenuItem(
+                              value: 'ro', child: Text('Romanian')),
+                          DropdownMenuItem(
+                              value: 'hu', child: Text('Hungarian')),
                           DropdownMenuItem(value: 'fa', child: Text('Persian')),
                           DropdownMenuItem(value: 'ar', child: Text('Arabic')),
                         ],
-                        onChanged: (value) { if (value != null) _update(() => settings.preferredAudioLanguage = value); },
+                        onChanged: (value) {
+                          if (value != null) {
+                            _update(
+                                () => settings.preferredAudioLanguage = value);
+                          }
+                        },
                       ),
                     ),
                     ListTile(
                       title: const UniversalText('Preferred subtitle language'),
-                      subtitle: const UniversalText('Exact per-title subtitle choice is remembered when available; this language is the fallback.'),
+                      subtitle: const UniversalText(
+                          'Exact per-title subtitle choice is remembered when available; this language is the fallback.'),
                       trailing: DropdownButton<String>(
                         value: settings.preferredSubtitleLanguage,
                         items: const <DropdownMenuItem<String>>[
-                          DropdownMenuItem(value: '', child: Text('Auto / original')),
+                          DropdownMenuItem(
+                              value: '', child: Text('Auto / original')),
                           DropdownMenuItem(value: 'en', child: Text('English')),
                           DropdownMenuItem(value: 'es', child: Text('Spanish')),
                           DropdownMenuItem(value: 'fr', child: Text('French')),
                           DropdownMenuItem(value: 'de', child: Text('German')),
                           DropdownMenuItem(value: 'it', child: Text('Italian')),
-                          DropdownMenuItem(value: 'pt', child: Text('Portuguese')),
-                          DropdownMenuItem(value: 'ja', child: Text('Japanese')),
+                          DropdownMenuItem(
+                              value: 'pt', child: Text('Portuguese')),
+                          DropdownMenuItem(
+                              value: 'ja', child: Text('Japanese')),
                           DropdownMenuItem(value: 'ko', child: Text('Korean')),
                           DropdownMenuItem(value: 'zh', child: Text('Chinese')),
                           DropdownMenuItem(value: 'hi', child: Text('Hindi')),
@@ -624,26 +693,38 @@ class _StreamingExperienceSettingsScreenState
                           DropdownMenuItem(value: 'pl', child: Text('Polish')),
                           DropdownMenuItem(value: 'el', child: Text('Greek')),
                           DropdownMenuItem(value: 'th', child: Text('Thai')),
-                          DropdownMenuItem(value: 'vi', child: Text('Vietnamese')),
-                          DropdownMenuItem(value: 'id', child: Text('Indonesian')),
+                          DropdownMenuItem(
+                              value: 'vi', child: Text('Vietnamese')),
+                          DropdownMenuItem(
+                              value: 'id', child: Text('Indonesian')),
                           DropdownMenuItem(value: 'sv', child: Text('Swedish')),
-                          DropdownMenuItem(value: 'no', child: Text('Norwegian')),
+                          DropdownMenuItem(
+                              value: 'no', child: Text('Norwegian')),
                           DropdownMenuItem(value: 'da', child: Text('Danish')),
                           DropdownMenuItem(value: 'fi', child: Text('Finnish')),
                           DropdownMenuItem(value: 'he', child: Text('Hebrew')),
-                          DropdownMenuItem(value: 'uk', child: Text('Ukrainian')),
+                          DropdownMenuItem(
+                              value: 'uk', child: Text('Ukrainian')),
                           DropdownMenuItem(value: 'cs', child: Text('Czech')),
-                          DropdownMenuItem(value: 'ro', child: Text('Romanian')),
-                          DropdownMenuItem(value: 'hu', child: Text('Hungarian')),
+                          DropdownMenuItem(
+                              value: 'ro', child: Text('Romanian')),
+                          DropdownMenuItem(
+                              value: 'hu', child: Text('Hungarian')),
                           DropdownMenuItem(value: 'fa', child: Text('Persian')),
                           DropdownMenuItem(value: 'ar', child: Text('Arabic')),
                         ],
-                        onChanged: (value) { if (value != null) _update(() => settings.preferredSubtitleLanguage = value); },
+                        onChanged: (value) {
+                          if (value != null) {
+                            _update(() =>
+                                settings.preferredSubtitleLanguage = value);
+                          }
+                        },
                       ),
                     ),
                     ListTile(
                       title: const UniversalText('Playback speed'),
-                      subtitle: const UniversalText('Applied to supported media-server streams.'),
+                      subtitle: const UniversalText(
+                          'Applied to supported media-server streams.'),
                       trailing: DropdownButton<double>(
                         value: settings.playbackSpeed,
                         items: const <DropdownMenuItem<double>>[
@@ -654,20 +735,30 @@ class _StreamingExperienceSettingsScreenState
                           DropdownMenuItem(value: 1.75, child: Text('1.75×')),
                           DropdownMenuItem(value: 2.0, child: Text('2.0×')),
                         ],
-                        onChanged: (value) { if (value != null) _update(() => settings.playbackSpeed = value); },
+                        onChanged: (value) {
+                          if (value != null) {
+                            _update(() => settings.playbackSpeed = value);
+                          }
+                        },
                       ),
                     ),
                     SwitchListTile(
                       value: settings.skipKnownIntros,
-                      title: const UniversalText('Skip known intros automatically'),
-                      subtitle: const UniversalText('Only skips when the imported media has valid start and end markers.'),
-                      onChanged: (value) => _update(() => settings.skipKnownIntros = value),
+                      title: const UniversalText(
+                          'Skip known intros automatically'),
+                      subtitle: const UniversalText(
+                          'Only skips when the imported media has valid start and end markers.'),
+                      onChanged: (value) =>
+                          _update(() => settings.skipKnownIntros = value),
                     ),
                     SwitchListTile(
                       value: settings.skipKnownCredits,
-                      title: const UniversalText('Skip known end credits automatically'),
-                      subtitle: const UniversalText('Only skips near a recognized credit marker in the media metadata.'),
-                      onChanged: (value) => _update(() => settings.skipKnownCredits = value),
+                      title: const UniversalText(
+                          'Skip known end credits automatically'),
+                      subtitle: const UniversalText(
+                          'Only skips near a recognized credit marker in the media metadata.'),
+                      onChanged: (value) =>
+                          _update(() => settings.skipKnownCredits = value),
                     ),
                     SwitchListTile(
                       value: settings.highContrast,
@@ -914,9 +1005,8 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
     try {
       final api = AppController.instance.backendApi;
       final apiUri = api.baseUri;
-      final apiPathPrefix = apiUri.path.endsWith('/')
-          ? apiUri.path
-          : '${apiUri.path}/';
+      final apiPathPrefix =
+          apiUri.path.endsWith('/') ? apiUri.path : '${apiUri.path}/';
       final isAuthenticatedBackendUrl = uri.scheme == apiUri.scheme &&
           uri.host == apiUri.host &&
           uri.port == apiUri.port &&
@@ -948,10 +1038,10 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
         savePosition: () {
           final duration = player.value.duration;
           if (duration > Duration.zero) {
-            final normalized = (player.value.position.inMilliseconds /
-                    duration.inMilliseconds)
-                .clamp(0.0, 1.0)
-                .toDouble();
+            final normalized =
+                (player.value.position.inMilliseconds / duration.inMilliseconds)
+                    .clamp(0.0, 1.0)
+                    .toDouble();
             _savePlaybackProgress(
               normalized,
               positionSeconds: player.value.position.inSeconds,
@@ -962,7 +1052,8 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
         },
         stop: () {
           unawaited(player.pause());
-          _updateTheaterRoomStatus('stopped', player.value.position.inSeconds.toDouble());
+          _updateTheaterRoomStatus(
+              'stopped', player.value.position.inSeconds.toDouble());
           unawaited(_syncBackendSession(state: 'stopped'));
           if (mounted) Navigator.of(context).maybePop();
         },
@@ -978,13 +1069,14 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
         final app = AppController.instance;
         final savedSeconds = app.playbackPositionSeconds[widget.media.id];
         final savedDuration = app.playbackDurationSeconds[widget.media.id];
-        if (savedSeconds != null && savedSeconds > 0 &&
-            savedDuration != null && savedDuration > 0 &&
+        if (savedSeconds != null &&
+            savedSeconds > 0 &&
+            savedDuration != null &&
+            savedDuration > 0 &&
             player.value.duration > Duration.zero) {
           final offset = Duration(seconds: savedSeconds);
-          await player.seekTo(offset > player.value.duration
-              ? player.value.duration
-              : offset);
+          await player.seekTo(
+              offset > player.value.duration ? player.value.duration : offset);
         } else {
           final resume = app.getPlaybackProgress(widget.media.id);
           if (resume > 0 && player.value.duration > Duration.zero) {
@@ -1039,14 +1131,20 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
       final value = marker[key];
       if (value is num) {
         final n = value.toDouble();
-        if (key.toLowerCase().contains('ms') || key.toLowerCase().contains('millisecond')) return n / 1000;
+        if (key.toLowerCase().contains('ms') ||
+            key.toLowerCase().contains('millisecond')) {
+          return n / 1000;
+        }
         return n;
       }
       final text = value?.toString().trim() ?? '';
       if (text.isEmpty) continue;
       final number = double.tryParse(text);
       if (number != null) {
-        if (key.toLowerCase().contains('ms') || key.toLowerCase().contains('millisecond')) return number / 1000;
+        if (key.toLowerCase().contains('ms') ||
+            key.toLowerCase().contains('millisecond')) {
+          return number / 1000;
+        }
         return number;
       }
       final parts = text.split(':');
@@ -1062,7 +1160,12 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
   }
 
   Future<void> _maybeSkipKnownSegments(VideoPlayerController player) async {
-    if (_skipCheckRunning || !player.value.isInitialized || !player.value.isPlaying || player.value.isBuffering) return;
+    if (_skipCheckRunning ||
+        !player.value.isInitialized ||
+        !player.value.isPlaying ||
+        player.value.isBuffering) {
+      return;
+    }
     final position = player.value.position.inMilliseconds / 1000.0;
     final duration = player.value.duration.inSeconds.toDouble();
     if (duration <= 0) return;
@@ -1071,10 +1174,33 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
     if (_preferences.skipKnownIntros) {
       for (var i = 0; i < widget.media.tvIntros.length; i++) {
         final marker = widget.media.tvIntros[i];
-        final start = _markerSeconds(marker, const ['startSeconds', 'start_seconds', 'introStartSeconds', 'startTimeSeconds', 'start', 'startMs', 'startMilliseconds', 'start_ms']);
-        final end = _markerSeconds(marker, const ['endSeconds', 'end_seconds', 'introEndSeconds', 'endTimeSeconds', 'end', 'endMs', 'endMilliseconds', 'end_ms']);
+        final start = _markerSeconds(marker, const [
+          'startSeconds',
+          'start_seconds',
+          'introStartSeconds',
+          'startTimeSeconds',
+          'start',
+          'startMs',
+          'startMilliseconds',
+          'start_ms'
+        ]);
+        final end = _markerSeconds(marker, const [
+          'endSeconds',
+          'end_seconds',
+          'introEndSeconds',
+          'endTimeSeconds',
+          'end',
+          'endMs',
+          'endMilliseconds',
+          'end_ms'
+        ]);
         final id = 'intro:$i:${end ?? -1}';
-        if (start == null || end == null || end <= start || _autoSkippedMarkers.contains(id)) continue;
+        if (start == null ||
+            end == null ||
+            end <= start ||
+            _autoSkippedMarkers.contains(id)) {
+          continue;
+        }
         if (position >= start && position < end && end < duration - 1) {
           target = (end + 0.2).toDouble();
           markerId = id;
@@ -1085,15 +1211,32 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
     if (target == null && _preferences.skipKnownCredits) {
       for (var i = 0; i < widget.media.xrayEvents.length; i++) {
         final marker = widget.media.xrayEvents[i];
-        final label = <String>[marker['type'], marker['title'], marker['label'], marker['name'], marker['event']]
+        final label = <String>[
+          marker['type'],
+          marker['title'],
+          marker['label'],
+          marker['name'],
+          marker['event']
+        ]
             .whereType<Object>()
             .map((value) => value.toString().toLowerCase())
             .join(' ');
         if (!label.contains('credit')) continue;
-        final start = _markerSeconds(marker, const ['startSeconds', 'start_seconds', 'timeSeconds', 'timestampSeconds', 'time', 'start', 'startMs', 'startMilliseconds']);
+        final start = _markerSeconds(marker, const [
+          'startSeconds',
+          'start_seconds',
+          'timeSeconds',
+          'timestampSeconds',
+          'time',
+          'start',
+          'startMs',
+          'startMilliseconds'
+        ]);
         final id = 'credits:$i:${start ?? -1}';
         if (start == null || _autoSkippedMarkers.contains(id)) continue;
-        if (position >= start - 1 && position <= start + 2 && start < duration - 10) {
+        if (position >= start - 1 &&
+            position <= start + 2 &&
+            start < duration - 10) {
           target = duration - 1;
           markerId = id;
           break;
@@ -1105,7 +1248,8 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
     _autoSkippedMarkers.add(markerId);
     try {
       await player.seekTo(Duration(milliseconds: (target * 1000).round()));
-      await _record(markerId.startsWith('intro:') ? 'intro_skipped' : 'credits_skipped');
+      await _record(
+          markerId.startsWith('intro:') ? 'intro_skipped' : 'credits_skipped');
     } catch (_) {
       _autoSkippedMarkers.remove(markerId);
     } finally {
@@ -1162,7 +1306,8 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
       _updateTheaterRoomStatus('error', value.position.inSeconds.toDouble());
     } else if (value.duration > Duration.zero &&
         value.position >= value.duration - const Duration(milliseconds: 500)) {
-      _updateTheaterRoomStatus('completed', value.position.inSeconds.toDouble());
+      _updateTheaterRoomStatus(
+          'completed', value.position.inSeconds.toDouble());
     } else if (value.isPlaying) {
       _updateTheaterRoomStatus('playing', value.position.inSeconds.toDouble());
     } else if (value.isInitialized && !_loading) {
@@ -1211,7 +1356,9 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
         positionSeconds: value.duration.inSeconds,
         durationSeconds: value.duration.inSeconds,
       );
-      if (_canWritePlaybackProgress) AppController.instance.markWatched(widget.media);
+      if (_canWritePlaybackProgress) {
+        AppController.instance.markWatched(widget.media);
+      }
       unawaited(_syncBackendSession(state: 'completed'));
     } else if (value.duration > Duration.zero) {
       final normalized =
@@ -1315,7 +1462,8 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
     _syncTimer?.cancel();
     _flushWatchTime();
     if (_lastTheaterStatus != null && _lastTheaterStatus != 'completed') {
-      _updateTheaterRoomStatus('stopped', _controller?.value.position.inSeconds.toDouble());
+      _updateTheaterRoomStatus(
+          'stopped', _controller?.value.position.inSeconds.toDouble());
     }
     final player = _controller;
     if (_wasBuffering && _bufferStartedAt != null) {
@@ -1324,7 +1472,8 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
               DateTime.now().difference(_bufferStartedAt!).inMilliseconds));
     }
     if (player != null) {
-      if (_canWritePlaybackProgress && player.value.isInitialized &&
+      if (_canWritePlaybackProgress &&
+          player.value.isInitialized &&
           player.value.duration > Duration.zero) {
         _savePlaybackProgress(
           (player.value.position.inMilliseconds /
@@ -1359,10 +1508,12 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
     final value = player?.value;
     final duration = value?.duration ?? Duration.zero;
     final position = value?.position ?? Duration.zero;
-    final originalLanguage = OriginalLanguageDefaults.resolveForMedia(widget.media);
-    final preferredOriginalLanguage = _preferences.preferredAudioLanguage.isNotEmpty
-        ? _preferences.preferredAudioLanguage
-        : (_preferences.preferOriginalAudio ? originalLanguage : null);
+    final originalLanguage =
+        OriginalLanguageDefaults.resolveForMedia(widget.media);
+    final preferredOriginalLanguage =
+        _preferences.preferredAudioLanguage.isNotEmpty
+            ? _preferences.preferredAudioLanguage
+            : (_preferences.preferOriginalAudio ? originalLanguage : null);
     final maxSeconds =
         duration.inSeconds > 0 ? duration.inSeconds.toDouble() : 1.0;
     final currentSeconds = _sliderPreviewSeconds ??
@@ -1531,7 +1682,8 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
                             OriginalLanguageDefaults.matchingTrack(
                                       widget.media.audioTracks,
                                       targetLanguage: preferredOriginalLanguage,
-                                    ) != null
+                                    ) !=
+                                    null
                                 ? 'Preferred audio: ${OriginalLanguageDefaults.displayName(preferredOriginalLanguage)} · ${OriginalLanguageDefaults.matchingTrack(widget.media.audioTracks, targetLanguage: preferredOriginalLanguage)}. The current adaptive player still needs track-selection support to apply this track.'
                                 : 'Preferred audio: ${OriginalLanguageDefaults.displayName(preferredOriginalLanguage)}. No matching track is identified in the imported track metadata; the player uses the source default.',
                             style: const TextStyle(

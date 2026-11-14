@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -7,6 +7,7 @@ import '../catalog_poster_image.dart';
 import '../details.dart';
 import '../music.dart';
 import '../presence/account_profile_presence_service.dart';
+import '../widgets/media_status_badges.dart';
 import '../widgets/account_profile_presence_strip.dart';
 import 'collections_screen.dart';
 import 'theater_home_screen.dart';
@@ -63,7 +64,8 @@ class _RedboxHomeScreenState extends State<RedboxHomeScreen> {
     final controller = AppController.instance;
     final profile = controller.currentProfile;
     return controller.library
-        .where((item) => item.isAccessibleTo(profile) && controller.isOwned(item.id))
+        .where((item) =>
+            item.isAccessibleTo(profile) && controller.isOwned(item.id))
         .toList(growable: false);
   }
 
@@ -85,7 +87,8 @@ class _RedboxHomeScreenState extends State<RedboxHomeScreen> {
         type.contains('special');
   }
 
-  List<MediaItem> _sorted(List<MediaItem> items) => items.toList(growable: false);
+  List<MediaItem> _sorted(List<MediaItem> items) =>
+      items.toList(growable: false);
 
   void _openMedia(MediaItem media) {
     Navigator.of(context).push(
@@ -114,28 +117,83 @@ class _RedboxHomeScreenState extends State<RedboxHomeScreen> {
     final query = _query.trim().toLowerCase();
     final matching = query.isEmpty
         ? all
-        : all.where((media) => media.title.toLowerCase().contains(query)).toList();
-    final movies = _sorted(matching.where((media) => !_isMusic(media) && !_isSeries(media)).toList());
+        : all
+            .where((media) => media.title.toLowerCase().contains(query))
+            .toList();
+    final movies = _sorted(matching
+        .where((media) => !_isMusic(media) && !_isSeries(media))
+        .toList());
     final series = _sorted(matching.where(_isSeries).toList());
     final albums = _sorted(matching.where(_isMusic).toList());
     final continueWatching = _sorted(matching.where((media) {
       final progress = AppController.instance.getPlaybackProgress(media.id);
       return progress > 0 && progress < .96 && !_isMusic(media);
     }).toList());
-    final recent = _sorted(matching)..sort((a, b) => b.addedAt.compareTo(a.addedAt));
+    final recent = _sorted(matching)
+      ..sort((a, b) => b.addedAt.compareTo(a.addedAt));
     final featured = recent.isEmpty ? null : recent.first;
 
     final categories = <_KioskCategory>[
-      _KioskCategory(id: 'movies', title: 'Movies', subtitle: '${movies.length} titles', icon: Icons.local_movies_rounded, media: movies),
-      _KioskCategory(id: 'series', title: 'TV Shows', subtitle: '${series.length} shows & episodes', icon: Icons.live_tv_rounded, media: series),
-      _KioskCategory(id: 'music', title: 'Music & Albums', subtitle: '${albums.length} albums and tracks', icon: Icons.album_rounded, media: albums),
-      _KioskCategory(id: 'continue', title: 'Continue Watching', subtitle: '${continueWatching.length} in progress', icon: Icons.play_circle_outline_rounded, media: continueWatching),
-      _KioskCategory(id: 'new', title: 'New to Your Library', subtitle: 'Recently added titles', icon: Icons.fiber_new_rounded, media: recent),
-      _KioskCategory(id: 'recent', title: 'Browse All', subtitle: '${matching.length} owned items', icon: Icons.grid_view_rounded, media: matching),
-      _KioskCategory(id: 'collections', title: 'Collections', subtitle: 'Box sets & editions', icon: Icons.inventory_2_rounded, media: all),
-      _KioskCategory(id: 'store', title: 'Virtual Store', subtitle: 'Explore the 3D aisles', icon: Icons.storefront_rounded, media: all),
-      _KioskCategory(id: 'theater', title: 'Theater Rooms', subtitle: 'Your private auditoriums', icon: Icons.meeting_room_rounded, media: all),
-      _KioskCategory(id: 'lounge', title: 'Listening Lounge', subtitle: 'Albums, artists & playlists', icon: Icons.headphones_rounded, media: albums),
+      _KioskCategory(
+          id: 'movies',
+          title: 'Movies',
+          subtitle: '${movies.length} titles',
+          icon: Icons.local_movies_rounded,
+          media: movies),
+      _KioskCategory(
+          id: 'series',
+          title: 'TV Shows',
+          subtitle: '${series.length} shows & episodes',
+          icon: Icons.live_tv_rounded,
+          media: series),
+      _KioskCategory(
+          id: 'music',
+          title: 'Music & Albums',
+          subtitle: '${albums.length} albums and tracks',
+          icon: Icons.album_rounded,
+          media: albums),
+      _KioskCategory(
+          id: 'continue',
+          title: 'Continue Watching',
+          subtitle: '${continueWatching.length} in progress',
+          icon: Icons.play_circle_outline_rounded,
+          media: continueWatching),
+      _KioskCategory(
+          id: 'new',
+          title: 'New to Your Library',
+          subtitle: 'Recently added titles',
+          icon: Icons.fiber_new_rounded,
+          media: recent),
+      _KioskCategory(
+          id: 'recent',
+          title: 'Browse All',
+          subtitle: '${matching.length} owned items',
+          icon: Icons.grid_view_rounded,
+          media: matching),
+      _KioskCategory(
+          id: 'collections',
+          title: 'Collections',
+          subtitle: 'Box sets & editions',
+          icon: Icons.inventory_2_rounded,
+          media: all),
+      _KioskCategory(
+          id: 'store',
+          title: 'Virtual Store',
+          subtitle: 'Explore the 3D aisles',
+          icon: Icons.storefront_rounded,
+          media: all),
+      _KioskCategory(
+          id: 'theater',
+          title: 'Theater Rooms',
+          subtitle: 'Your private auditoriums',
+          icon: Icons.meeting_room_rounded,
+          media: all),
+      _KioskCategory(
+          id: 'lounge',
+          title: 'Listening Lounge',
+          subtitle: 'Albums, artists & playlists',
+          icon: Icons.headphones_rounded,
+          media: albums),
     ];
 
     final shown = query.isNotEmpty
@@ -165,12 +223,15 @@ class _RedboxHomeScreenState extends State<RedboxHomeScreen> {
         backgroundColor: _dayMode ? lightBackground : darkBackground,
         appBar: AppBar(
           backgroundColor: _dayMode ? const Color(0xFFE5EAF0) : darkBackground,
-          title: const Text('My Media', style: TextStyle(fontWeight: FontWeight.w900)),
+          title: const Text('My Media',
+              style: TextStyle(fontWeight: FontWeight.w900)),
           actions: [
             IconButton(
               tooltip: _dayMode ? 'Switch to night mode' : 'Switch to day mode',
               onPressed: _toggleDisplayMode,
-              icon: Icon(_dayMode ? Icons.dark_mode_rounded : Icons.light_mode_rounded),
+              icon: Icon(_dayMode
+                  ? Icons.dark_mode_rounded
+                  : Icons.light_mode_rounded),
             ),
             IconButton(
               tooltip: 'Listening Lounge',
@@ -216,7 +277,8 @@ class _RedboxHomeScreenState extends State<RedboxHomeScreen> {
                                   icon: const Icon(Icons.close_rounded),
                                 ),
                           filled: true,
-                          fillColor: _dayMode ? Colors.white : const Color(0xFF171B24),
+                          fillColor:
+                              _dayMode ? Colors.white : const Color(0xFF171B24),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
                             borderSide: BorderSide.none,
@@ -230,14 +292,22 @@ class _RedboxHomeScreenState extends State<RedboxHomeScreen> {
                             child: Text(
                               'CHOOSE A SECTION',
                               style: TextStyle(
-                                color: _dayMode ? const Color(0xFF465466) : Colors.white70,
+                                color: _dayMode
+                                    ? const Color(0xFF465466)
+                                    : Colors.white70,
                                 fontSize: 10,
                                 letterSpacing: 1.5,
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
                           ),
-                          Text('${_menuPage + 1} / ${(categories.length / 4).ceil()}', style: TextStyle(color: _dayMode ? Colors.black54 : Colors.white54, fontSize: 10)),
+                          Text(
+                              '${_menuPage + 1} / ${(categories.length / 4).ceil()}',
+                              style: TextStyle(
+                                  color: _dayMode
+                                      ? Colors.black54
+                                      : Colors.white54,
+                                  fontSize: 10)),
                         ],
                       ),
                       const SizedBox(height: 8),
@@ -246,16 +316,20 @@ class _RedboxHomeScreenState extends State<RedboxHomeScreen> {
                         child: PageView.builder(
                           controller: _menuPageController,
                           itemCount: (categories.length / 4).ceil(),
-                          onPageChanged: (page) => setState(() => _menuPage = page),
+                          onPageChanged: (page) =>
+                              setState(() => _menuPage = page),
                           itemBuilder: (context, page) {
                             final start = page * 4;
-                            final end = (start + 4).clamp(0, categories.length).toInt();
-                            final pageCategories = categories.sublist(start, end);
+                            final end =
+                                (start + 4).clamp(0, categories.length).toInt();
+                            final pageCategories =
+                                categories.sublist(start, end);
                             return GridView.builder(
                               padding: EdgeInsets.zero,
                               physics: const NeverScrollableScrollPhysics(),
                               itemCount: pageCategories.length,
-                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
                                 crossAxisCount: 2,
                                 mainAxisSpacing: 8,
                                 crossAxisSpacing: 8,
@@ -270,16 +344,28 @@ class _RedboxHomeScreenState extends State<RedboxHomeScreen> {
                                   onTap: () {
                                     switch (category.id) {
                                       case 'store':
-                                        Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const VirtualStoreScreen()));
+                                        Navigator.of(context).push(
+                                            MaterialPageRoute<void>(
+                                                builder: (_) =>
+                                                    const VirtualStoreScreen()));
                                         break;
                                       case 'theater':
-                                        Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const TheaterHomeScreen()));
+                                        Navigator.of(context).push(
+                                            MaterialPageRoute<void>(
+                                                builder: (_) =>
+                                                    const TheaterHomeScreen()));
                                         break;
                                       case 'collections':
-                                        Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const CollectionsScreen()));
+                                        Navigator.of(context).push(
+                                            MaterialPageRoute<void>(
+                                                builder: (_) =>
+                                                    const CollectionsScreen()));
                                         break;
                                       case 'lounge':
-                                        Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const MusicScreen()));
+                                        Navigator.of(context).push(
+                                            MaterialPageRoute<void>(
+                                                builder: (_) =>
+                                                    const MusicScreen()));
                                         break;
                                       default:
                                         _selectMenu(category.id);
@@ -303,7 +389,9 @@ class _RedboxHomeScreenState extends State<RedboxHomeScreen> {
                             decoration: BoxDecoration(
                               color: index == _menuPage
                                   ? const Color(0xFF2489D8)
-                                  : (_dayMode ? Colors.black26 : Colors.white30),
+                                  : (_dayMode
+                                      ? Colors.black26
+                                      : Colors.white30),
                               borderRadius: BorderRadius.circular(99),
                             ),
                           ),
@@ -315,21 +403,40 @@ class _RedboxHomeScreenState extends State<RedboxHomeScreen> {
                         const SizedBox(height: 14),
                         Row(
                           children: [
-                            Expanded(child: Text(categories.firstWhere((item) => item.id == _activeMenu).title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900))),
-                            TextButton(onPressed: () => setState(() => _activeMenu = 'all'), child: const Text('Show all')),
+                            Expanded(
+                                child: Text(
+                                    categories
+                                        .firstWhere(
+                                            (item) => item.id == _activeMenu)
+                                        .title,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge
+                                        ?.copyWith(
+                                            fontWeight: FontWeight.w900))),
+                            TextButton(
+                                onPressed: () =>
+                                    setState(() => _activeMenu = 'all'),
+                                child: const Text('Show all')),
                           ],
                         ),
                       ],
-                      if (featured != null && query.isEmpty && _activeMenu == 'all') ...[
+                      if (featured != null &&
+                          query.isEmpty &&
+                          _activeMenu == 'all') ...[
                         const SizedBox(height: 16),
-                        _FeaturedMedia(media: featured, onTap: () => _openMedia(featured)),
+                        _FeaturedMedia(
+                            media: featured, onTap: () => _openMedia(featured)),
                       ],
                       if (query.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 18),
                           child: Text(
                             '${matching.length} result${matching.length == 1 ? '' : 's'}',
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w900),
                           ),
                         ),
                       if (all.isEmpty)
@@ -348,25 +455,52 @@ class _RedboxHomeScreenState extends State<RedboxHomeScreen> {
               ),
               if (query.isNotEmpty)
                 if (matching.isNotEmpty)
-                  _PosterRailSliver(title: 'Search results', items: matching, onTap: _openMedia)
+                  _PosterRailSliver(
+                      title: 'Search results',
+                      items: matching,
+                      onTap: _openMedia)
                 else
-                  const SliverToBoxAdapter(child: Padding(padding: EdgeInsets.all(28), child: Center(child: Text('No matching titles in your owned library.'))))
+                  const SliverToBoxAdapter(
+                      child: Padding(
+                          padding: EdgeInsets.all(28),
+                          child: Center(
+                              child: Text(
+                                  'No matching titles in your owned library.'))))
               else if (_activeMenu != 'all')
                 if (shown.isNotEmpty)
-                  _PosterRailSliver(title: 'Titles', items: shown, onTap: _openMedia)
+                  _PosterRailSliver(
+                      title: 'Titles', items: shown, onTap: _openMedia)
                 else
-                  const SliverToBoxAdapter(child: Padding(padding: EdgeInsets.all(28), child: Center(child: Text('There are no items in this section yet.'))))
+                  const SliverToBoxAdapter(
+                      child: Padding(
+                          padding: EdgeInsets.all(28),
+                          child: Center(
+                              child: Text(
+                                  'There are no items in this section yet.'))))
               else ...[
                 if (continueWatching.isNotEmpty)
-                  _PosterRailSliver(title: 'Continue watching', items: continueWatching, onTap: _openMedia),
+                  _PosterRailSliver(
+                      title: 'Continue watching',
+                      items: continueWatching,
+                      onTap: _openMedia),
                 if (movies.isNotEmpty)
-                  _PosterRailSliver(title: 'Movies', items: movies, onTap: _openMedia),
+                  _PosterRailSliver(
+                      title: 'Movies', items: movies, onTap: _openMedia),
                 if (series.isNotEmpty)
-                  _PosterRailSliver(title: 'Series & episodes', items: series, onTap: _openMedia),
+                  _PosterRailSliver(
+                      title: 'Series & episodes',
+                      items: series,
+                      onTap: _openMedia),
                 if (albums.isNotEmpty)
-                  _PosterRailSliver(title: 'Albums & music', items: albums, onTap: _openMedia),
+                  _PosterRailSliver(
+                      title: 'Albums & music',
+                      items: albums,
+                      onTap: _openMedia),
                 if (recent.isNotEmpty)
-                  _PosterRailSliver(title: 'Recently added', items: recent, onTap: _openMedia),
+                  _PosterRailSliver(
+                      title: 'Recently added',
+                      items: recent,
+                      onTap: _openMedia),
               ],
               const SliverToBoxAdapter(child: SizedBox(height: 28)),
             ],
@@ -378,7 +512,12 @@ class _RedboxHomeScreenState extends State<RedboxHomeScreen> {
 }
 
 class _KioskCategory {
-  const _KioskCategory({required this.id, required this.title, required this.subtitle, required this.icon, required this.media});
+  const _KioskCategory(
+      {required this.id,
+      required this.title,
+      required this.subtitle,
+      required this.icon,
+      required this.media});
   final String id;
   final String title;
   final String subtitle;
@@ -387,7 +526,11 @@ class _KioskCategory {
 }
 
 class _KioskMenuTile extends StatelessWidget {
-  const _KioskMenuTile({required this.category, required this.dayMode, required this.selected, required this.onTap});
+  const _KioskMenuTile(
+      {required this.category,
+      required this.dayMode,
+      required this.selected,
+      required this.onTap});
   final _KioskCategory category;
   final bool dayMode;
   final bool selected;
@@ -406,28 +549,32 @@ class _KioskMenuTile extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (first != null) CatalogPosterImage(media: first, fit: BoxFit.cover),
+            if (first != null)
+              CatalogPosterImage(media: first, fit: BoxFit.cover),
             DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.centerLeft,
                   end: Alignment.centerRight,
-                  colors: [Colors.black.withValues(alpha: .88), Colors.black.withValues(alpha: .26)],
+                  colors: [
+                    Colors.black.withValues(alpha: .88),
+                    Colors.black.withValues(alpha: .26)
+                  ],
                 ),
               ),
             ),
             if (selected)
               Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: const Color(0xFF58B6FF),
-                        width: 2.2,
-                      ),
-                      borderRadius: BorderRadius.circular(13),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: const Color(0xFF58B6FF),
+                      width: 2.2,
                     ),
+                    borderRadius: BorderRadius.circular(13),
                   ),
                 ),
+              ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
               child: Row(
@@ -439,13 +586,24 @@ class _KioskMenuTile extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(category.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12)),
+                        Text(category.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 12)),
                         const SizedBox(height: 2),
-                        Text(category.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70, fontSize: 9)),
+                        Text(category.subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                color: Colors.white70, fontSize: 9)),
                       ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right_rounded, color: Colors.white70, size: 18),
+                  const Icon(Icons.chevron_right_rounded,
+                      color: Colors.white70, size: 18),
                 ],
               ),
             ),
@@ -471,23 +629,42 @@ class _KioskTopper extends StatelessWidget {
                 : const [Color(0xFF123A63), Color(0xFF1769AA)],
           ),
           borderRadius: BorderRadius.circular(13),
-          boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 9, offset: Offset(0, 4))],
+          boxShadow: const [
+            BoxShadow(
+                color: Colors.black26, blurRadius: 9, offset: Offset(0, 4))
+          ],
         ),
         child: Row(
           children: [
-            const Icon(Icons.movie_filter_rounded, color: Colors.white, size: 25),
+            const Icon(Icons.movie_filter_rounded,
+                color: Colors.white, size: 25),
             const SizedBox(width: 10),
             const Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('YOUR ENTERTAINMENT KIOSK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 1.1, fontSize: 10)),
+                  Text('YOUR ENTERTAINMENT KIOSK',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.1,
+                          fontSize: 10)),
                   SizedBox(height: 2),
-                  Text('Pick something great to watch or hear.', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                  Text('Pick something great to watch or hear.',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
-            Text('$titleCount\nOWNED', textAlign: TextAlign.right, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10, height: 1.25)),
+            Text('$titleCount\nOWNED',
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 10,
+                    height: 1.25)),
           ],
         ),
       );
@@ -507,12 +684,18 @@ class _LocalCatalogNotice extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(Icons.offline_pin_rounded, color: dayMode ? const Color(0xFF315C7D) : const Color(0xFF80B8E8), size: 18),
+            Icon(Icons.offline_pin_rounded,
+                color:
+                    dayMode ? const Color(0xFF315C7D) : const Color(0xFF80B8E8),
+                size: 18),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 'Your loaded library catalog stays browsable here. Playback still requires an accessible local file or home server.',
-                style: TextStyle(color: dayMode ? const Color(0xFF354455) : Colors.white70, fontSize: 10, height: 1.3),
+                style: TextStyle(
+                    color: dayMode ? const Color(0xFF354455) : Colors.white70,
+                    fontSize: 10,
+                    height: 1.3),
               ),
             ),
           ],
@@ -537,6 +720,11 @@ class _FeaturedMedia extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 CatalogPosterImage(media: media, fit: BoxFit.cover),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: MediaStatusBadgeRow(media: media, dense: false),
+                ),
                 const DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -553,14 +741,30 @@ class _FeaturedMedia extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('FEATURED FROM YOUR LIBRARY', style: TextStyle(fontSize: 10, letterSpacing: 1.2, fontWeight: FontWeight.w900, color: Colors.white70)),
+                      const Text('FEATURED FROM YOUR LIBRARY',
+                          style: TextStyle(
+                              fontSize: 10,
+                              letterSpacing: 1.2,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white70)),
                       const SizedBox(height: 4),
-                      Text(media.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w900, color: Colors.white)),
-                      Text(media.releaseYear?.toString() ?? media.type, style: const TextStyle(color: Colors.white70)),
+                      Text(media.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 23,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white)),
+                      Text(media.releaseYear?.toString() ?? media.type,
+                          style: const TextStyle(color: Colors.white70)),
                     ],
                   ),
                 ),
-                const Positioned(right: 14, bottom: 16, child: Icon(Icons.play_circle_fill_rounded, size: 42, color: Colors.white)),
+                const Positioned(
+                    right: 14,
+                    bottom: 16,
+                    child: Icon(Icons.play_circle_fill_rounded,
+                        size: 42, color: Colors.white)),
               ],
             ),
           ),
@@ -569,7 +773,8 @@ class _FeaturedMedia extends StatelessWidget {
 }
 
 class _PosterRailSliver extends StatefulWidget {
-  const _PosterRailSliver({required this.title, required this.items, required this.onTap});
+  const _PosterRailSliver(
+      {required this.title, required this.items, required this.onTap});
   final String title;
   final List<MediaItem> items;
   final ValueChanged<MediaItem> onTap;
@@ -653,20 +858,27 @@ class _PosterRailSliverState extends State<_PosterRailSliver> {
                       Expanded(
                         child: Text(
                           widget.title,
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w900),
                         ),
                       ),
                       IconButton(
                         tooltip: 'Back',
                         visualDensity: VisualDensity.compact,
                         onPressed: _canGoBack ? () => _move(-1) : null,
-                        icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 17),
+                        icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                            size: 17),
                       ),
                       IconButton(
                         tooltip: 'Next',
                         visualDensity: VisualDensity.compact,
-                        onPressed: _canGoNext && widget.items.length > 3 ? () => _move(1) : null,
-                        icon: const Icon(Icons.arrow_forward_ios_rounded, size: 17),
+                        onPressed: _canGoNext && widget.items.length > 3
+                            ? () => _move(1)
+                            : null,
+                        icon: const Icon(Icons.arrow_forward_ios_rounded,
+                            size: 17),
                       ),
                     ],
                   ),
@@ -694,12 +906,29 @@ class _PosterRailSliverState extends State<_PosterRailSliver> {
                                   borderRadius: BorderRadius.circular(9),
                                   child: SizedBox(
                                     width: double.infinity,
-                                    child: CatalogPosterImage(media: media, fit: BoxFit.cover),
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        CatalogPosterImage(
+                                            media: media, fit: BoxFit.cover),
+                                        Positioned(
+                                          top: 5,
+                                          right: 5,
+                                          child: MediaStatusBadgeRow(
+                                              media: media, dense: true),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
                               const SizedBox(height: 5),
-                              Text(media.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                              Text(media.title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700)),
                             ],
                           ),
                         ),

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app_core.dart';
 import 'core/services/library_protection_service.dart';
@@ -45,25 +45,20 @@ class _MediaHealthScreenState extends State<MediaHealthScreen> {
       .where((track) => !track.catalogOnly)
       .toList(growable: false);
 
-  int get _missingArtwork => _media
-      .where((item) => (item.imageUrl?.trim() ?? '').isEmpty)
-      .length;
+  int get _missingArtwork =>
+      _media.where((item) => (item.imageUrl?.trim() ?? '').isEmpty).length;
 
-  int get _missingDescriptions => _media
-      .where((item) => (item.description?.trim() ?? '').isEmpty)
-      .length;
+  int get _missingDescriptions =>
+      _media.where((item) => (item.description?.trim() ?? '').isEmpty).length;
 
-  int get _missingPlaybackSources => _media
-      .where((item) => (item.playbackUrl?.trim() ?? '').isEmpty)
-      .length;
+  int get _missingPlaybackSources =>
+      _media.where((item) => (item.playbackUrl?.trim() ?? '').isEmpty).length;
 
-  int get _missingSubtitleMetadata => _media
-      .where((item) => item.subtitles.isEmpty)
-      .length;
+  int get _missingSubtitleMetadata =>
+      _media.where((item) => item.subtitles.isEmpty).length;
 
-  int get _missingAudioMetadata => _media
-      .where((item) => item.audioTracks.isEmpty)
-      .length;
+  int get _missingAudioMetadata =>
+      _media.where((item) => item.audioTracks.isEmpty).length;
 
   int get _missingAlbumArtwork => _ownedTracks
       .where((track) => (track.artworkUrl?.trim() ?? '').isEmpty)
@@ -99,14 +94,20 @@ class _MediaHealthScreenState extends State<MediaHealthScreen> {
           padding: const EdgeInsets.all(13),
           child: Row(
             children: [
-              Icon(icon, size: 27, color: Theme.of(context).colorScheme.primary),
+              Icon(icon,
+                  size: 27, color: Theme.of(context).colorScheme.primary),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(value, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+                    Text(value,
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleLarge
+                            ?.copyWith(fontWeight: FontWeight.w900)),
+                    Text(title,
+                        style: const TextStyle(fontWeight: FontWeight.w800)),
                     Text(note, style: Theme.of(context).textTheme.bodySmall),
                   ],
                 ),
@@ -119,8 +120,10 @@ class _MediaHealthScreenState extends State<MediaHealthScreen> {
   Widget _findingTile(LibraryAuditFinding finding) => ListTile(
         contentPadding: EdgeInsets.zero,
         leading: const Icon(Icons.info_outline_rounded),
-        title: Text(finding.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Text('${finding.category} · ${finding.description}', maxLines: 2, overflow: TextOverflow.ellipsis),
+        title:
+            Text(finding.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: Text('${finding.category} · ${finding.description}',
+            maxLines: 2, overflow: TextOverflow.ellipsis),
         trailing: const Icon(Icons.chevron_right_rounded),
         onTap: () => _openMedia(finding.mediaId),
       );
@@ -131,8 +134,11 @@ class _MediaHealthScreenState extends State<MediaHealthScreen> {
     final tracks = _ownedTracks;
     final findings = _findings;
     final duplicates = _duplicates;
-    final issueCount = _missingArtwork + _missingDescriptions +
-        _missingPlaybackSources + _missingAlbumArtwork + _missingAudioFiles;
+    final issueCount = _missingArtwork +
+        _missingDescriptions +
+        _missingPlaybackSources +
+        _missingAlbumArtwork +
+        _missingAudioFiles;
 
     return Scaffold(
       appBar: AppBar(
@@ -155,18 +161,28 @@ class _MediaHealthScreenState extends State<MediaHealthScreen> {
               child: Row(
                 children: [
                   Icon(
-                    issueCount == 0 ? Icons.verified_rounded : Icons.health_and_safety_rounded,
+                    issueCount == 0
+                        ? Icons.verified_rounded
+                        : Icons.health_and_safety_rounded,
                     size: 34,
-                    color: issueCount == 0 ? Colors.green : Theme.of(context).colorScheme.primary,
+                    color: issueCount == 0
+                        ? Colors.green
+                        : Theme.of(context).colorScheme.primary,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(issueCount == 0 ? 'No obvious metadata gaps' : '$issueCount catalog checks need attention', style: const TextStyle(fontWeight: FontWeight.w900)),
+                        Text(
+                            issueCount == 0
+                                ? 'No obvious metadata gaps'
+                                : '$issueCount catalog checks need attention',
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w900)),
                         const SizedBox(height: 3),
-                        Text('${media.length} accessible movies and shows · ${tracks.length} owned music tracks'),
+                        Text(
+                            '${media.length} accessible movies and shows · ${tracks.length} owned music tracks'),
                       ],
                     ),
                   ),
@@ -175,38 +191,74 @@ class _MediaHealthScreenState extends State<MediaHealthScreen> {
             ),
           ),
           const SizedBox(height: 10),
-          _metric('Missing movie/show artwork', '$_missingArtwork', Icons.image_not_supported_outlined, 'Poster or artwork URL is empty.'),
-          _metric('Missing descriptions', '$_missingDescriptions', Icons.description_outlined, 'A synopsis has not been saved.'),
-          _metric('No direct playback URL', '$_missingPlaybackSources', Icons.play_disabled_rounded, 'A server may still resolve playback on demand.'),
-          _metric('No indexed subtitle metadata', '$_missingSubtitleMetadata', Icons.subtitles_off_rounded, 'Informational only; subtitles are optional.'),
-          _metric('No indexed audio-track metadata', '$_missingAudioMetadata', Icons.audiotrack_rounded, 'Informational only; some files expose tracks at runtime.'),
-          _metric('Music albums missing artwork', '$_missingAlbumArtwork', Icons.album_rounded, 'Owned music tracks without album artwork.'),
-          _metric('Owned music tracks without audio URL', '$_missingAudioFiles', Icons.music_off_rounded, 'Catalog-only discovery entries are excluded.'),
+          _metric(
+              'Missing movie/show artwork',
+              '$_missingArtwork',
+              Icons.image_not_supported_outlined,
+              'Poster or artwork URL is empty.'),
+          _metric('Missing descriptions', '$_missingDescriptions',
+              Icons.description_outlined, 'A synopsis has not been saved.'),
+          _metric(
+              'No direct playback URL',
+              '$_missingPlaybackSources',
+              Icons.play_disabled_rounded,
+              'A server may still resolve playback on demand.'),
+          _metric(
+              'No indexed subtitle metadata',
+              '$_missingSubtitleMetadata',
+              Icons.subtitles_off_rounded,
+              'Informational only; subtitles are optional.'),
+          _metric(
+              'No indexed audio-track metadata',
+              '$_missingAudioMetadata',
+              Icons.audiotrack_rounded,
+              'Informational only; some files expose tracks at runtime.'),
+          _metric('Music albums missing artwork', '$_missingAlbumArtwork',
+              Icons.album_rounded, 'Owned music tracks without album artwork.'),
+          _metric(
+              'Owned music tracks without audio URL',
+              '$_missingAudioFiles',
+              Icons.music_off_rounded,
+              'Catalog-only discovery entries are excluded.'),
           const SizedBox(height: 16),
           Row(
             children: [
-              Expanded(child: Text('Potential duplicate titles', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900))),
+              Expanded(
+                  child: Text('Potential duplicate titles',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w900))),
               Text('${duplicates.length} groups'),
             ],
           ),
           const SizedBox(height: 6),
           if (duplicates.isEmpty)
-            const Text('No duplicate title groups were detected by the current title/type/year matcher.')
+            const Text(
+                'No duplicate title groups were detected by the current title/type/year matcher.')
           else
             ...duplicates.take(8).map((group) => Card(
-              child: ListTile(
-                leading: const Icon(Icons.content_copy_rounded),
-                title: Text(group.normalizedTitle),
-                subtitle: Text('${group.items.length} records · ${group.mediaType} · ${group.releaseYear ?? 'year unknown'}${group.containsDifferentEditions ? ' · editions differ' : ''}'),
-                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                  builder: (_) => const LibraryProtectionCenterScreen(initialTabIndex: 1),
+                  child: ListTile(
+                    leading: const Icon(Icons.content_copy_rounded),
+                    title: Text(group.normalizedTitle),
+                    subtitle: Text(
+                        '${group.items.length} records · ${group.mediaType} · ${group.releaseYear ?? 'year unknown'}${group.containsDifferentEditions ? ' · editions differ' : ''}'),
+                    onTap: () =>
+                        Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => const LibraryProtectionCenterScreen(
+                          initialTabIndex: 1),
+                    )),
+                  ),
                 )),
-              ),
-            )),
           const SizedBox(height: 18),
-          Text('Repair queue', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+          Text('Repair queue',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 4),
-          const Text('Select an item to open its details and review available metadata or playback settings. No records are changed automatically.'),
+          const Text(
+              'Select an item to open its details and review available metadata or playback settings. No records are changed automatically.'),
           const SizedBox(height: 6),
           if (findings.isEmpty)
             const Text('No findings from the current catalog audit.')

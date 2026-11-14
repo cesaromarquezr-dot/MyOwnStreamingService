@@ -3,7 +3,7 @@
 // Media files remain on the appropriate account server; this source contains
 // application logic, UI, and collection navigation.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'app_core.dart';
 import 'widgets/added_by_profile_label.dart';
 import 'details.dart';
@@ -598,7 +598,11 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
                   CatalogPosterImage(media: item, fit: fit),
               fallbackIcon: Icons.movie_outlined,
               onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                builder: (_) => MediaDetailsScreen(media: item, wrappedContextType: 'collection', wrappedContextId: collection.id, wrappedContextTitle: collection.name),
+                builder: (_) => MediaDetailsScreen(
+                    media: item,
+                    wrappedContextType: 'collection',
+                    wrappedContextId: collection.id,
+                    wrappedContextTitle: collection.name),
               )),
             ))
         .toList(growable: false);

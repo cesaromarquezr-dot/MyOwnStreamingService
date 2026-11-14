@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_core.dart';
@@ -33,7 +33,9 @@ class _SongIdentificationScreenState extends State<SongIdentificationScreen> {
   }
 
   Future<void> _cleanupRecording() async {
-    try { await _capture.dispose(); } catch (_) {}
+    try {
+      await _capture.dispose();
+    } catch (_) {}
   }
 
   Future<void> _startRecognition() async {
@@ -89,7 +91,8 @@ class _SongIdentificationScreenState extends State<SongIdentificationScreen> {
       final payload = await AppController.instance.backendApi
           .identifySongFromAudio(sample.bytes, mimeType: sample.mimeType);
       if (payload['matched'] == true) {
-        final profileId = AppController.instance.currentProfile?.id.trim() ?? '';
+        final profileId =
+            AppController.instance.currentProfile?.id.trim() ?? '';
         final title = payload['title']?.toString().trim() ?? '';
         final artist = payload['artist']?.toString().trim() ?? '';
         if (profileId.isNotEmpty && title.isNotEmpty && artist.isNotEmpty) {
@@ -99,7 +102,8 @@ class _SongIdentificationScreenState extends State<SongIdentificationScreen> {
               title: title,
               artist: artist,
               album: payload['album']?.toString(),
-              trackId: payload['trackId']?.toString() ?? payload['musicBrainzRecordingId']?.toString(),
+              trackId: payload['trackId']?.toString() ??
+                  payload['musicBrainzRecordingId']?.toString(),
               source: 'identify-song',
               eventType: 'identified',
               artworkUrl: payload['artworkUrl']?.toString(),
@@ -127,7 +131,9 @@ class _SongIdentificationScreenState extends State<SongIdentificationScreen> {
         });
       }
     } finally {
-      try { await _capture.dispose(); } catch (_) {}
+      try {
+        await _capture.dispose();
+      } catch (_) {}
       if (mounted) {
         setState(() => _loading = false);
       }

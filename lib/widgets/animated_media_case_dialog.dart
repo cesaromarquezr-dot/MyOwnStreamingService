@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../app_core.dart' hide MediaCollection;
 import '../models/media_collection_models.dart';

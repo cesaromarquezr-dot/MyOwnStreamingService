@@ -1,7 +1,7 @@
 // Library directories shared by the Film navigation menu and Home shortcuts.
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'app_core.dart';
 import 'details.dart';
 import 'feature_center.dart';
@@ -25,13 +25,15 @@ class LibraryCollectionsScreen extends StatelessWidget {
 class LibraryActorsScreen extends StatelessWidget {
   const LibraryActorsScreen({super.key});
   @override
-  Widget build(BuildContext context) => const _PeopleDirectoryScreen(kind: 'Actors');
+  Widget build(BuildContext context) =>
+      const _PeopleDirectoryScreen(kind: 'Actors');
 }
 
 class LibraryDirectorsScreen extends StatelessWidget {
   const LibraryDirectorsScreen({super.key});
   @override
-  Widget build(BuildContext context) => const _PeopleDirectoryScreen(kind: 'Directors');
+  Widget build(BuildContext context) =>
+      const _PeopleDirectoryScreen(kind: 'Directors');
 }
 
 class _PeopleDirectoryScreen extends StatelessWidget {
@@ -56,12 +58,17 @@ class _PeopleDirectoryScreen extends StatelessWidget {
         ],
       ),
       body: people.isEmpty
-          ? Center(child: UniversalText('No $kind metadata has been imported yet.'))
+          ? Center(
+              child: UniversalText('No $kind metadata has been imported yet.'))
           : GridView.builder(
               padding: const EdgeInsets.all(18),
               itemCount: people.length,
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: MediaQuery.sizeOf(context).width >= 900 ? 4 : MediaQuery.sizeOf(context).width >= 600 ? 3 : 2,
+                crossAxisCount: MediaQuery.sizeOf(context).width >= 900
+                    ? 4
+                    : MediaQuery.sizeOf(context).width >= 600
+                        ? 3
+                        : 2,
                 childAspectRatio: 1.65,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
@@ -83,11 +90,22 @@ class _PeopleDirectoryScreen extends StatelessWidget {
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
-                      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                        Icon(kind == 'Actors' ? Icons.person_rounded : Icons.videocam_rounded, size: 34),
-                        const SizedBox(height: 10),
-                        Text(person, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
-                      ]),
+                      child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                                kind == 'Actors'
+                                    ? Icons.person_rounded
+                                    : Icons.videocam_rounded,
+                                size: 34),
+                            const SizedBox(height: 10),
+                            Text(person,
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w800)),
+                          ]),
                     ),
                   ),
                 );
@@ -117,37 +135,61 @@ class _PersonMediaScreen extends StatelessWidget {
               itemCount: library.length + 1,
               itemBuilder: (_, index) {
                 if (index == 0) {
-                  final localCredits = library.map((media) {
-                    return {
-                      'title': media.title,
-                      'type': media.type,
-                      'category': kind == 'Actors' ? 'Acting' : 'Directing',
-                      'role': kind == 'Actors' ? 'Cast credit' : 'Director',
-                      'year': media.releaseYear,
-                      'mediaId': media.id,
-                    };
-                  }).where((credit) => library.any((media) => media.id == credit['mediaId'] &&
-                      (kind == 'Actors' ? media.actors : media.directors).any((name) => name.toLowerCase() == person.toLowerCase()))).toList();
+                  final localCredits = library
+                      .map((media) {
+                        return {
+                          'title': media.title,
+                          'type': media.type,
+                          'category': kind == 'Actors' ? 'Acting' : 'Directing',
+                          'role': kind == 'Actors' ? 'Cast credit' : 'Director',
+                          'year': media.releaseYear,
+                          'mediaId': media.id,
+                        };
+                      })
+                      .where((credit) => library.any((media) =>
+                          media.id == credit['mediaId'] &&
+                          (kind == 'Actors' ? media.actors : media.directors)
+                              .any((name) =>
+                                  name.toLowerCase() == person.toLowerCase())))
+                      .toList();
                   return Card(
                     child: ListTile(
                       leading: const Icon(Icons.timeline_rounded),
-                      title: const UniversalText('Performer Universe', style: TextStyle(fontWeight: FontWeight.w800)),
-                      subtitle: const UniversalText('Explore movies, TV, music and the complete career'),
+                      title: const UniversalText('Performer Universe',
+                          style: TextStyle(fontWeight: FontWeight.w800)),
+                      subtitle: const UniversalText(
+                          'Explore movies, TV, music and the complete career'),
                       trailing: const Icon(Icons.chevron_right_rounded),
-                      onTap: () => Navigator.push(context, MaterialPageRoute(
-                        builder: (_) => PeopleCareerTimelineScreen(personName: person, localCredits: localCredits),
-                      )),
+                      onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => PeopleCareerTimelineScreen(
+                                personName: person, localCredits: localCredits),
+                          )),
                     ),
                   );
                 }
                 final media = library[index - 1];
                 return Card(
                   child: ListTile(
-                    leading: media.imageUrl == null ? const Icon(Icons.movie_rounded) : Image.network(media.imageUrl!, width: 52, height: 70, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.movie_rounded)),
-                    title: LocalizedMediaText(media.title, preserveOriginal: true, style: const TextStyle(fontWeight: FontWeight.w800)),
-                    subtitle: UniversalText('${media.type}${media.releaseYear == null ? '' : ' • ${media.releaseYear}'}'),
+                    leading: media.imageUrl == null
+                        ? const Icon(Icons.movie_rounded)
+                        : Image.network(media.imageUrl!,
+                            width: 52,
+                            height: 70,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) =>
+                                const Icon(Icons.movie_rounded)),
+                    title: LocalizedMediaText(media.title,
+                        preserveOriginal: true,
+                        style: const TextStyle(fontWeight: FontWeight.w800)),
+                    subtitle: UniversalText(
+                        '${media.type}${media.releaseYear == null ? '' : ' • ${media.releaseYear}'}'),
                     trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: media))),
+                    onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => MediaDetailsScreen(media: media))),
                   ),
                 );
               },
@@ -198,7 +240,8 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     ));
   }
 
-  List<String> _categories(Iterable<String> values, {List<String> presets = const []}) {
+  List<String> _categories(Iterable<String> values,
+      {List<String> presets = const []}) {
     final result = <String>{'All'};
     result.addAll(presets);
     for (final value in values) {
@@ -233,8 +276,12 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           decoration: const InputDecoration(labelText: 'Playlist name'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const UniversalText('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const UniversalText('Create')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const UniversalText('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const UniversalText('Create')),
         ],
       ),
     );
@@ -246,7 +293,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       playlistName,
       trackIds: tracks.map((track) => track.id),
     );
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('Created "$playlistName".')));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: UniversalText('Created "$playlistName".')));
+    }
   }
 
   Future<void> _createSmartCollection({
@@ -268,12 +318,17 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               decoration: const InputDecoration(labelText: 'Collection name'),
             ),
             const SizedBox(height: 12),
-            const UniversalText('New matching likes will be added automatically. Removing a like removes that item from this smart collection, but not from independent custom collections.'),
+            const UniversalText(
+                'New matching likes will be added automatically. Removing a like removes that item from this smart collection, but not from independent custom collections.'),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const UniversalText('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const UniversalText('Create')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const UniversalText('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const UniversalText('Create')),
         ],
       ),
     );
@@ -288,12 +343,15 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     );
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: UniversalText('Created auto-updating collection "$collectionName".')),
+        SnackBar(
+            content: UniversalText(
+                'Created auto-updating collection "$collectionName".')),
       );
     }
   }
 
-  Future<void> _createMediaCollection(List<MediaItem> media, {required String defaultName}) async {
+  Future<void> _createMediaCollection(List<MediaItem> media,
+      {required String defaultName}) async {
     if (media.isEmpty) return;
     final name = TextEditingController(text: defaultName);
     final shouldCreate = await showDialog<bool>(
@@ -306,8 +364,12 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           decoration: const InputDecoration(labelText: 'Collection name'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const UniversalText('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const UniversalText('Create')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const UniversalText('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const UniversalText('Create')),
         ],
       ),
     );
@@ -319,7 +381,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       automatic: false,
       mediaIds: media.map((item) => item.id),
     );
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('Created "$collectionName".')));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: UniversalText('Created "$collectionName".')));
+    }
   }
 
   @override
@@ -328,78 +393,130 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     final likedMedia = controller.liked;
     bool isShow(MediaItem media) {
       final type = media.type.toLowerCase();
-      return type.contains('tv') || type.contains('show') ||
-          type.contains('series') || type.contains('episode');
+      return type.contains('tv') ||
+          type.contains('show') ||
+          type.contains('series') ||
+          type.contains('episode');
     }
+
     final likedMovies = likedMedia.where((media) => !isShow(media)).toList();
     final likedShows = likedMedia.where(isShow).toList();
     final musicLibrary = MusicLibraryStore.instance;
     final likedSongIds = MusicFavoritesBridge.likedTracks().toSet();
-    final likedTracks = musicLibrary.tracks.where((track) => likedSongIds.contains(track.id)).toList();
+    final likedTracks = musicLibrary.tracks
+        .where((track) => likedSongIds.contains(track.id))
+        .toList();
     final songCategories = _categories(
       likedTracks.expand((track) => <String>[
-        ...track.genres,
-        ...track.subgenres,
-        if (track.hasGenreBlend) track.genreBlendLabel,
-      ]),
-      presets: const ['Country', 'Rap', 'Pop', 'Reggaeton', 'Corridos Tumbados', 'Party Dance', 'Nostalgic'],
+            ...track.genres,
+            ...track.subgenres,
+            if (track.hasGenreBlend) track.genreBlendLabel,
+          ]),
+      presets: const [
+        'Country',
+        'Rap',
+        'Pop',
+        'Reggaeton',
+        'Corridos Tumbados',
+        'Party Dance',
+        'Nostalgic'
+      ],
     );
     final movieCategories = _categories(
       likedMovies.expand((media) => [...media.genres, ...media.tags]),
-      presets: const ['Action', 'Comedy', 'Sci-Fi', 'Drama', 'Documentary', 'Mockumentary'],
+      presets: const [
+        'Action',
+        'Comedy',
+        'Sci-Fi',
+        'Drama',
+        'Documentary',
+        'Mockumentary'
+      ],
     );
     final showCategories = _categories(
       likedShows.expand((media) => [...media.genres, ...media.tags]),
-      presets: const ['Action', 'Comedy', 'Sci-Fi', 'Drama', 'Documentary', 'Mockumentary'],
+      presets: const [
+        'Action',
+        'Comedy',
+        'Sci-Fi',
+        'Drama',
+        'Documentary',
+        'Mockumentary'
+      ],
     );
-    final filteredSongs = likedTracks.where((track) =>
-      _matches(<String>[...track.genres, ...track.subgenres, if (track.hasGenreBlend) track.genreBlendLabel], _songCategory) ||
-      MusicGenreSystem.matchesGenres(
-        track.genres,
-        <String>[_songCategory],
-        itemSubgenres: track.subgenres,
-      )
-    ).toList();
-    final filteredMovies = likedMovies.where((media) => _matches([...media.genres, ...media.tags], _movieCategory)).toList();
-    final filteredShows = likedShows.where((media) => _matches([...media.genres, ...media.tags], _showCategory)).toList();
+    final filteredSongs = likedTracks
+        .where((track) =>
+            _matches(<String>[
+              ...track.genres,
+              ...track.subgenres,
+              if (track.hasGenreBlend) track.genreBlendLabel
+            ], _songCategory) ||
+            MusicGenreSystem.matchesGenres(
+              track.genres,
+              <String>[_songCategory],
+              itemSubgenres: track.subgenres,
+            ))
+        .toList();
+    final filteredMovies = likedMovies
+        .where((media) =>
+            _matches([...media.genres, ...media.tags], _movieCategory))
+        .toList();
+    final filteredShows = likedShows
+        .where((media) =>
+            _matches([...media.genres, ...media.tags], _showCategory))
+        .toList();
 
     return Scaffold(
       appBar: AppBar(title: const UniversalText('Favorites')),
       body: AnimatedBuilder(
-        animation: Listenable.merge([musicLibrary, MusicFavoritesBridge.changes]),
+        animation:
+            Listenable.merge([musicLibrary, MusicFavoritesBridge.changes]),
         builder: (_, __) => ListView(
           padding: const EdgeInsets.all(18),
           children: [
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(14),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const UniversalText('Keep your library in sync', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 4),
-                  const UniversalText('Smart collections update when you like or unlike movies and shows. Custom collections remain hand-curated.'),
-                  const SizedBox(height: 10),
-                  Wrap(spacing: 8, runSpacing: 8, children: [
-                    OutlinedButton.icon(
-                      onPressed: () => _createSmartCollection(rule: 'liked_media', defaultName: 'My Liked Movies & Shows'),
-                      icon: const Icon(Icons.auto_awesome_rounded),
-                      label: const UniversalText('Auto-update combined favorites'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: () => _createSmartCollection(rule: 'liked_movies', defaultName: 'My Liked Movies'),
-                      icon: const Icon(Icons.movie_filter_rounded),
-                      label: const UniversalText('Auto-update movies'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: () => _createSmartCollection(rule: 'liked_shows', defaultName: 'My Liked TV Shows'),
-                      icon: const Icon(Icons.live_tv_rounded),
-                      label: const UniversalText('Auto-update shows'),
-                    ),
-                  ]),
-                ]),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const UniversalText('Keep your library in sync',
+                          style: TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 4),
+                      const UniversalText(
+                          'Smart collections update when you like or unlike movies and shows. Custom collections remain hand-curated.'),
+                      const SizedBox(height: 10),
+                      Wrap(spacing: 8, runSpacing: 8, children: [
+                        OutlinedButton.icon(
+                          onPressed: () => _createSmartCollection(
+                              rule: 'liked_media',
+                              defaultName: 'My Liked Movies & Shows'),
+                          icon: const Icon(Icons.auto_awesome_rounded),
+                          label: const UniversalText(
+                              'Auto-update combined favorites'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () => _createSmartCollection(
+                              rule: 'liked_movies',
+                              defaultName: 'My Liked Movies'),
+                          icon: const Icon(Icons.movie_filter_rounded),
+                          label: const UniversalText('Auto-update movies'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () => _createSmartCollection(
+                              rule: 'liked_shows',
+                              defaultName: 'My Liked TV Shows'),
+                          icon: const Icon(Icons.live_tv_rounded),
+                          label: const UniversalText('Auto-update shows'),
+                        ),
+                      ]),
+                    ]),
               ),
             ),
             const SizedBox(height: 12),
-            const UniversalText('Liked Movies', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+            const UniversalText('Liked Movies',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
             CategoryFilterChips(
               categories: movieCategories,
               selectedCategory: _movieCategory,
@@ -408,14 +525,22 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             Align(
               alignment: Alignment.centerRight,
               child: OutlinedButton.icon(
-                onPressed: filteredMovies.isEmpty ? null : () => _createMediaCollection(filteredMovies, defaultName: '$_movieCategory Movies'),
+                onPressed: filteredMovies.isEmpty
+                    ? null
+                    : () => _createMediaCollection(filteredMovies,
+                        defaultName: '$_movieCategory Movies'),
                 icon: const Icon(Icons.create_new_folder_outlined),
                 label: const UniversalText('Create New Collection'),
               ),
             ),
-            if (filteredMovies.isEmpty) const Card(child: ListTile(title: UniversalText('No liked movies in this category yet.'))),
+            if (filteredMovies.isEmpty)
+              const Card(
+                  child: ListTile(
+                      title: UniversalText(
+                          'No liked movies in this category yet.'))),
             for (final media in filteredMovies)
-              Card(child: ListTile(
+              Card(
+                  child: ListTile(
                 leading: const Icon(Icons.movie_outlined),
                 title: LocalizedMediaText(media.title, preserveOriginal: true),
                 subtitle: Text(media.type),
@@ -423,10 +548,14 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                   liked: controller.isLiked(media.id),
                   onPressed: () => _unlikeMedia(media),
                 ),
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: media))),
+                onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => MediaDetailsScreen(media: media))),
               )),
             const SizedBox(height: 18),
-            const UniversalText('Liked TV Shows', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+            const UniversalText('Liked TV Shows',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
             CategoryFilterChips(
               categories: showCategories,
               selectedCategory: _showCategory,
@@ -435,14 +564,22 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             Align(
               alignment: Alignment.centerRight,
               child: OutlinedButton.icon(
-                onPressed: filteredShows.isEmpty ? null : () => _createMediaCollection(filteredShows, defaultName: '$_showCategory Shows'),
+                onPressed: filteredShows.isEmpty
+                    ? null
+                    : () => _createMediaCollection(filteredShows,
+                        defaultName: '$_showCategory Shows'),
                 icon: const Icon(Icons.create_new_folder_outlined),
                 label: const UniversalText('Create New Collection'),
               ),
             ),
-            if (filteredShows.isEmpty) const Card(child: ListTile(title: UniversalText('No liked shows in this category yet.'))),
+            if (filteredShows.isEmpty)
+              const Card(
+                  child: ListTile(
+                      title: UniversalText(
+                          'No liked shows in this category yet.'))),
             for (final media in filteredShows)
-              Card(child: ListTile(
+              Card(
+                  child: ListTile(
                 leading: const Icon(Icons.tv_outlined),
                 title: LocalizedMediaText(media.title, preserveOriginal: true),
                 subtitle: Text(media.type),
@@ -450,10 +587,14 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                   liked: controller.isLiked(media.id),
                   onPressed: () => _unlikeMedia(media),
                 ),
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: media))),
+                onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => MediaDetailsScreen(media: media))),
               )),
             const SizedBox(height: 22),
-            const UniversalText('Liked Songs', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+            const UniversalText('Liked Songs',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
             CategoryFilterChips(
               categories: songCategories,
               selectedCategory: _songCategory,
@@ -462,26 +603,36 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             Align(
               alignment: Alignment.centerRight,
               child: OutlinedButton.icon(
-                onPressed: filteredSongs.isEmpty ? null : () => _createSongPlaylist(filteredSongs),
+                onPressed: filteredSongs.isEmpty
+                    ? null
+                    : () => _createSongPlaylist(filteredSongs),
                 icon: const Icon(Icons.queue_music_outlined),
                 label: const UniversalText('Create New Playlist'),
               ),
             ),
-            if (filteredSongs.isEmpty) const Card(child: ListTile(title: UniversalText('No liked songs in this category yet.'))),
+            if (filteredSongs.isEmpty)
+              const Card(
+                  child: ListTile(
+                      title: UniversalText(
+                          'No liked songs in this category yet.'))),
             for (final track in filteredSongs)
-              Card(child: ListTile(
+              Card(
+                  child: ListTile(
                 leading: const Icon(Icons.music_note_rounded),
                 title: LocalizedMediaText(track.title),
-                subtitle: Text(musicTrackSubtitle(track), maxLines: 2, overflow: TextOverflow.ellipsis),
+                subtitle: Text(musicTrackSubtitle(track),
+                    maxLines: 2, overflow: TextOverflow.ellipsis),
                 trailing: LikeToggleButton(
                   liked: true,
                   onPressed: () async {
-                    final liked = MusicFavoritesBridge.likedTracks().contains(track.id);
+                    final liked =
+                        MusicFavoritesBridge.likedTracks().contains(track.id);
                     final result = await UniversalMediaActions.perform(
                       context: UniversalMediaActionContext(
                         contentType: 'music_track',
                         contentId: track.id,
-                        profileId: controller.currentProfile?.id ?? 'local-profile',
+                        profileId:
+                            controller.currentProfile?.id ?? 'local-profile',
                         availableActions: const {
                           UniversalMediaAction.like,
                           UniversalMediaAction.removeReaction,
@@ -497,13 +648,29 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                 ),
               )),
             const SizedBox(height: 18),
-            const UniversalText('Liked Albums', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-            if (MusicFavoritesBridge.likedAlbums().isEmpty) const Card(child: ListTile(title: UniversalText('No liked albums yet.'))),
-            for (final album in MusicFavoritesBridge.likedAlbums()) Card(child: ListTile(leading: const Icon(Icons.album_rounded), title: Text(album))),
+            const UniversalText('Liked Albums',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+            if (MusicFavoritesBridge.likedAlbums().isEmpty)
+              const Card(
+                  child:
+                      ListTile(title: UniversalText('No liked albums yet.'))),
+            for (final album in MusicFavoritesBridge.likedAlbums())
+              Card(
+                  child: ListTile(
+                      leading: const Icon(Icons.album_rounded),
+                      title: Text(album))),
             const SizedBox(height: 18),
-            const UniversalText('Liked Playlists', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-            if (MusicFavoritesBridge.likedPlaylists().isEmpty) const Card(child: ListTile(title: UniversalText('No liked playlists yet.'))),
-            for (final playlist in MusicFavoritesBridge.likedPlaylists()) Card(child: ListTile(leading: const Icon(Icons.queue_music_rounded), title: Text(playlist))),
+            const UniversalText('Liked Playlists',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+            if (MusicFavoritesBridge.likedPlaylists().isEmpty)
+              const Card(
+                  child: ListTile(
+                      title: UniversalText('No liked playlists yet.'))),
+            for (final playlist in MusicFavoritesBridge.likedPlaylists())
+              Card(
+                  child: ListTile(
+                      leading: const Icon(Icons.queue_music_rounded),
+                      title: Text(playlist))),
           ],
         ),
       ),

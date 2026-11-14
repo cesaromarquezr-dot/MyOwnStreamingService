@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Product capability status is a roadmap/integration aid, not a live health
 /// probe. "Foundation exists" means the saved source has an entry point or

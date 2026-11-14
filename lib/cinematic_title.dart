@@ -6,7 +6,7 @@
 
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'app_core.dart';
 import 'cinematic_title_fonts.dart';
 import 'core/services/cinematic_title_metadata_service.dart';

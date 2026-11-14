@@ -1,6 +1,8 @@
 // Root MaterialApp shell for MyOwnStreamingService.
-import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:flutter_localizations/flutter_localizations.dart'
+    as flutter_localizations;
 
 import 'app_accessibility.dart';
 import 'app_core.dart';
@@ -61,7 +63,7 @@ class _AppRootShellState extends State<AppRootShell> {
           .toList(growable: false),
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
+        flutter_localizations.GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
       navigatorKey: widget.navigatorKey,
@@ -108,8 +110,7 @@ class _AppRootShellState extends State<AppRootShell> {
                   builder: (context, _) {
                     final profileSelected =
                         AppController.instance.currentProfile != null;
-                    final routeIsOnboarding =
-                        appPageState.pageId == 'boot' ||
+                    final routeIsOnboarding = appPageState.pageId == 'boot' ||
                         appPageState.pageId == 'profiles' ||
                         appPageState.pageId == 'server-selection' ||
                         appPageState.pageId == 'import';
@@ -166,7 +167,8 @@ class _AppPageSurface extends StatelessWidget {
         AppAccessibilitySettings.instance,
       ]),
       builder: (context, _) {
-        final accessibilityProfileId = AppController.instance.currentProfile?.id;
+        final accessibilityProfileId =
+            AppController.instance.currentProfile?.id;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           AppAccessibilitySettings.instance.ensureLoaded(
             profileId: accessibilityProfileId,
@@ -211,8 +213,9 @@ class _AppPageSurface extends StatelessWidget {
         );
         final media = MediaQuery.of(context);
         final systemScale = media.textScaler.scale(14.0) / 14.0;
-        final effectiveTextScale =
-            (systemScale * accessibility.appTextScale).clamp(0.75, 2.2).toDouble();
+        final effectiveTextScale = (systemScale * accessibility.appTextScale)
+            .clamp(0.75, 2.2)
+            .toDouble();
         final showGlobalNavigation =
             AppController.instance.currentProfile != null &&
                 appPageState.pageId != 'boot' &&

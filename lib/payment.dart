@@ -2,7 +2,7 @@
 // Purpose: Implements the payment portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'backend_api.dart';
 import 'app_core.dart';
 import 'localization.dart';

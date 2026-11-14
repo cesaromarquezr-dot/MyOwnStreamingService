@@ -4,7 +4,7 @@
 
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app_core.dart';
 import 'release_order_grouping.dart';
@@ -22,9 +22,7 @@ import 'country_origin_style.dart';
 import 'user_rating_store.dart';
 import 'rating_system.dart';
 import 'home_streaming_discovery.dart'
-    show
-        HomeHeroCarousel,
-        HomeHoverPreviewStore;
+    show HomeHeroCarousel, HomeHoverPreviewStore;
 
 class MoviesScreen extends StatefulWidget {
   const MoviesScreen({super.key});
@@ -46,6 +44,7 @@ class _MoviesScreenState extends State<MoviesScreen>
   PageHeroSettings _heroSettings = const PageHeroSettings();
 
   @override
+
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
@@ -53,7 +52,9 @@ class _MoviesScreenState extends State<MoviesScreen>
     TmdbMediaRatingStore.revision.addListener(_onTmdbRatingsChanged);
     unawaited(UserMediaRatingStore.initializeForProfile(
       AppController.instance.currentProfile?.id,
-    ).then((_) { if (mounted) setState(() {}); }));
+    ).then((_) {
+      if (mounted) setState(() {});
+    }));
     HomeHoverPreviewStore.clearCurrent();
 
     // Seed browseable catalog examples when Movies/TV is opened directly.
@@ -91,7 +92,8 @@ class _MoviesScreenState extends State<MoviesScreen>
         .where((media) => media.type.toLowerCase() == 'movie')
         .toList(growable: false);
     _prefetchingTmdbRatings = true;
-    unawaited(TmdbMediaRatingStore.prefetch(items, isTv: false).whenComplete(() {
+    unawaited(
+        TmdbMediaRatingStore.prefetch(items, isTv: false).whenComplete(() {
       _prefetchingTmdbRatings = false;
       if (mounted && _sortMode.contains('Rated')) setState(() {});
     }));
@@ -105,6 +107,7 @@ class _MoviesScreenState extends State<MoviesScreen>
   void _onHeroSettingsRevision() => unawaited(_reloadHeroSettings());
 
   @override
+
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     PageHeroSettingsStore.revision.removeListener(_onHeroSettingsRevision);
@@ -128,8 +131,8 @@ class _MoviesScreenState extends State<MoviesScreen>
     Navigator.push(
       context,
       PageRouteBuilder(
-      settings: const RouteSettings(name: '/app/details'),
-      transitionDuration: const Duration(milliseconds: 180),
+        settings: const RouteSettings(name: '/app/details'),
+        transitionDuration: const Duration(milliseconds: 180),
         reverseTransitionDuration: const Duration(milliseconds: 140),
         pageBuilder: (
           context,
@@ -167,6 +170,7 @@ class _MoviesScreenState extends State<MoviesScreen>
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final library = AppController.instance.library;
@@ -185,51 +189,75 @@ class _MoviesScreenState extends State<MoviesScreen>
 
     _sortMedia(filteredMovies);
 
-    final viewEntries = filteredMovies.map((movie) => LibraryViewEntry(
-      title: movie.title,
-      subtitle: [
-        if (movie.releaseYear != null) movie.releaseYear.toString(),
-        if (movie.genres.isNotEmpty) movie.genres.take(2).join(' · '),
-        mediaCountryOriginLabel(movie),
-        movie.type,
-        if ((movie.addedByProfileName?.trim().isNotEmpty ?? false)) 'Added by ${movie.addedByProfileName!.trim()}',
-        if ((movie.addedByProfileName?.trim().isNotEmpty != true) && const <String>{'home-server-scanner', 'import/rip', 'disc_ingestion_center', 'approved-arm-import', 'arm-import'}.contains(movie.addedSource.trim().toLowerCase())) 'Added by unknown profile',
-      ].where((part) => part.trim().isNotEmpty).join(' · '),
-      subtitleBuilder: (context) => Wrap(
-        spacing: 5,
-        runSpacing: 2,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          if (movie.releaseYear != null) Text('${movie.releaseYear}', style: const TextStyle(color: Colors.white60, fontSize: 11)),
-          if (movie.genres.isNotEmpty) Text(movie.genres.take(2).join(' · '), style: const TextStyle(color: Colors.white60, fontSize: 11)),
-          CountryOriginInline(media: movie, fontSize: 10.5),
-          TmdbMediaRatingBadge(
-            title: movie.title, isTv: false, year: movie.releaseYear,
-          ),
-          AddedByProfileLabel.forMedia(movie),
-          if (UserMediaRatingStore.scorePercentFor(
-                AppController.instance.currentProfile?.id, movie.id) != null)
-            UserScoreBadge(
-              score: UserMediaRatingStore.scoreFor(
-                AppController.instance.currentProfile?.id, movie.id),
-              palette: UserMediaRatingStore.paletteFor(
-                AppController.instance.currentProfile?.id),
-            ),
-        ],
-      ),
-      year: movie.releaseYear,
-      artworkBuilder: (context, fit) => CatalogPosterImage(media: movie, fit: fit),
-      fallbackIcon: Icons.movie_outlined,
-      onTap: () => _openDetails(context, movie),
-      onHover: (hovering) {
-        if (_searchQuery.trim().isNotEmpty || !_heroSettings.enabled) return;
-        if (hovering) {
-          HomeHoverPreviewStore.show(movie);
-        } else {
-          HomeHoverPreviewStore.clear(movie.id);
-        }
-      },
-    )).toList(growable: false);
+    final viewEntries = filteredMovies
+        .map((movie) => LibraryViewEntry(
+              title: movie.title,
+              subtitle: [
+                if (movie.releaseYear != null) movie.releaseYear.toString(),
+                if (movie.genres.isNotEmpty) movie.genres.take(2).join(' · '),
+                mediaCountryOriginLabel(movie),
+                movie.type,
+                if ((movie.addedByProfileName?.trim().isNotEmpty ?? false))
+                  'Added by ${movie.addedByProfileName!.trim()}',
+                if ((movie.addedByProfileName?.trim().isNotEmpty != true) &&
+                    const <String>{
+                      'home-server-scanner',
+                      'import/rip',
+                      'disc_ingestion_center',
+                      'approved-arm-import',
+                      'arm-import'
+                    }.contains(movie.addedSource.trim().toLowerCase()))
+                  'Added by unknown profile',
+              ].where((part) => part.trim().isNotEmpty).join(' · '),
+              subtitleBuilder: (context) => Wrap(
+                spacing: 5,
+                runSpacing: 2,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  if (movie.releaseYear != null)
+                    Text('${movie.releaseYear}',
+                        style: const TextStyle(
+                            color: Colors.white60, fontSize: 11)),
+                  if (movie.genres.isNotEmpty)
+                    Text(movie.genres.take(2).join(' · '),
+                        style: const TextStyle(
+                            color: Colors.white60, fontSize: 11)),
+                  CountryOriginInline(media: movie, fontSize: 10.5),
+                  TmdbMediaRatingBadge(
+                    title: movie.title,
+                    isTv: false,
+                    year: movie.releaseYear,
+                  ),
+                  AddedByProfileLabel.forMedia(movie),
+                  if (UserMediaRatingStore.scorePercentFor(
+                          AppController.instance.currentProfile?.id,
+                          movie.id) !=
+                      null)
+                    UserScoreBadge(
+                      score: UserMediaRatingStore.scoreFor(
+                          AppController.instance.currentProfile?.id, movie.id),
+                      palette: UserMediaRatingStore.paletteFor(
+                          AppController.instance.currentProfile?.id),
+                    ),
+                ],
+              ),
+              year: movie.releaseYear,
+              artworkBuilder: (context, fit) =>
+                  CatalogPosterImage(media: movie, fit: fit),
+              fallbackIcon: Icons.movie_outlined,
+              onTap: () => _openDetails(context, movie),
+              onHover: (hovering) {
+                if (_searchQuery.trim().isNotEmpty || !_heroSettings.enabled) {
+                  return;
+                }
+                if (hovering) {
+                  HomeHoverPreviewStore.show(movie);
+                } else {
+                  HomeHoverPreviewStore.clear(movie.id);
+                }
+              },
+            ))
+        .toList(growable: false);
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -277,7 +305,10 @@ class _MoviesScreenState extends State<MoviesScreen>
                                   gradient: LinearGradient(
                                     begin: Alignment.topCenter,
                                     end: Alignment.bottomCenter,
-                                    colors: [Color(0xB8000000), Colors.transparent],
+                                    colors: [
+                                      Color(0xB8000000),
+                                      Colors.transparent
+                                    ],
                                   ),
                                 ),
                                 child: _buildTopBar(context, movies.length),
@@ -313,11 +344,13 @@ class _MoviesScreenState extends State<MoviesScreen>
                               ),
                             SliverToBoxAdapter(
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 20),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 20),
                                 child: LibraryViewModePicker(
                                   scope: 'movies',
                                   value: _viewMode,
-                                  onChanged: (mode) => setState(() => _viewMode = mode),
+                                  onChanged: (mode) =>
+                                      setState(() => _viewMode = mode),
                                   compact: true,
                                 ),
                               ),
@@ -327,12 +360,14 @@ class _MoviesScreenState extends State<MoviesScreen>
                                 child: LibraryCollectionView(
                                   entries: viewEntries,
                                   mode: _viewMode,
-                                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 42),
+                                  padding:
+                                      const EdgeInsets.fromLTRB(20, 4, 20, 42),
                                 ),
                               )
                             else
                               SliverPadding(
-                                padding: const EdgeInsets.fromLTRB(20, 4, 20, 42),
+                                padding:
+                                    const EdgeInsets.fromLTRB(20, 4, 20, 42),
                                 sliver: SliverGrid(
                                   delegate: SliverChildBuilderDelegate(
                                     (context, index) {
@@ -341,9 +376,11 @@ class _MoviesScreenState extends State<MoviesScreen>
                                         movie: movie,
                                         index: index,
                                         animation: _pageController,
-                                        enableHomePreview: _searchQuery.trim().isEmpty &&
-                                            _heroSettings.enabled,
-                                        onTap: () => _openDetails(context, movie),
+                                        enableHomePreview:
+                                            _searchQuery.trim().isEmpty &&
+                                                _heroSettings.enabled,
+                                        onTap: () =>
+                                            _openDetails(context, movie),
                                       );
                                     },
                                     childCount: filteredMovies.length,
@@ -371,34 +408,41 @@ class _MoviesScreenState extends State<MoviesScreen>
     );
   }
 
-
   /// Sorts the visible movie list without changing the underlying library order.
   void _sortMedia(List<MediaItem> items) {
     switch (_sortMode) {
       case 'A-Z':
-        items.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+        items.sort(
+            (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
         break;
       case 'Z-A':
-        items.sort((a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()));
+        items.sort(
+            (a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()));
         break;
       case 'Oldest to Newest':
         items.sort((a, b) => ReleaseOrderGrouping.compareMediaByReleaseDate(
-              a, b, newestFirst: false));
+            a, b,
+            newestFirst: false));
         break;
       case 'Newest to Oldest':
         items.sort((a, b) => ReleaseOrderGrouping.compareMediaByReleaseDate(
-              a, b, newestFirst: true));
+            a, b,
+            newestFirst: true));
         break;
       case 'Countries A-Z':
         items.sort((a, b) {
           final aCountry = (a.countryOfOrigin ?? '').trim().toLowerCase();
           final bCountry = (b.countryOfOrigin ?? '').trim().toLowerCase();
           if (aCountry.isEmpty || bCountry.isEmpty) {
-            if (aCountry.isEmpty && bCountry.isEmpty) return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+            if (aCountry.isEmpty && bCountry.isEmpty) {
+              return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+            }
             return aCountry.isEmpty ? 1 : -1;
           }
           final byCountry = aCountry.compareTo(bCountry);
-          return byCountry != 0 ? byCountry : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+          return byCountry != 0
+              ? byCountry
+              : a.title.toLowerCase().compareTo(b.title.toLowerCase());
         });
         break;
       case 'Countries Z-A':
@@ -406,11 +450,15 @@ class _MoviesScreenState extends State<MoviesScreen>
           final aCountry = (a.countryOfOrigin ?? '').trim().toLowerCase();
           final bCountry = (b.countryOfOrigin ?? '').trim().toLowerCase();
           if (aCountry.isEmpty || bCountry.isEmpty) {
-            if (aCountry.isEmpty && bCountry.isEmpty) return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+            if (aCountry.isEmpty && bCountry.isEmpty) {
+              return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+            }
             return aCountry.isEmpty ? 1 : -1;
           }
           final byCountry = bCountry.compareTo(aCountry);
-          return byCountry != 0 ? byCountry : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+          return byCountry != 0
+              ? byCountry
+              : a.title.toLowerCase().compareTo(b.title.toLowerCase());
         });
         break;
       case 'Top Rated':
@@ -418,19 +466,22 @@ class _MoviesScreenState extends State<MoviesScreen>
         final lowestFirst = _sortMode == 'Lowest Rated';
         items.sort((a, b) {
           final scoreA = TmdbMediaRatingStore.scoreFor(
-            title: a.title, isTv: false, year: a.releaseYear,
+            title: a.title,
+            isTv: false,
+            year: a.releaseYear,
           );
           final scoreB = TmdbMediaRatingStore.scoreFor(
-            title: b.title, isTv: false, year: b.releaseYear,
+            title: b.title,
+            isTv: false,
+            year: b.releaseYear,
           );
           if (scoreA == null && scoreB == null) {
             return a.title.toLowerCase().compareTo(b.title.toLowerCase());
           }
           if (scoreA == null) return 1;
           if (scoreB == null) return -1;
-          final scoreOrder = lowestFirst
-              ? scoreA.compareTo(scoreB)
-              : scoreB.compareTo(scoreA);
+          final scoreOrder =
+              lowestFirst ? scoreA.compareTo(scoreB) : scoreB.compareTo(scoreA);
           return scoreOrder != 0
               ? scoreOrder
               : a.title.toLowerCase().compareTo(b.title.toLowerCase());
@@ -452,21 +503,37 @@ class _MoviesScreenState extends State<MoviesScreen>
       children: [
         DropdownButtonHideUnderline(
           child: DropdownButton<String>(
-        value: _sortMode,
-        dropdownColor: const Color(0xFF151515),
-        icon: const Icon(Icons.unfold_more_rounded, color: Colors.white70, size: 18),
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
-        items: const [
-          DropdownMenuItem(value: 'Default', child: UniversalText('Default')),
-          DropdownMenuItem(value: 'A-Z', child: UniversalText('Titles A-Z')),
-          DropdownMenuItem(value: 'Z-A', child: UniversalText('Titles Z-A')),
-          DropdownMenuItem(value: 'Countries A-Z', child: UniversalText('Countries A-Z')),
-          DropdownMenuItem(value: 'Countries Z-A', child: UniversalText('Countries Z-A')),
-          DropdownMenuItem(value: 'Oldest to Newest', child: UniversalText('Oldest to Newest')),
-          DropdownMenuItem(value: 'Newest to Oldest', child: UniversalText('Newest to Oldest')),
-          DropdownMenuItem(value: 'Top Rated', child: UniversalText('Top Rated (TMDB)')),
-          DropdownMenuItem(value: 'Lowest Rated', child: UniversalText('Lowest Rated (TMDB)')),
-        ],
+            value: _sortMode,
+            dropdownColor: const Color(0xFF151515),
+            icon: const Icon(Icons.unfold_more_rounded,
+                color: Colors.white70, size: 18),
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
+            items: const [
+              DropdownMenuItem(
+                  value: 'Default', child: UniversalText('Default')),
+              DropdownMenuItem(
+                  value: 'A-Z', child: UniversalText('Titles A-Z')),
+              DropdownMenuItem(
+                  value: 'Z-A', child: UniversalText('Titles Z-A')),
+              DropdownMenuItem(
+                  value: 'Countries A-Z',
+                  child: UniversalText('Countries A-Z')),
+              DropdownMenuItem(
+                  value: 'Countries Z-A',
+                  child: UniversalText('Countries Z-A')),
+              DropdownMenuItem(
+                  value: 'Oldest to Newest',
+                  child: UniversalText('Oldest to Newest')),
+              DropdownMenuItem(
+                  value: 'Newest to Oldest',
+                  child: UniversalText('Newest to Oldest')),
+              DropdownMenuItem(
+                  value: 'Top Rated', child: UniversalText('Top Rated (TMDB)')),
+              DropdownMenuItem(
+                  value: 'Lowest Rated',
+                  child: UniversalText('Lowest Rated (TMDB)')),
+            ],
             onChanged: _changeSortMode,
           ),
         ),
@@ -506,20 +573,18 @@ class _MoviesScreenState extends State<MoviesScreen>
               Navigator.of(context).maybePop();
             },
           ),
-
           const SizedBox(width: 14),
-
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Wrap(
                   spacing: 9,
                   runSpacing: 2,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    const UniversalText('Movies',
+                    const UniversalText(
+                      'Movies',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 29,
@@ -536,7 +601,8 @@ class _MoviesScreenState extends State<MoviesScreen>
                         color: Colors.white.withValues(alpha: 0.07),
                         borderRadius: BorderRadius.circular(7),
                       ),
-                      child: UniversalText('$movieCount',
+                      child: UniversalText(
+                        '$movieCount',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.65),
                           fontSize: 10,
@@ -561,16 +627,15 @@ class _MoviesScreenState extends State<MoviesScreen>
               ],
             ),
           ),
-
           _GlassIconButton(
             icon: Icons.cloud_sync_rounded,
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
-                builder: (_) => const MediaMetadataCatalogScreen(initialType: 'movie'),
+                builder: (_) =>
+                    const MediaMetadataCatalogScreen(initialType: 'movie'),
               ),
             ),
           ),
-
           _GlassIconButton(
             icon: _searchQuery.isEmpty
                 ? Icons.search_rounded
@@ -609,8 +674,7 @@ class _MoviesScreenState extends State<MoviesScreen>
       builder: (sheetContext) {
         return Padding(
           padding: EdgeInsets.only(
-            bottom:
-                MediaQuery.of(sheetContext).viewInsets.bottom,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
           ),
           child: Container(
             padding: const EdgeInsets.fromLTRB(
@@ -642,14 +706,14 @@ class _MoviesScreenState extends State<MoviesScreen>
                       color: Colors.white.withValues(
                         alpha: 0.18,
                       ),
-                      borderRadius:
-                          BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(20),
                     ),
                   ),
                   const SizedBox(height: 20),
                   const Align(
                     alignment: Alignment.centerLeft,
-                    child: UniversalText('Search movies',
+                    child: UniversalText(
+                      'Search movies',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 21,
@@ -687,13 +751,11 @@ class _MoviesScreenState extends State<MoviesScreen>
                         alpha: 0.055,
                       ),
                       border: OutlineInputBorder(
-                        borderRadius:
-                            BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(16),
                         borderSide: BorderSide.none,
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderRadius:
-                            BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(16),
                         borderSide: BorderSide(
                           color: Colors.white.withValues(
                             alpha: 0.14,
@@ -714,11 +776,11 @@ class _MoviesScreenState extends State<MoviesScreen>
                         backgroundColor: Colors.white,
                         foregroundColor: Colors.black,
                         shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      child: const UniversalText('Done',
+                      child: const UniversalText(
+                        'Done',
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
                         ),
@@ -757,7 +819,8 @@ class _MoviesScreenState extends State<MoviesScreen>
             ),
           ),
           const SizedBox(width: 7),
-          UniversalText('$count ${count == 1 ? 'result' : 'results'}',
+          UniversalText(
+            '$count ${count == 1 ? 'result' : 'results'}',
             style: TextStyle(
               color: Colors.white.withValues(
                 alpha: 0.45,
@@ -787,13 +850,11 @@ class _MoviesScreenState extends State<MoviesScreen>
         11,
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
@@ -847,8 +908,7 @@ class _MoviesScreenState extends State<MoviesScreen>
           horizontal: 32,
         ),
         child: Column(
-          mainAxisAlignment:
-              MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
               width: 104,
@@ -865,9 +925,7 @@ class _MoviesScreenState extends State<MoviesScreen>
                 ),
               ),
               child: Icon(
-                isSearching
-                    ? Icons.search_off_rounded
-                    : Icons.movie_outlined,
+                isSearching ? Icons.search_off_rounded : Icons.movie_outlined,
                 size: 44,
                 color: Colors.white.withValues(
                   alpha: 0.48,
@@ -876,9 +934,7 @@ class _MoviesScreenState extends State<MoviesScreen>
             ),
             const SizedBox(height: 26),
             Text(
-              isSearching
-                  ? 'No movies found'
-                  : 'Your movie library is empty',
+              isSearching ? 'No movies found' : 'Your movie library is empty',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Colors.white,
@@ -945,6 +1001,7 @@ class _MovieCardState extends State<_MovieCard> {
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final movie = widget.movie;
@@ -952,13 +1009,11 @@ class _MovieCardState extends State<_MovieCard> {
     return AnimatedBuilder(
       animation: widget.animation,
       builder: (context, child) {
-        final delayedStart =
-            (widget.index * 0.045).clamp(0.0, 0.65);
+        final delayedStart = (widget.index * 0.045).clamp(0.0, 0.65);
 
-        final raw = ((widget.animation.value -
-                    delayedStart) /
-                (1 - delayedStart))
-            .clamp(0.0, 1.0);
+        final raw =
+            ((widget.animation.value - delayedStart) / (1 - delayedStart))
+                .clamp(0.0, 1.0);
 
         final entrance = Curves.easeOutCubic.transform(raw);
 
@@ -1022,8 +1077,7 @@ class _MovieCardState extends State<_MovieCard> {
               curve: Curves.easeOutCubic,
               decoration: BoxDecoration(
                 color: const Color(0xFF101010),
-                borderRadius:
-                    BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(18),
                 border: Border.all(
                   color: hovering
                       ? Colors.white.withValues(
@@ -1038,8 +1092,7 @@ class _MovieCardState extends State<_MovieCard> {
                     color: Colors.black.withValues(
                       alpha: hovering ? 0.48 : 0.25,
                     ),
-                    blurRadius:
-                        hovering ? 28 : 12,
+                    blurRadius: hovering ? 28 : 12,
                     offset: Offset(
                       0,
                       hovering ? 14 : 7,
@@ -1049,8 +1102,7 @@ class _MovieCardState extends State<_MovieCard> {
               ),
               clipBehavior: Clip.antiAlias,
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.stretch,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(
                     child: Stack(
@@ -1060,7 +1112,8 @@ class _MovieCardState extends State<_MovieCard> {
                           media: movie,
                           fit: BoxFit.cover,
                           placeholder: _ArtworkFallback(title: movie.title),
-                          errorPlaceholder: _ArtworkFallback(title: movie.title),
+                          errorPlaceholder:
+                              _ArtworkFallback(title: movie.title),
                         ),
 
                         // Artwork gradient.
@@ -1071,18 +1124,13 @@ class _MovieCardState extends State<_MovieCard> {
                           height: 125,
                           child: IgnorePointer(
                             child: DecoratedBox(
-                              decoration:
-                                  BoxDecoration(
-                                gradient:
-                                    LinearGradient(
-                                  begin: Alignment
-                                      .topCenter,
-                                  end: Alignment
-                                      .bottomCenter,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
                                   colors: [
                                     Colors.transparent,
-                                    Colors.black
-                                        .withValues(
+                                    Colors.black.withValues(
                                       alpha: 0.94,
                                     ),
                                   ],
@@ -1094,15 +1142,12 @@ class _MovieCardState extends State<_MovieCard> {
 
                         // Hover dim.
                         AnimatedOpacity(
-                          opacity:
-                              hovering ? 1 : 0,
-                          duration:
-                              const Duration(
+                          opacity: hovering ? 1 : 0,
+                          duration: const Duration(
                             milliseconds: 180,
                           ),
                           child: Container(
-                            color: Colors.black
-                                .withValues(
+                            color: Colors.black.withValues(
                               alpha: 0.24,
                             ),
                           ),
@@ -1112,32 +1157,24 @@ class _MovieCardState extends State<_MovieCard> {
                         Center(
                           child: AnimatedScale(
                             scale: hovering ? 1 : 0.72,
-                            duration:
-                                const Duration(
+                            duration: const Duration(
                               milliseconds: 240,
                             ),
-                            curve:
-                                Curves.easeOutBack,
+                            curve: Curves.easeOutBack,
                             child: AnimatedOpacity(
-                              opacity:
-                                  hovering ? 1 : 0,
-                              duration:
-                                  const Duration(
+                              opacity: hovering ? 1 : 0,
+                              duration: const Duration(
                                 milliseconds: 170,
                               ),
                               child: Container(
                                 width: 58,
                                 height: 58,
-                                decoration:
-                                    BoxDecoration(
+                                decoration: BoxDecoration(
                                   color: Colors.white,
-                                  shape:
-                                      BoxShape.circle,
+                                  shape: BoxShape.circle,
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors
-                                          .black
-                                          .withValues(
+                                      color: Colors.black.withValues(
                                         alpha: 0.4,
                                       ),
                                       blurRadius: 22,
@@ -1145,10 +1182,8 @@ class _MovieCardState extends State<_MovieCard> {
                                   ],
                                 ),
                                 child: const Icon(
-                                  Icons
-                                      .play_arrow_rounded,
-                                  color:
-                                      Colors.black,
+                                  Icons.play_arrow_rounded,
+                                  color: Colors.black,
                                   size: 32,
                                 ),
                               ),
@@ -1170,8 +1205,10 @@ class _MovieCardState extends State<_MovieCard> {
                               compact: true,
                               onPressed: () {
                                 setState(() {
-                                  if (AppController.instance.isLiked(movie.id)) {
-                                    AppController.instance.clearReaction(movie.id);
+                                  if (AppController.instance
+                                      .isLiked(movie.id)) {
+                                    AppController.instance
+                                        .clearReaction(movie.id);
                                   } else {
                                     AppController.instance.likeMedia(movie);
                                   }
@@ -1186,34 +1223,27 @@ class _MovieCardState extends State<_MovieCard> {
                           top: 11,
                           left: 11,
                           child: Container(
-                            padding:
-                                const EdgeInsets
-                                    .symmetric(
+                            padding: const EdgeInsets.symmetric(
                               horizontal: 8,
                               vertical: 5,
                             ),
-                            decoration:
-                                BoxDecoration(
-                              color: Colors.black
-                                  .withValues(
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(
                                 alpha: 0.58,
                               ),
-                              borderRadius:
-                                  BorderRadius
-                                      .circular(7),
+                              borderRadius: BorderRadius.circular(7),
                               border: Border.all(
-                                color: Colors.white
-                                    .withValues(
+                                color: Colors.white.withValues(
                                   alpha: 0.1,
                                 ),
                               ),
                             ),
-                            child: const UniversalText('MOVIE',
+                            child: const UniversalText(
+                              'MOVIE',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 8,
-                                fontWeight:
-                                    FontWeight.w800,
+                                fontWeight: FontWeight.w800,
                                 letterSpacing: 1,
                               ),
                             ),
@@ -1225,29 +1255,22 @@ class _MovieCardState extends State<_MovieCard> {
                             top: 11,
                             right: 11,
                             child: Container(
-                              padding:
-                                  const EdgeInsets
-                                      .symmetric(
+                              padding: const EdgeInsets.symmetric(
                                 horizontal: 7,
                                 vertical: 5,
                               ),
-                              decoration:
-                                  BoxDecoration(
-                                color: Colors.black
-                                    .withValues(
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(
                                   alpha: 0.55,
                                 ),
-                                borderRadius:
-                                    BorderRadius
-                                        .circular(7),
+                                borderRadius: BorderRadius.circular(7),
                               ),
-                              child: UniversalText('${movie.releaseYear}',
-                                style:
-                                    const TextStyle(
+                              child: UniversalText(
+                                '${movie.releaseYear}',
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 9,
-                                  fontWeight:
-                                      FontWeight.w600,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
@@ -1258,57 +1281,52 @@ class _MovieCardState extends State<_MovieCard> {
 
                   // Card information.
                   Padding(
-                    padding:
-                        const EdgeInsets.fromLTRB(
+                    padding: const EdgeInsets.fromLTRB(
                       13,
                       11,
                       10,
                       13,
                     ),
                     child: Row(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Expanded(
                           child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment
-                                    .start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 movie.title,
                                 maxLines: 2,
-                                overflow:
-                                    TextOverflow
-                                        .ellipsis,
-                                style:
-                                    const TextStyle(
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 14,
                                   height: 1.2,
-                                  fontWeight:
-                                      FontWeight.w700,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                               const SizedBox(height: 5),
                               if (movie.releaseYear != null)
-                                Text('${movie.releaseYear}', style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.48),
-                                  fontSize: 10.5,
-                                )),
+                                Text('${movie.releaseYear}',
+                                    style: TextStyle(
+                                      color:
+                                          Colors.white.withValues(alpha: 0.48),
+                                      fontSize: 10.5,
+                                    )),
                               TmdbMediaRatingBadge(
                                 title: movie.title,
                                 isTv: false,
                                 year: movie.releaseYear,
                               ),
                               if (UserMediaRatingStore.scorePercentFor(
-                                    AppController.instance.currentProfile?.id,
-                                    movie.id) != null) ...[
+                                      AppController.instance.currentProfile?.id,
+                                      movie.id) !=
+                                  null) ...[
                                 const SizedBox(height: 5),
                                 UserScoreBadge(
                                   score: UserMediaRatingStore.scoreFor(
-                                    AppController.instance.currentProfile?.id,
-                                    movie.id),
+                                      AppController.instance.currentProfile?.id,
+                                      movie.id),
                                   palette: UserMediaRatingStore.paletteFor(
                                     AppController.instance.currentProfile?.id,
                                   ),
@@ -1317,38 +1335,32 @@ class _MovieCardState extends State<_MovieCard> {
                               const SizedBox(height: 2),
                               CountryOriginInline(media: movie, fontSize: 10.5),
                               const SizedBox(height: 3),
-                              AddedByProfileLabel.forMedia(movie, compact: true),
+                              AddedByProfileLabel.forMedia(movie,
+                                  compact: true),
                             ],
                           ),
                         ),
                         const SizedBox(width: 8),
                         AnimatedContainer(
-                          duration:
-                              const Duration(
+                          duration: const Duration(
                             milliseconds: 180,
                           ),
                           width: 35,
                           height: 35,
-                          decoration:
-                              BoxDecoration(
+                          decoration: BoxDecoration(
                             color: hovering
-                                ? Colors.white
-                                    .withValues(
+                                ? Colors.white.withValues(
                                     alpha: 0.12,
                                   )
-                                : Colors.white
-                                    .withValues(
+                                : Colors.white.withValues(
                                     alpha: 0.055,
                                   ),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
-                            Icons
-                                .play_arrow_rounded,
-                            color: Colors.white
-                                .withValues(
-                              alpha:
-                                  hovering ? 0.95 : 0.65,
+                            Icons.play_arrow_rounded,
+                            color: Colors.white.withValues(
+                              alpha: hovering ? 0.95 : 0.65,
                             ),
                             size: 19,
                           ),
@@ -1378,6 +1390,7 @@ class _ArtworkFallback extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
@@ -1410,11 +1423,9 @@ class _ArtworkFallback extends StatelessWidget {
           ),
           Center(
             child: Padding(
-              padding:
-                  const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(24),
               child: Column(
-                mainAxisAlignment:
-                    MainAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
                     Icons.movie_rounded,
@@ -1428,16 +1439,13 @@ class _ArtworkFallback extends StatelessWidget {
                     title,
                     maxLines: 2,
                     textAlign: TextAlign.center,
-                    overflow:
-                        TextOverflow.ellipsis,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: Colors.white
-                          .withValues(
+                      color: Colors.white.withValues(
                         alpha: 0.32,
                       ),
                       fontSize: 13,
-                      fontWeight:
-                          FontWeight.w600,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -1458,6 +1466,7 @@ class _MoviesBackground extends StatelessWidget {
   const _MoviesBackground();
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return IgnorePointer(
@@ -1525,16 +1534,15 @@ class _GlassIconButton extends StatefulWidget {
   });
 
   @override
-  State<_GlassIconButton> createState() =>
-      _GlassIconButtonState();
+  State<_GlassIconButton> createState() => _GlassIconButtonState();
 }
 
-class _GlassIconButtonState
-    extends State<_GlassIconButton> {
+class _GlassIconButtonState extends State<_GlassIconButton> {
   bool hovering = false;
   bool pressed = false;
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return MouseRegion(
@@ -1572,12 +1580,10 @@ class _GlassIconButtonState
               : hovering
                   ? 1.04
                   : 1,
-          duration:
-              const Duration(milliseconds: 160),
+          duration: const Duration(milliseconds: 160),
           curve: Curves.easeOutCubic,
           child: AnimatedContainer(
-            duration:
-                const Duration(milliseconds: 180),
+            duration: const Duration(milliseconds: 180),
             width: 48,
             height: 48,
             decoration: BoxDecoration(
@@ -1588,8 +1594,7 @@ class _GlassIconButtonState
                   : Colors.white.withValues(
                       alpha: 0.055,
                     ),
-              borderRadius:
-                  BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(
                 color: hovering
                     ? Colors.white.withValues(

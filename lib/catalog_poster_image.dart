@@ -2,7 +2,7 @@
 // covers for albums only when a user's media server or catalog has no artwork.
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import 'app_core.dart';
@@ -37,8 +37,8 @@ class CatalogPosterImage extends StatefulWidget {
 
 class _CatalogPosterImageState extends State<CatalogPosterImage> {
   static Future<void> _backdropResolutionTail = Future<void>.value();
-  static final Map<String, Future<MediaArtworkResult?>> _backdropMetadataFutures =
-      <String, Future<MediaArtworkResult?>>{};
+  static final Map<String, Future<MediaArtworkResult?>>
+      _backdropMetadataFutures = <String, Future<MediaArtworkResult?>>{};
 
   late String _imageUrl;
   late String _mediaKey;
@@ -53,7 +53,8 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
     _imageUrl = _normalizeArtworkUrl(widget.media.imageUrl);
     _mediaKey = _keyFor(widget.media);
     AppController.instance.addListener(_onAppControllerChanged);
-    AppSectionCustomizationStore.revision.addListener(_onArtworkSettingsChanged);
+    AppSectionCustomizationStore.revision
+        .addListener(_onArtworkSettingsChanged);
     ArtworkSelectionStore.revision.addListener(_onArtworkSelectionChanged);
     unawaited(_loadSelectedPoster());
     _startProviderLookupIfReady();
@@ -68,8 +69,7 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
     _startBackdropLookupIfNeeded();
   }
 
-  String get _artworkDisplayMode =>
-      AppSectionCustomizationStore.settingsFor(
+  String get _artworkDisplayMode => AppSectionCustomizationStore.settingsFor(
         AppController.instance.currentProfile,
       ).artworkDisplayMode;
 
@@ -89,7 +89,9 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
 
   static String _normalizeArtworkUrl(String? raw) {
     final value = raw?.trim() ?? '';
-    if (value.isEmpty || value.startsWith('http://') || value.startsWith('https://')) {
+    if (value.isEmpty ||
+        value.startsWith('http://') ||
+        value.startsWith('https://')) {
       return value;
     }
     if (value.startsWith('/')) {
@@ -196,7 +198,8 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
       final completer = Completer<MediaArtworkResult?>();
       _backdropResolutionTail = _backdropResolutionTail.then((_) async {
         try {
-          completer.complete(await MediaArtworkAutoResolver.resolveMedia(media));
+          completer
+              .complete(await MediaArtworkAutoResolver.resolveMedia(media));
         } catch (_) {
           completer.complete(null);
         }
@@ -217,7 +220,8 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
     } else if (uri.host.toLowerCase().contains('youtube.com') ||
         uri.host.toLowerCase().contains('youtube-nocookie.com')) {
       id = uri.queryParameters['v'];
-      if ((id == null || id.isEmpty) && uri.pathSegments.length >= 2 &&
+      if ((id == null || id.isEmpty) &&
+          uri.pathSegments.length >= 2 &&
           const {'embed', 'shorts', 'live'}.contains(uri.pathSegments.first)) {
         id = uri.pathSegments[1];
       }
@@ -229,7 +233,9 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
   }
 
   void _startProviderLookupIfReady() {
-    if (!mounted || _providerLookupStarted || _imageUrl.isNotEmpty ||
+    if (!mounted ||
+        _providerLookupStarted ||
+        _imageUrl.isNotEmpty ||
         !CinematicTitleMetadataService.isConfigured) {
       return;
     }
@@ -240,7 +246,8 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
   @override
   void dispose() {
     AppController.instance.removeListener(_onAppControllerChanged);
-    AppSectionCustomizationStore.revision.removeListener(_onArtworkSettingsChanged);
+    AppSectionCustomizationStore.revision
+        .removeListener(_onArtworkSettingsChanged);
     ArtworkSelectionStore.revision.removeListener(_onArtworkSelectionChanged);
     super.dispose();
   }
@@ -259,7 +266,8 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
       unawaited(_loadSelectedPoster());
       _startProviderLookupIfReady();
       _startBackdropLookupIfNeeded();
-    } else if (!_fallbackAttempted && _imageUrl.isEmpty &&
+    } else if (!_fallbackAttempted &&
+        _imageUrl.isEmpty &&
         (widget.media.imageUrl?.trim().isNotEmpty ?? false)) {
       _imageUrl = _normalizeArtworkUrl(widget.media.imageUrl);
     }
@@ -276,7 +284,8 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
     try {
       // Reuse previously verified metadata immediately after an app restart.
       // This avoids a backend catalog round-trip for every missing local poster.
-      final savedPoster = await MediaArtworkAutoResolver.readAutoPosterUrl(media.id);
+      final savedPoster =
+          await MediaArtworkAutoResolver.readAutoPosterUrl(media.id);
       if (savedPoster != null && savedPoster.isNotEmpty) {
         if (mounted && _mediaKey == key && _imageUrl.isEmpty) {
           setState(() => _imageUrl = savedPoster);
@@ -335,7 +344,9 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
             },
           );
 
-    if (mode == 'Poster only' || backgroundUrl == null || backgroundUrl.isEmpty) {
+    if (mode == 'Poster only' ||
+        backgroundUrl == null ||
+        backgroundUrl.isEmpty) {
       return poster();
     }
     return SizedBox(
@@ -376,7 +387,8 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
               )
             else
               const Center(
-                child: Icon(Icons.movie_outlined, color: Colors.white70, size: 36),
+                child:
+                    Icon(Icons.movie_outlined, color: Colors.white70, size: 36),
               ),
           ],
         ),
@@ -395,7 +407,9 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
     });
   }
 
-  Widget _placeholder() => widget.placeholder ?? SizedBox(
+  Widget _placeholder() =>
+      widget.placeholder ??
+      SizedBox(
         width: widget.width,
         height: widget.height,
         child: const ColoredBox(
@@ -406,7 +420,6 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
         ),
       );
 }
-
 
 /// Automatically resolves a missing or failed album cover from the authenticated
 /// Spotify/MusicBrainz catalog while retaining local artwork as the first choice.
@@ -440,7 +453,8 @@ class _AlbumArtworkImageState extends State<AlbumArtworkImage> {
   String _url = '';
   String _lookupKey = '';
   bool _lookupStarted = false;
-  static final Map<String, Future<String?>> _cache = <String, Future<String?>>{};
+  static final Map<String, Future<String?>> _cache =
+      <String, Future<String?>>{};
 
   String get _currentKey => '${widget.title.trim().toLowerCase()}|'
       '${widget.artist.trim().toLowerCase()}';
@@ -484,10 +498,12 @@ class _AlbumArtworkImageState extends State<AlbumArtworkImage> {
     if (title.isEmpty) return;
     _lookupStarted = true;
     final key = _currentKey;
-    final future = _cache.putIfAbsent(key, () => MediaArtworkAutoResolver.resolveAlbumCover(
-          title: title,
-          artist: widget.artist,
-        ));
+    final future = _cache.putIfAbsent(
+        key,
+        () => MediaArtworkAutoResolver.resolveAlbumCover(
+              title: title,
+              artist: widget.artist,
+            ));
     unawaited(_applyResolution(future, key));
   }
 
@@ -506,14 +522,17 @@ class _AlbumArtworkImageState extends State<AlbumArtworkImage> {
     final url = _url.trim();
     if (url.isEmpty) {
       _resolveIfNeeded();
-      return widget.placeholder ?? SizedBox(
-        width: widget.width,
-        height: widget.height,
-        child: const ColoredBox(
-          color: Color(0xFF242424),
-          child: Center(child: Icon(Icons.album_outlined, color: Colors.white54, size: 28)),
-        ),
-      );
+      return widget.placeholder ??
+          SizedBox(
+            width: widget.width,
+            height: widget.height,
+            child: const ColoredBox(
+              color: Color(0xFF242424),
+              child: Center(
+                  child: Icon(Icons.album_outlined,
+                      color: Colors.white54, size: 28)),
+            ),
+          );
     }
     return CachedNetworkImage(
       imageUrl: url,
@@ -521,14 +540,18 @@ class _AlbumArtworkImageState extends State<AlbumArtworkImage> {
       height: widget.height,
       fit: widget.fit,
       fadeInDuration: const Duration(milliseconds: 100),
-      placeholder: (_, __) => widget.placeholder ?? SizedBox(
-        width: widget.width,
-        height: widget.height,
-        child: const ColoredBox(
-          color: Color(0xFF242424),
-          child: Center(child: Icon(Icons.album_outlined, color: Colors.white54, size: 28)),
-        ),
-      ),
+      placeholder: (_, __) =>
+          widget.placeholder ??
+          SizedBox(
+            width: widget.width,
+            height: widget.height,
+            child: const ColoredBox(
+              color: Color(0xFF242424),
+              child: Center(
+                  child: Icon(Icons.album_outlined,
+                      color: Colors.white54, size: 28)),
+            ),
+          ),
       errorWidget: (_, __, ___) {
         if (!_lookupStarted) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -540,14 +563,18 @@ class _AlbumArtworkImageState extends State<AlbumArtworkImage> {
             _resolveIfNeeded();
           });
         }
-        return widget.errorPlaceholder ?? widget.placeholder ?? SizedBox(
-          width: widget.width,
-          height: widget.height,
-          child: const ColoredBox(
-            color: Color(0xFF242424),
-            child: Center(child: Icon(Icons.album_outlined, color: Colors.white54, size: 28)),
-          ),
-        );
+        return widget.errorPlaceholder ??
+            widget.placeholder ??
+            SizedBox(
+              width: widget.width,
+              height: widget.height,
+              child: const ColoredBox(
+                color: Color(0xFF242424),
+                child: Center(
+                    child: Icon(Icons.album_outlined,
+                        color: Colors.white54, size: 28)),
+              ),
+            );
       },
     );
   }

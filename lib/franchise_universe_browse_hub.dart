@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app_core.dart';
 import 'cinematic_universe_franchise_explorer.dart';
@@ -37,7 +37,9 @@ class FranchiseUniverseBrowseHubScreen extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         children: [
           _BrowseIntroCard(
-            title: isFranchise ? 'Explore movie franchises' : 'Explore connected universes',
+            title: isFranchise
+                ? 'Explore movie franchises'
+                : 'Explore connected universes',
             description: isFranchise
                 ? 'Browse franchise groups derived from catalog metadata. Use live intelligence to discover future titles without maintaining a movie-by-movie list.'
                 : 'Explore universe groups derived from metadata, and use live discovery to keep upcoming titles current. Studio overlap alone is not treated as proof of shared continuity.',
@@ -48,9 +50,11 @@ class FranchiseUniverseBrowseHubScreen extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.account_tree_rounded),
               title: const Text('Connections Graph & Timeline'),
-              subtitle: const Text('Search a character, choose a continuity, and explore story connections or release/story order.'),
+              subtitle: const Text(
+                  'Search a character, choose a continuity, and explore story connections or release/story order.'),
               trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () => Navigator.of(context).push<void>(MaterialPageRoute<void>(
+              onTap: () =>
+                  Navigator.of(context).push<void>(MaterialPageRoute<void>(
                 builder: (_) => const FranchiseStoryGraphScreen(),
               )),
             ),
@@ -60,15 +64,18 @@ class FranchiseUniverseBrowseHubScreen extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.auto_awesome),
               title: const Text('Cinematic Universe Intelligence'),
-              subtitle: const Text('Discover upcoming movies and shows from live metadata; no per-title filmography maintenance.'),
+              subtitle: const Text(
+                  'Discover upcoming movies and shows from live metadata; no per-title filmography maintenance.'),
               trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).push<void>(MaterialPageRoute<void>(
+              onTap: () =>
+                  Navigator.of(context).push<void>(MaterialPageRoute<void>(
                 builder: (_) => const CinematicFranchiseIntelligenceScreen(),
               )),
             ),
           ),
           const SizedBox(height: 18),
-          _SectionHeading(isFranchise ? 'Catalog franchises' : 'Catalog universes'),
+          _SectionHeading(
+              isFranchise ? 'Catalog franchises' : 'Catalog universes'),
           const SizedBox(height: 8),
           ...metadataGroups.map((group) => _MetadataGroupTile(group: group)),
           if (metadataGroups.isEmpty)
@@ -92,46 +99,63 @@ class _MetadataGroupTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Card(
-    child: ListTile(
-      leading: Icon(group.kind == 'Universe' ? Icons.hub_rounded : Icons.movie_filter_rounded),
-      title: Text(group.name, style: const TextStyle(fontWeight: FontWeight.w800)),
-      subtitle: Text('${group.works.length} catalog-linked title(s)'),
-      trailing: const Icon(Icons.chevron_right_rounded),
-      onTap: () => Navigator.of(context).push<void>(MaterialPageRoute<void>(
-        builder: (_) => UniverseFranchiseDetailsScreen(group: group),
-      )),
-    ),
-  );
+        child: ListTile(
+          leading: Icon(group.kind == 'Universe'
+              ? Icons.hub_rounded
+              : Icons.movie_filter_rounded),
+          title: Text(group.name,
+              style: const TextStyle(fontWeight: FontWeight.w800)),
+          subtitle: Text('${group.works.length} catalog-linked title(s)'),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => Navigator.of(context).push<void>(MaterialPageRoute<void>(
+            builder: (_) => UniverseFranchiseDetailsScreen(group: group),
+          )),
+        ),
+      );
 }
 
 class _BrowseIntroCard extends StatelessWidget {
-  const _BrowseIntroCard({required this.title, required this.description, required this.icon});
+  const _BrowseIntroCard(
+      {required this.title, required this.description, required this.icon});
   final String title;
   final String description;
   final IconData icon;
 
   @override
   Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon, size: 34, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
-          const SizedBox(height: 6),
-          Text(description, style: const TextStyle(color: Colors.white70, height: 1.4)),
-        ])),
-      ]),
-    ),
-  );
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(icon, size: 34, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 12),
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text(title,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 6),
+                  Text(description,
+                      style:
+                          const TextStyle(color: Colors.white70, height: 1.4)),
+                ])),
+          ]),
+        ),
+      );
 }
 
 class _SectionHeading extends StatelessWidget {
   const _SectionHeading(this.title);
   final String title;
   @override
-  Widget build(BuildContext context) => Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900));
+  Widget build(BuildContext context) => Text(title,
+      style: Theme.of(context)
+          .textTheme
+          .titleMedium
+          ?.copyWith(fontWeight: FontWeight.w900));
 }
 
 class _EmptyHint extends StatelessWidget {
@@ -139,7 +163,7 @@ class _EmptyHint extends StatelessWidget {
   final String message;
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.all(12),
-    child: Text(message, style: const TextStyle(color: Colors.white54)),
-  );
+        padding: const EdgeInsets.all(12),
+        child: Text(message, style: const TextStyle(color: Colors.white54)),
+      );
 }

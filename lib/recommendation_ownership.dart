@@ -1,8 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app_core.dart';
 import 'core/services/cinematic_title_metadata_service.dart';
-
 
 /// Resolves recommended titles against the active profile's real library.
 ///
@@ -55,17 +54,20 @@ class RecommendationOwnershipMatcher {
     }..remove('');
     if (titles.isEmpty) return null;
     final profile = controller.currentProfile;
-    var candidates = controller.library.where((item) =>
-        (profile == null || item.isAccessibleTo(profile)) &&
-        item.isSeries == isTv &&
-        <String>{
-          normalizeTitle(item.title),
-          normalizeTitle(item.originalTitle ?? ''),
-          normalizeTitle(item.canonicalTitle ?? ''),
-        }.intersection(titles).isNotEmpty).toList(growable: false);
+    var candidates = controller.library
+        .where((item) =>
+            (profile == null || item.isAccessibleTo(profile)) &&
+            item.isSeries == isTv &&
+            <String>{
+              normalizeTitle(item.title),
+              normalizeTitle(item.originalTitle ?? ''),
+              normalizeTitle(item.canonicalTitle ?? ''),
+            }.intersection(titles).isNotEmpty)
+        .toList(growable: false);
     if (candidates.isEmpty) return null;
     if (year != null) {
-      final exactYear = candidates.where((item) => _yearOf(item) == year).toList();
+      final exactYear =
+          candidates.where((item) => _yearOf(item) == year).toList();
       if (exactYear.isNotEmpty) candidates = exactYear;
     }
     for (final candidate in candidates) {
@@ -116,10 +118,10 @@ class RecommendationOwnershipMatcher {
     required AppController controller,
   }) =>
       findOwnedMediaForRecommendation(
-            recommendation: recommendation,
-            controller: controller,
-          ) !=
-          null;
+        recommendation: recommendation,
+        controller: controller,
+      ) !=
+      null;
 
   static MediaItem? _findOwnedMatch({
     required String title,
@@ -128,8 +130,8 @@ class RecommendationOwnershipMatcher {
     required List<MediaItem> ownedItems,
   }) {
     final sameTitle = ownedItems
-        .where((item) =>
-            _sameTitleAndFormat(title: title, isTv: isTv, item: item))
+        .where(
+            (item) => _sameTitleAndFormat(title: title, isTv: isTv, item: item))
         .toList(growable: false);
     if (sameTitle.isEmpty) return null;
 
@@ -145,10 +147,7 @@ class RecommendationOwnershipMatcher {
     // a different year because catalog metadata may refer to a re-release or
     // edition. Treat it as owned. Only preserve a year distinction when there
     // are multiple locally owned releases of that same title and media type.
-    final distinctKnownYears = sameTitle
-        .map(_yearOf)
-        .whereType<int>()
-        .toSet();
+    final distinctKnownYears = sameTitle.map(_yearOf).whereType<int>().toSet();
     if (distinctKnownYears.length <= 1) return sameTitle.first;
     return null;
   }

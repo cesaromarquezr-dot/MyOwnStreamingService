@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Explains the standard living-room navigation inputs supported by the app.
 /// Actual available gamepad keys depend on the operating system's Flutter key

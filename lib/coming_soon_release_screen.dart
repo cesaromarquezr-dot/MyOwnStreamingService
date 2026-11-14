@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -719,9 +719,8 @@ class _ComingSoonReleaseScreenState extends State<ComingSoonReleaseScreen> {
   @override
   void initState() {
     super.initState();
-    _filter = _filters.contains(widget.initialFilter)
-        ? widget.initialFilter
-        : 'All';
+    _filter =
+        _filters.contains(widget.initialFilter) ? widget.initialFilter : 'All';
     // Do not synchronously call setState from initState while an enclosing
     // route is still inserting this screen. Start I/O after the first frame.
     WidgetsBinding.instance.addPostFrameCallback((_) {

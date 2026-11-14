@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app_core.dart';
 
@@ -19,7 +19,8 @@ class CinematicFranchiseIntelligenceScreen extends StatefulWidget {
 
 class _CinematicFranchiseIntelligenceScreenState
     extends State<CinematicFranchiseIntelligenceScreen> {
-  static bool get _backendAvailable => AppController.instance.isBackendAuthenticated;
+  static bool get _backendAvailable =>
+      AppController.instance.isBackendAuthenticated;
   // Company identifiers are discovery rules, not movie/show title lists.
   static const Map<String, int> _studios = <String, int>{
     'Marvel Studios': 420,
@@ -45,7 +46,8 @@ class _CinematicFranchiseIntelligenceScreenState
     if (_backendAvailable) {
       _refresh();
       // Refresh periodically while this screen is open; reopening also refreshes.
-      _autoRefreshTimer = Timer.periodic(const Duration(hours: 12), (_) => _refresh());
+      _autoRefreshTimer =
+          Timer.periodic(const Duration(hours: 12), (_) => _refresh());
     }
   }
 
@@ -64,14 +66,19 @@ class _CinematicFranchiseIntelligenceScreenState
 
   Future<void> _refresh() async {
     if (!_backendAvailable) {
-      setState(() => _error = 'Sign in to the MyOwnStreamingService backend to load live TMDB metadata. Configure TMDB_API_KEY or TMDB_API_TOKEN in Backend/.env.');
+      setState(() => _error =
+          'Sign in to the MyOwnStreamingService backend to load live TMDB metadata. Configure TMDB_API_KEY or TMDB_API_TOKEN in Backend/.env.');
       return;
     }
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final found = <String, _DiscoveredTitle>{};
       final today = DateTime.now();
-      final date = '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      final date =
+          '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
       // Query by studio rules. This discovers future titles without enumerating titles in source code.
       for (final studio in _studios.entries) {
         final movies = await _get('/discover/movie', <String, String>{
@@ -91,17 +98,26 @@ class _CinematicFranchiseIntelligenceScreenState
         _collect(found, shows['results'], studio.key, true);
       }
       final sorted = found.values.toList()
-        ..sort((a, b) => (a.releaseDate ?? '9999').compareTo(b.releaseDate ?? '9999'));
+        ..sort((a, b) =>
+            (a.releaseDate ?? '9999').compareTo(b.releaseDate ?? '9999'));
       if (!mounted) return;
-      setState(() { _titles..clear()..addAll(sorted); _lastRefresh = DateTime.now(); });
+      setState(() {
+        _titles
+          ..clear()
+          ..addAll(sorted);
+        _lastRefresh = DateTime.now();
+      });
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) {
+        setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  void _collect(Map<String, _DiscoveredTitle> target, dynamic raw, String studio, bool isTv) {
+  void _collect(Map<String, _DiscoveredTitle> target, dynamic raw,
+      String studio, bool isTv) {
     if (raw is! List) return;
     for (final value in raw) {
       if (value is! Map) continue;
@@ -118,7 +134,8 @@ class _CinematicFranchiseIntelligenceScreenState
           id: id as int,
           title: name,
           type: isTv ? 'TV' : 'Movie',
-          releaseDate: (isTv ? map['first_air_date'] : map['release_date'])?.toString(),
+          releaseDate:
+              (isTv ? map['first_air_date'] : map['release_date'])?.toString(),
           overview: map['overview']?.toString() ?? '',
           posterPath: map['poster_path']?.toString(),
           studios: <String>[studio],
@@ -165,14 +182,16 @@ class _CinematicFranchiseIntelligenceScreenState
                       );
                     }
                     final sections = <Widget>[
-                      Text('${metadata.isTv ? 'TV show' : 'Movie'} • ${example.universe}'),
+                      Text(
+                          '${metadata.isTv ? 'TV show' : 'Movie'} • ${example.universe}'),
                       if (metadata.releaseDate?.isNotEmpty == true)
                         Text('Release / first air: ${metadata.releaseDate}'),
                       if (metadata.overview.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         Text(metadata.overview),
                       ],
-                      for (final section in <({String label, List<String> names})>[
+                      for (final section
+                          in <({String label, List<String> names})>[
                         (label: 'Cast', names: metadata.cast),
                         (label: 'Characters', names: metadata.characters),
                         (label: 'Directors', names: metadata.directors),
@@ -182,7 +201,8 @@ class _CinematicFranchiseIntelligenceScreenState
                         if (section.names.isNotEmpty) ...[
                           const SizedBox(height: 10),
                           Text(section.label,
-                              style: const TextStyle(fontWeight: FontWeight.bold)),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold)),
                           Text(section.names.take(12).join(', ')),
                         ],
                       const SizedBox(height: 10),
@@ -223,7 +243,8 @@ class _CinematicFranchiseIntelligenceScreenState
         children: [
           for (final example in examples)
             ListTile(
-              leading: Icon(example.isTv ? Icons.tv_outlined : Icons.movie_outlined),
+              leading:
+                  Icon(example.isTv ? Icons.tv_outlined : Icons.movie_outlined),
               title: Text(example.title),
               subtitle: Text(
                 '${example.universe}${example.year == null ? '' : ' • ${example.year}'}${example.notes == null ? '' : '\n${example.notes}'}',
@@ -242,64 +263,136 @@ class _CinematicFranchiseIntelligenceScreenState
     return Scaffold(
       appBar: AppBar(
         title: const Text('Cinematic Universe Intelligence'),
-        actions: [IconButton(tooltip: 'Refresh metadata', onPressed: _loading ? null : _refresh, icon: const Icon(Icons.sync))],
+        actions: [
+          IconButton(
+              tooltip: 'Refresh metadata',
+              onPressed: _loading ? null : _refresh,
+              icon: const Icon(Icons.sync))
+        ],
       ),
       body: ListView(padding: const EdgeInsets.all(16), children: [
-        Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Self-updating franchise discovery', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          const Text('Find upcoming movies and shows from live provider metadata, group overlapping studio results, and avoid maintaining a hard-coded filmography. It refreshes when opened and every 12 hours while this screen remains open, after the provider publishes release and studio metadata.'),
-          const SizedBox(height: 8),
-          Text(_lastRefresh == null ? 'Last refresh: not yet refreshed' : 'Last refresh: ${_lastRefresh!.toLocal()}'),
-          if (!_backendAvailable) const Padding(padding: EdgeInsets.only(top: 8), child: Text('Sign in to the backend. Configure TMDB_API_KEY or TMDB_API_TOKEN in Backend/.env.', style: TextStyle(color: Colors.orangeAccent))),
-          if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: const TextStyle(color: Colors.redAccent))),
-          const SizedBox(height: 8),
-          FilledButton.icon(onPressed: _loading ? null : _refresh, icon: _loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.sync), label: Text(_loading ? 'Refreshing provider data…' : 'Refresh now')),
-        ]))),
+        Card(
+            child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Self-updating franchise discovery',
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      const Text(
+                          'Find upcoming movies and shows from live provider metadata, group overlapping studio results, and avoid maintaining a hard-coded filmography. It refreshes when opened and every 12 hours while this screen remains open, after the provider publishes release and studio metadata.'),
+                      const SizedBox(height: 8),
+                      Text(_lastRefresh == null
+                          ? 'Last refresh: not yet refreshed'
+                          : 'Last refresh: ${_lastRefresh!.toLocal()}'),
+                      if (!_backendAvailable)
+                        const Padding(
+                            padding: EdgeInsets.only(top: 8),
+                            child: Text(
+                                'Sign in to the backend. Configure TMDB_API_KEY or TMDB_API_TOKEN in Backend/.env.',
+                                style: TextStyle(color: Colors.orangeAccent))),
+                      if (_error != null)
+                        Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(_error!,
+                                style:
+                                    const TextStyle(color: Colors.redAccent))),
+                      const SizedBox(height: 8),
+                      FilledButton.icon(
+                          onPressed: _loading ? null : _refresh,
+                          icon: _loading
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.sync),
+                          label: Text(_loading
+                              ? 'Refreshing provider data…'
+                              : 'Refresh now')),
+                    ]))),
         const Padding(
           padding: EdgeInsets.fromLTRB(4, 18, 4, 6),
-          child: Text('Starter examples — validate metadata and cast/crew', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          child: Text('Starter examples — validate metadata and cast/crew',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         ),
         const Padding(
           padding: EdgeInsets.fromLTRB(4, 0, 4, 8),
-          child: Text('These are examples only, not a hard-coded universe limit. Tap a title to look up sourced provider metadata. New titles continue to be discovered separately from live metadata.', style: TextStyle(color: Colors.white60)),
+          child: Text(
+              'These are examples only, not a hard-coded universe limit. Tap a title to look up sourced provider metadata. New titles continue to be discovered separately from live metadata.',
+              style: TextStyle(color: Colors.white60)),
         ),
         _buildSeedExampleGroup(
-          title: 'Marvel Cinematic Universe — Movies (${CinematicSeedExamples.movies.length})',
+          title:
+              'Marvel Cinematic Universe — Movies (${CinematicSeedExamples.movies.length})',
           subtitle: 'Starter examples, not the complete catalog',
           examples: CinematicSeedExamples.movies,
         ),
         _buildSeedExampleGroup(
-          title: 'Marvel-related — Shows (${CinematicSeedExamples.shows.length})',
+          title:
+              'Marvel-related — Shows (${CinematicSeedExamples.shows.length})',
           subtitle: 'Includes one title marked as a separate continuity',
           examples: CinematicSeedExamples.shows,
         ),
         _buildSeedExampleGroup(
-          title: 'Additional Movie Examples (${CinematicSeedExamples.additionalMovies.length})',
-          subtitle: 'Harry Potter, How to Train Your Dragon, The Incredibles, and Finding Nemo',
+          title:
+              'Additional Movie Examples (${CinematicSeedExamples.additionalMovies.length})',
+          subtitle:
+              'Harry Potter, How to Train Your Dragon, The Incredibles, and Finding Nemo',
           examples: CinematicSeedExamples.additionalMovies,
         ),
         _buildSeedExampleGroup(
-          title: 'Additional TV Examples (${CinematicSeedExamples.additionalShows.length})',
+          title:
+              'Additional TV Examples (${CinematicSeedExamples.additionalShows.length})',
           subtitle: 'Disney Channel sitcoms and animated series',
           examples: CinematicSeedExamples.additionalShows,
         ),
-        if (_loading && _titles.isEmpty) const Padding(padding: EdgeInsets.all(32), child: Center(child: CircularProgressIndicator())),
-        if (!_loading && _backendAvailable && _titles.isEmpty && _error == null) const Padding(padding: EdgeInsets.all(20), child: Text('No upcoming titles found for the configured studio rules.')),
-        for (final title in _titles) Card(child: ListTile(
-          leading: title.posterPath == null ? const Icon(Icons.movie_outlined, size: 38) : Image.network('https://image.tmdb.org/t/p/w185${title.posterPath}', width: 54, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.movie_outlined)),
-          title: Text(title.title),
-          subtitle: Text('${title.type} • ${title.releaseDate?.isEmpty == false ? title.releaseDate : 'Release date unknown'}\n${title.studios.join(', ')}${title.overview.isEmpty ? '' : '\n${title.overview}'}'),
-          isThreeLine: true,
-        )),
-        const Padding(padding: EdgeInsets.all(12), child: Text('Limitations: studio affiliation is a discovery signal, not proof of shared continuity. The same studio can produce unrelated titles; verify universe/franchise relationships before automatically merging them. TV data may be incomplete when providers have not published company metadata.', style: TextStyle(color: Colors.white60, fontSize: 12))),
+        if (_loading && _titles.isEmpty)
+          const Padding(
+              padding: EdgeInsets.all(32),
+              child: Center(child: CircularProgressIndicator())),
+        if (!_loading && _backendAvailable && _titles.isEmpty && _error == null)
+          const Padding(
+              padding: EdgeInsets.all(20),
+              child: Text(
+                  'No upcoming titles found for the configured studio rules.')),
+        for (final title in _titles)
+          Card(
+              child: ListTile(
+            leading: title.posterPath == null
+                ? const Icon(Icons.movie_outlined, size: 38)
+                : Image.network(
+                    'https://image.tmdb.org/t/p/w185${title.posterPath}',
+                    width: 54,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) =>
+                        const Icon(Icons.movie_outlined)),
+            title: Text(title.title),
+            subtitle: Text(
+                '${title.type} • ${title.releaseDate?.isEmpty == false ? title.releaseDate : 'Release date unknown'}\n${title.studios.join(', ')}${title.overview.isEmpty ? '' : '\n${title.overview}'}'),
+            isThreeLine: true,
+          )),
+        const Padding(
+            padding: EdgeInsets.all(12),
+            child: Text(
+                'Limitations: studio affiliation is a discovery signal, not proof of shared continuity. The same studio can produce unrelated titles; verify universe/franchise relationships before automatically merging them. TV data may be incomplete when providers have not published company metadata.',
+                style: TextStyle(color: Colors.white60, fontSize: 12))),
       ]),
     );
   }
 }
 
 class _DiscoveredTitle {
-  _DiscoveredTitle({required this.id, required this.title, required this.type, required this.releaseDate, required this.overview, required this.posterPath, required this.studios});
+  _DiscoveredTitle(
+      {required this.id,
+      required this.title,
+      required this.type,
+      required this.releaseDate,
+      required this.overview,
+      required this.posterPath,
+      required this.studios});
   final int id;
   final String title;
   final String type;

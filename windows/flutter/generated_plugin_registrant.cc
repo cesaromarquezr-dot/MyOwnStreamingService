@@ -12,8 +12,8 @@
 #include <geolocator_windows/geolocator_windows.h>
 #include <pro_video_editor/pro_video_editor_plugin_c_api.h>
 #include <record_windows/record_windows_plugin_c_api.h>
-#include <share_plus/share_plus_windows_plugin_c_api.h>
 #include <url_launcher_windows/url_launcher_windows.h>
+#include <share_plus/share_plus_windows_plugin_c_api.h>
 
 void RegisterPlugins(flutter::PluginRegistry* registry) {
   AppLinksPluginCApiRegisterWithRegistrar(
@@ -28,8 +28,8 @@ void RegisterPlugins(flutter::PluginRegistry* registry) {
       registry->GetRegistrarForPlugin("ProVideoEditorPluginCApi"));
   RecordWindowsPluginCApiRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("RecordWindowsPluginCApi"));
-  SharePlusWindowsPluginCApiRegisterWithRegistrar(
-      registry->GetRegistrarForPlugin("SharePlusWindowsPluginCApi"));
   UrlLauncherWindowsRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("UrlLauncherWindows"));
+  SharePlusWindowsPluginCApiRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("SharePlusWindowsPluginCApi"));
 }

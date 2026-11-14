@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../app_core.dart';
 import '../coming_soon_release_screen.dart';
@@ -137,7 +137,8 @@ class _ExperienceActionCard extends StatelessWidget {
                     color: action.color.withValues(alpha: .18),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(action.icon, color: action.color, size: compact ? 19 : 22),
+                  child: Icon(action.icon,
+                      color: action.color, size: compact ? 19 : 22),
                 ),
                 const SizedBox(width: 9),
                 Expanded(
@@ -149,7 +150,8 @@ class _ExperienceActionCard extends StatelessWidget {
                         action.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w800, fontSize: 12),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -190,27 +192,37 @@ class MediaFormatBrowseSection extends StatelessWidget {
 
   bool _isMusic(MediaItem media) {
     final type = media.type.toLowerCase().replaceAll('_', ' ');
-    return type.contains('music') || type.contains('album') ||
-        type.contains('song') || type.contains('track') || type.contains('audio');
+    return type.contains('music') ||
+        type.contains('album') ||
+        type.contains('song') ||
+        type.contains('track') ||
+        type.contains('audio');
   }
 
   bool _isShow(MediaItem media) {
     final type = media.type.toLowerCase().replaceAll('_', ' ');
-    return type.contains('tv') || type.contains('show') ||
-        type.contains('series') || type.contains('episode') || type.contains('special');
+    return type.contains('tv') ||
+        type.contains('show') ||
+        type.contains('series') ||
+        type.contains('episode') ||
+        type.contains('special');
   }
 
   List<_FormatShortcut> _shortcuts() {
     List<MediaItem> format(String value) => items
-        .where((media) => MediaCaseStyle.canonicalFormat(media.displayCaseFormat) == value)
+        .where((media) =>
+            MediaCaseStyle.canonicalFormat(media.displayCaseFormat) == value)
         .toList(growable: false);
     final music = items.where(_isMusic).toList(growable: false);
-    final movies = items.where((media) => !_isMusic(media) && !_isShow(media)).toList(growable: false);
+    final movies = items
+        .where((media) => !_isMusic(media) && !_isShow(media))
+        .toList(growable: false);
     final shows = items.where(_isShow).toList(growable: false);
     return <_FormatShortcut>[
       _FormatShortcut('DVD', Icons.album_outlined, format('DVD')),
       _FormatShortcut('Blu-ray', Icons.album_rounded, format('Blu-ray')),
-      _FormatShortcut('4K Ultra HD', Icons.high_quality_rounded, format('4K Ultra HD')),
+      _FormatShortcut(
+          '4K Ultra HD', Icons.high_quality_rounded, format('4K Ultra HD')),
       _FormatShortcut('CD', Icons.disc_full_rounded, format('Audio CD')),
       _FormatShortcut('Music', Icons.library_music_rounded, music),
       _FormatShortcut('Movies', Icons.movie_rounded, movies),
@@ -224,7 +236,11 @@ class MediaFormatBrowseSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+        Text(title,
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w900)),
         const SizedBox(height: 9),
         Wrap(
           spacing: 8,

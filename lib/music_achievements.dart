@@ -3,7 +3,7 @@
 // Achievements are grouped into Music, Movies, and Shows instead of exposing
 // a music-only destination.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app_core.dart';
 import 'localization.dart';
@@ -121,7 +121,9 @@ class _FilmAchievements extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final watched = AppController.instance.watched;
-    final movies = watched.where((media) => media.type.trim().toLowerCase() == 'movie').toList();
+    final movies = watched
+        .where((media) => media.type.trim().toLowerCase() == 'movie')
+        .toList();
     final uniqueMovies = movies.map((media) => media.id).toSet();
     final genres = movies
         .expand((media) => media.genres)
@@ -167,7 +169,11 @@ class _ShowAchievements extends StatelessWidget {
     final watched = AppController.instance.watched;
     final shows = watched.where((media) {
       final type = media.type.trim().toLowerCase();
-      return type == 'tvshow' || type == 'tv_show' || type == 'tv show' || type == 'show' || type == 'series';
+      return type == 'tvshow' ||
+          type == 'tv_show' ||
+          type == 'tv show' ||
+          type == 'show' ||
+          type == 'series';
     }).toList();
     final uniqueShows = shows.map((media) => media.id).toSet();
     final genres = shows
@@ -277,9 +283,7 @@ class _AchievementList extends StatelessWidget {
             CircleAvatar(
               radius: 25,
               child: Icon(
-                badge.unlocked
-                    ? badge.icon
-                    : Icons.lock_outline_rounded,
+                badge.unlocked ? badge.icon : Icons.lock_outline_rounded,
               ),
             ),
             const SizedBox(width: 14),

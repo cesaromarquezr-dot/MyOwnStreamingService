@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_core.dart';
@@ -88,9 +88,8 @@ class UserRatingPalette {
       final redDelta = red - candidateRed;
       final greenDelta = green - candidateGreen;
       final blueDelta = blue - candidateBlue;
-      final distance = redDelta * redDelta +
-          greenDelta * greenDelta +
-          blueDelta * blueDelta;
+      final distance =
+          redDelta * redDelta + greenDelta * greenDelta + blueDelta * blueDelta;
       if (distance < closestDistance) {
         closestDistance = distance;
         closestName = entry.key;
@@ -134,9 +133,8 @@ class UserRatingPalette {
     final rawColorNames = json['colorNames'];
     final colors = <String, int>{...defaultColors};
     for (final key in defaultColors.keys) {
-      final savedName = rawColorNames is Map
-          ? rawColorNames[key]?.toString()
-          : null;
+      final savedName =
+          rawColorNames is Map ? rawColorNames[key]?.toString() : null;
       final namedValue = savedName == null ? null : namedColors[savedName];
       if (namedValue != null) {
         colors[key] = namedValue;
@@ -151,6 +149,7 @@ class UserRatingPalette {
       final raw = json[key];
       return (raw is num ? raw.toInt() : fallback).clamp(0, 100).toInt();
     }
+
     final excellent = threshold('excellentThreshold', 90);
     final good = threshold('goodThreshold', 75);
     final moderate = threshold('moderateThreshold', 60);
@@ -180,7 +179,8 @@ class UserMediaRatingStore {
 
   static String trackKey(String id) => 'music-track:$id';
 
-  static String artistKey(String artist) => 'music-artist:${_normalize(artist)}';
+  static String artistKey(String artist) =>
+      'music-artist:${_normalize(artist)}';
 
   static String albumKey(String title, String artist) =>
       'music-album:${_normalize(artist)}:${_normalize(title)}';
@@ -255,7 +255,10 @@ class UserMediaRatingStore {
               ? (map['stars'] as num).toDouble() * 20
               : null;
           final normalized = score ?? legacy;
-          if (id.isNotEmpty && normalized != null && normalized >= 0 && normalized <= 100) {
+          if (id.isNotEmpty &&
+              normalized != null &&
+              normalized >= 0 &&
+              normalized <= 100) {
             _ratings[profile]![id] = normalized;
           }
         }
@@ -286,7 +289,9 @@ class UserMediaRatingStore {
 
   static Color? colorFor(String? profileId, String mediaId) {
     final score = scorePercentFor(profileId, mediaId);
-    return score == null ? null : paletteFor(profileId).colorFor(score.toDouble());
+    return score == null
+        ? null
+        : paletteFor(profileId).colorFor(score.toDouble());
   }
 
   static Future<void> rememberScore({
@@ -294,7 +299,9 @@ class UserMediaRatingStore {
     required String mediaId,
     required double score,
   }) async {
-    if (mediaId.trim().isEmpty || !score.isFinite || score < 0 || score > 100) return;
+    if (mediaId.trim().isEmpty || !score.isFinite || score < 0 || score > 100) {
+      return;
+    }
     final profile = _profileKey(profileId);
     _ratings.putIfAbsent(profile, () => <String, double>{})[mediaId] = score;
     _initializedProfiles.add(profile);
@@ -317,7 +324,8 @@ class UserMediaRatingStore {
     final profile = _profileKey(profileId);
     _palettes[profile] = palette;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('moss_rating_palette_$profile', jsonEncode(palette.toJson()));
+    await prefs.setString(
+        'moss_rating_palette_$profile', jsonEncode(palette.toJson()));
     changes.value++;
   }
 
@@ -352,7 +360,8 @@ class UserScoreBadge extends StatelessWidget {
       ),
       child: Text(
         '${value.toStringAsFixed(percentDigits)}% · ${(value / 10).toStringAsFixed(1)}/10',
-        style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w900),
+        style: TextStyle(
+            color: color, fontSize: 10.5, fontWeight: FontWeight.w900),
       ),
     );
   }
@@ -436,18 +445,20 @@ class _RatingColorSettingsScreenState extends State<RatingColorSettingsScreen> {
     final colors = <String, int>{};
     for (final key in UserRatingPalette.defaultColors.keys) {
       final name = _selectedColorNames[key];
-      colors[key] = UserRatingPalette.namedColors[name] ??
-          _palette.colors[key]!;
+      colors[key] =
+          UserRatingPalette.namedColors[name] ?? _palette.colors[key]!;
     }
-    final excellent = (int.tryParse(_thresholdControllers['excellent']!.text) ?? 90)
-        .clamp(0, 100)
-        .toInt();
+    final excellent =
+        (int.tryParse(_thresholdControllers['excellent']!.text) ?? 90)
+            .clamp(0, 100)
+            .toInt();
     final good = (int.tryParse(_thresholdControllers['good']!.text) ?? 75)
         .clamp(0, excellent)
         .toInt();
-    final moderate = (int.tryParse(_thresholdControllers['moderate']!.text) ?? 60)
-        .clamp(0, good)
-        .toInt();
+    final moderate =
+        (int.tryParse(_thresholdControllers['moderate']!.text) ?? 60)
+            .clamp(0, good)
+            .toInt();
     final low = (int.tryParse(_thresholdControllers['low']!.text) ?? 50)
         .clamp(0, moderate)
         .toInt();

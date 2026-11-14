@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app_core.dart';
 import 'details.dart';
@@ -29,7 +29,8 @@ class InternationalCatalogShelf extends StatelessWidget {
             padding: const EdgeInsets.only(right: 18),
             child: Row(
               children: [
-                const Icon(Icons.public_rounded, color: Colors.white70, size: 20),
+                const Icon(Icons.public_rounded,
+                    color: Colors.white70, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -85,12 +86,14 @@ class InternationalCatalogShelf extends StatelessWidget {
                               placeholder: Container(
                                 color: const Color(0xFF242424),
                                 alignment: Alignment.center,
-                                child: const Icon(Icons.movie_outlined, color: Colors.white70, size: 32),
+                                child: const Icon(Icons.movie_outlined,
+                                    color: Colors.white70, size: 32),
                               ),
                               errorPlaceholder: Container(
                                 color: const Color(0xFF242424),
                                 alignment: Alignment.center,
-                                child: const Icon(Icons.movie_outlined, color: Colors.white70, size: 32),
+                                child: const Icon(Icons.movie_outlined,
+                                    color: Colors.white70, size: 32),
                               ),
                             ),
                           ),

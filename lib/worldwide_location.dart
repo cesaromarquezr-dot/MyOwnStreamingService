@@ -8,7 +8,7 @@
 import 'dart:async';
 
 import 'package:countrify/countrify.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'backend_api.dart';
 import 'app_core.dart';
 import 'localization.dart';

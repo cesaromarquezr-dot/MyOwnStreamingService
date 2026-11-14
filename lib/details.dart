@@ -4,7 +4,7 @@
 
 import 'dart:async';
 import 'dart:math' as math;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
@@ -32,6 +32,10 @@ import 'core/services/original_language_defaults.dart';
 import 'core/services/cinematic_title_metadata_service.dart';
 import 'media_graph_relationship.dart';
 import 'media_edition_identity.dart';
+import 'widgets/media_detail_discovery_sections.dart';
+import 'widgets/media_community_hub.dart';
+import 'community/media_music_history_store.dart';
+import 'widgets/media_album_context_sections.dart';
 
 import 'backend_api_compatibility.dart';
 
@@ -107,6 +111,31 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   final Set<int> _failedProviderEpisodeSeasons = <int>{};
 
   MediaItem get media => widget.media;
+
+  bool get _hasRecordedPlayback =>
+      AppController.instance.isWatched(media.id) ||
+      AppController.instance.getPlaybackProgress(media.id) > 0;
+
+  bool get _isMusicTrack {
+    final type = media.type.toLowerCase();
+    return type.contains('song') ||
+        type.contains('track') ||
+        type.contains('music');
+  }
+
+  Future<bool> get _musicTrackHasPlayback =>
+      MediaMusicHistoryStore.albumHasListeningActivity(
+        profileId: AppController.instance.currentProfile?.id,
+        trackIds: <String>[media.id],
+      );
+
+  String get _communityMediaKey {
+    final provider = _providerTitleMetadata;
+    if (provider != null && provider.providerId > 0) {
+      return 'tmdb:${provider.isTv ? 'tv' : 'movie'}:${provider.providerId}';
+    }
+    return 'catalog:${media.id}';
+  }
 
   bool _isLegacyTvType(String rawType) {
     final type = rawType.trim().toLowerCase();
@@ -419,6 +448,35 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
             mediaType: media.type,
             tmdbId: _providerTitleMetadata?.providerId.toString(),
           ),
+          if (_isMusicTrack)
+            MediaAlbumContextSections(
+              albumTitle: media.title,
+              media: media,
+              profileId: AppController.instance.currentProfile?.id,
+              trackIds: <String>[media.id],
+            ),
+          MediaCommunityHub(
+            mediaKey: _communityMediaKey,
+            mediaTitle: media.title,
+            mediaType: media.type,
+            hasConsumptionActivity: _hasRecordedPlayback,
+            consumptionActivityFuture:
+                _isMusicTrack ? _musicTrackHasPlayback : null,
+            activityProfileId: AppController.instance.currentProfile?.id,
+            providerId: _providerTitleMetadata?.providerId,
+            providerIsTv: _providerTitleMetadata?.isTv ?? false,
+          ),
+          MediaDetailDiscoverySections(
+            media: media,
+            metadata: _providerTitleMetadata,
+            onOpenMedia: (item) => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                settings: RouteSettings(name: '/app/media/${item.id}'),
+                builder: (_) => MediaDetailsScreen(media: item),
+              ),
+            ),
+          ),
+          _buildTriviaSection(),
           MediaMetadataProvenancePanel(media: media),
           _buildStoryAdaptationsSection(),
           MediaContinuityPanel(mediaId: media.id, mediaTitle: media.title),
@@ -2766,6 +2824,147 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   }
 
   // ===========================================================================
+  // TRIVIA / TITLE FACTS
+  // ===========================================================================
+
+  Widget _buildTriviaSection() {
+    final provider = _providerTitleMetadata;
+    final releaseDate = (provider?.releaseDate?.trim().isNotEmpty == true)
+        ? provider!.releaseDate!.trim()
+        : media.releaseDate?.toIso8601String().split('T').first;
+    final directors = <String>{
+      ...?provider?.directors,
+      ...media.directors,
+    }.where((value) => value.trim().isNotEmpty).toList(growable: false);
+    final producers = <String>{
+      ...?provider?.crewCredits
+          .where((credit) => credit.job.toLowerCase().contains('producer'))
+          .map((credit) => credit.name),
+    }.where((value) => value.trim().isNotEmpty).toList(growable: false);
+    final writers = <String>{
+      ...?provider?.writers,
+      ...media.writers,
+    }.where((value) => value.trim().isNotEmpty).toList(growable: false);
+    final characters = <String>{
+      ...?provider?.characters,
+      ...media.characters,
+    }.where((value) => value.trim().isNotEmpty).toList(growable: false);
+    final genres = <String>{
+      ...?provider?.genres,
+      ...media.genres,
+    }.where((value) => value.trim().isNotEmpty).toList(growable: false);
+    final companies = <String>{
+      ...?provider?.companies.map((company) => company.name),
+      ...media.studios,
+      ...media.companies,
+    }.where((value) => value.trim().isNotEmpty).toList(growable: false);
+    final performers = media.music
+        .where((value) => value.trim().isNotEmpty)
+        .toList(growable: false);
+    final countries = <String>{
+      if ((provider?.countryOfOrigin ?? '').trim().isNotEmpty)
+        provider!.countryOfOrigin!.trim(),
+      if ((media.countryOfOrigin ?? '').trim().isNotEmpty)
+        media.countryOfOrigin!.trim(),
+    }.where((value) => value.trim().isNotEmpty).toList(growable: false);
+    final plot = (provider?.overview.trim().isNotEmpty == true)
+        ? provider!.overview.trim()
+        : (media.description?.trim() ?? '');
+    final budget = provider?.budget;
+    final boxOffice = provider?.revenue;
+    final runtime = provider?.runtimeMinutes;
+    final facts = <({String question, String answer})>[
+      if (releaseDate?.isNotEmpty == true)
+        (
+          question: media.type.toLowerCase().contains('episode')
+              ? 'When did this episode air?'
+              : 'When was it released?',
+          answer: releaseDate!
+        ),
+      if (directors.isNotEmpty)
+        (question: 'Who directed it?', answer: directors.join(', ')),
+      if (producers.isNotEmpty)
+        (question: 'Who produced it?', answer: producers.join(', ')),
+      if (writers.isNotEmpty)
+        (question: 'Who wrote it?', answer: writers.join(', ')),
+      if (_isMusicTrack && performers.isNotEmpty)
+        (question: 'Who performs this track?', answer: performers.join(', ')),
+      if (plot.isNotEmpty) (question: 'What is the plot?', answer: plot),
+      if (budget != null && budget > 0)
+        (
+          question: 'What was the budget?',
+          answer: _formatProviderMoney(budget)
+        ),
+      if (boxOffice != null && boxOffice > 0)
+        (
+          question: 'What was the box office / revenue?',
+          answer: _formatProviderMoney(boxOffice)
+        ),
+      if (characters.isNotEmpty)
+        (
+          question: 'Who are the key characters?',
+          answer: characters.join(', ')
+        ),
+      if (genres.isNotEmpty)
+        (question: 'What genres does it belong to?', answer: genres.join(', ')),
+      if (companies.isNotEmpty)
+        (
+          question: 'Which studio or company produced it?',
+          answer: companies.join(', ')
+        ),
+      if (countries.isNotEmpty)
+        (question: 'Which country is it from?', answer: countries.join(', ')),
+      if (runtime != null && runtime > 0)
+        (question: 'How long is it?', answer: '$runtime minutes'),
+      if (provider?.status?.trim().isNotEmpty == true)
+        (
+          question: 'What is its production status?',
+          answer: provider!.status!.trim()
+        ),
+      if (provider?.lastAirDate?.trim().isNotEmpty == true)
+        (
+          question: 'When did the series last air?',
+          answer: provider!.lastAirDate!.trim()
+        ),
+    ];
+    if (facts.isEmpty) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(top: 22, bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .045),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: .09)),
+      ),
+      child: ExpansionTile(
+        leading: const Icon(Icons.lightbulb_outline_rounded),
+        title: const Text('Trivia & General Information',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+        subtitle: const Text(
+            'Release facts, credits, plot, production and more',
+            style: TextStyle(color: Colors.white54, fontSize: 11)),
+        children: [
+          for (final fact in facts)
+            ExpansionTile(
+              dense: true,
+              title: Text(fact.question,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 13)),
+              childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(fact.answer,
+                      style:
+                          const TextStyle(color: Colors.white70, height: 1.45)),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ===========================================================================
   // PLAY
   // ===========================================================================
 
@@ -3069,17 +3268,27 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                     CatalogEntityKind.genre => 'genre',
                     CatalogEntityKind.character => 'character',
                     CatalogEntityKind.tag => 'tag',
-                    CatalogEntityKind.person => selectedMedia.actors.any((value) => value.trim().toLowerCase() == name.trim().toLowerCase())
+                    CatalogEntityKind.person => selectedMedia.actors.any(
+                            (value) =>
+                                value.trim().toLowerCase() ==
+                                name.trim().toLowerCase())
                         ? 'cast'
-                        : selectedMedia.directors.any((value) => value.trim().toLowerCase() == name.trim().toLowerCase())
+                        : selectedMedia.directors.any((value) =>
+                                value.trim().toLowerCase() ==
+                                name.trim().toLowerCase())
                             ? 'director'
-                            : selectedMedia.writers.any((value) => value.trim().toLowerCase() == name.trim().toLowerCase())
+                            : selectedMedia.writers.any((value) =>
+                                    value.trim().toLowerCase() ==
+                                    name.trim().toLowerCase())
                                 ? 'writer'
-                                : selectedMedia.music.any((value) => value.trim().toLowerCase() == name.trim().toLowerCase())
+                                : selectedMedia.music.any((value) =>
+                                        value.trim().toLowerCase() ==
+                                        name.trim().toLowerCase())
                                     ? 'composer'
                                     : 'person',
                   },
-                  wrappedContextId: '${kind.name}:${Uri.encodeComponent(name.toLowerCase())}',
+                  wrappedContextId:
+                      '${kind.name}:${Uri.encodeComponent(name.toLowerCase())}',
                   wrappedContextTitle: name,
                 ),
               ),

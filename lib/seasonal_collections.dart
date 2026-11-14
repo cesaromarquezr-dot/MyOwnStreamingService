@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app_core.dart';
 import 'details.dart';
@@ -78,25 +78,30 @@ class SeasonalCollectionEngine {
   static List<MediaItem> matching(List<MediaItem> library, {DateTime? now}) {
     final date = now ?? DateTime.now();
     final keywords = _keywords(date);
-    return library.where((item) => _matches(<String>[
-      item.title,
-      item.type,
-      item.description ?? '',
-      ...item.genres,
-      ...item.tags,
-    ], keywords)).toList(growable: false);
+    return library
+        .where((item) => _matches(<String>[
+              item.title,
+              item.type,
+              item.description ?? '',
+              ...item.genres,
+              ...item.tags,
+            ], keywords))
+        .toList(growable: false);
   }
 
-  static List<MusicTrack> matchingSongs(List<MusicTrack> tracks, {DateTime? now}) {
+  static List<MusicTrack> matchingSongs(List<MusicTrack> tracks,
+      {DateTime? now}) {
     final date = now ?? DateTime.now();
     final keywords = _keywords(date);
-    return tracks.where((track) => _matches(<String>[
-      track.title,
-      track.artist,
-      track.album,
-      ...track.genres,
-      ...track.subgenres,
-    ], keywords)).toList(growable: false);
+    return tracks
+        .where((track) => _matches(<String>[
+              track.title,
+              track.artist,
+              track.album,
+              ...track.genres,
+              ...track.subgenres,
+            ], keywords))
+        .toList(growable: false);
   }
 }
 
@@ -106,8 +111,10 @@ class SeasonalCollectionsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = SeasonalCollectionEngine.titleFor(DateTime.now());
-    final media = SeasonalCollectionEngine.matching(AppController.instance.library);
-    final songs = SeasonalCollectionEngine.matchingSongs(MusicLibraryStore.instance.tracks);
+    final media =
+        SeasonalCollectionEngine.matching(AppController.instance.library);
+    final songs = SeasonalCollectionEngine.matchingSongs(
+        MusicLibraryStore.instance.tracks);
 
     return Scaffold(
       backgroundColor: const Color(0xFF090909),
@@ -119,14 +126,20 @@ class SeasonalCollectionsScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('$title from your library', style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+          Text('$title from your library',
+              style:
+                  const TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
-          const UniversalText('A calendar-aware mix of your own movies, TV titles, and music.', style: TextStyle(color: Colors.white60)),
+          const UniversalText(
+              'A calendar-aware mix of your own movies, TV titles, and music.',
+              style: TextStyle(color: Colors.white60)),
           const SizedBox(height: 16),
           if (media.isEmpty && songs.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 28),
-              child: UniversalText('No seasonally tagged titles found in your library yet.', style: TextStyle(color: Colors.white54)),
+              child: UniversalText(
+                  'No seasonally tagged titles found in your library yet.',
+                  style: TextStyle(color: Colors.white54)),
             ),
           for (final item in media)
             ListTile(
@@ -135,18 +148,21 @@ class SeasonalCollectionsScreen extends StatelessWidget {
               title: LocalizedMediaText(item.title, preserveOriginal: true),
               subtitle: Text(item.type),
               trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: item))),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => MediaDetailsScreen(media: item))),
             ),
           if (songs.isNotEmpty) ...[
             const SizedBox(height: 18),
-            const UniversalText('Songs', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const UniversalText('Songs',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
           ],
           for (final track in songs)
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.music_note_rounded),
               title: LocalizedMediaText(track.title),
-              subtitle: Text(musicTrackSubtitle(track), maxLines: 2, overflow: TextOverflow.ellipsis),
+              subtitle: Text(musicTrackSubtitle(track),
+                  maxLines: 2, overflow: TextOverflow.ellipsis),
             ),
         ],
       ),

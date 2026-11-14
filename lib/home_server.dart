@@ -3,7 +3,7 @@
 // member management, storage status, and secure invitation-link UI.
 // Physical media remains on the account's home server.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:country_picker/country_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -17,12 +17,16 @@ import 'personal_media_server.dart';
 
 List<String> _musicStringList(dynamic value) {
   if (value is List) {
-    return value.map((entry) => entry.toString().trim())
-        .where((entry) => entry.isNotEmpty).toList(growable: false);
+    return value
+        .map((entry) => entry.toString().trim())
+        .where((entry) => entry.isNotEmpty)
+        .toList(growable: false);
   }
   if (value is String && value.trim().isNotEmpty) {
-    return value.split(RegExp(r'\s*[;,]\s*'))
-        .map((entry) => entry.trim()).where((entry) => entry.isNotEmpty)
+    return value
+        .split(RegExp(r'\s*[;,]\s*'))
+        .map((entry) => entry.trim())
+        .where((entry) => entry.isNotEmpty)
         .toList(growable: false);
   }
   return const <String>[];
@@ -151,7 +155,8 @@ class _HomeServerScreenState extends State<HomeServerScreen> {
                     DateTime.tryParse(m['modifiedAt']?.toString() ?? ''),
                 addedByProfileId: m['addedByProfileId']?.toString(),
                 addedByProfileName: m['addedByProfileName']?.toString(),
-                addedSource: m['addedSource']?.toString() ?? 'home-server-scanner',
+                addedSource:
+                    m['addedSource']?.toString() ?? 'home-server-scanner',
                 genres: (m['genres'] is List)
                     ? List<String>.from(
                         (m['genres'] as List).map((e) => e.toString()))
@@ -170,12 +175,20 @@ class _HomeServerScreenState extends State<HomeServerScreen> {
                     (m['musicVideoUrl'] ?? m['music_video_url'])?.toString(),
                 lyrics: m['lyrics']?.toString() ?? '',
                 soundtrackForTitles: _musicStringList(
-                    m['soundtrackForTitles'] ?? m['soundtrack_for_titles'] ?? m['soundtrackFor']),
-                relatedMediaTitles: _musicStringList(
-                    m['relatedMediaTitles'] ?? m['related_media_titles'] ?? m['relatedMedia']),
-                credits: _musicStringList(m['credits'] ?? m['trackCredits'] ?? m['track_credits']),
-                soundtrackSourceName: (m['soundtrackSourceName'] ?? m['soundtrack_source_name'])?.toString(),
-                soundtrackSourceUrl: (m['soundtrackSourceUrl'] ?? m['soundtrack_source_url'])?.toString(),
+                    m['soundtrackForTitles'] ??
+                        m['soundtrack_for_titles'] ??
+                        m['soundtrackFor']),
+                relatedMediaTitles: _musicStringList(m['relatedMediaTitles'] ??
+                    m['related_media_titles'] ??
+                    m['relatedMedia']),
+                credits: _musicStringList(
+                    m['credits'] ?? m['trackCredits'] ?? m['track_credits']),
+                soundtrackSourceName:
+                    (m['soundtrackSourceName'] ?? m['soundtrack_source_name'])
+                        ?.toString(),
+                soundtrackSourceUrl:
+                    (m['soundtrackSourceUrl'] ?? m['soundtrack_source_url'])
+                        ?.toString(),
               ))
           .toList();
       MusicLibraryStore.instance.tracks

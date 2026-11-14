@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -82,15 +82,15 @@ class MediaTextLocalizer {
     }
 
     try {
-      final response = await _withRequestLimit(() =>
-          Supabase.instance.client.functions.invoke(
-            'translate-text',
-            body: <String, dynamic>{
-              'text': text,
-              'source': sourceLanguage ?? 'auto',
-              'target': targetLanguage,
-            },
-          ));
+      final response = await _withRequestLimit(
+          () => Supabase.instance.client.functions.invoke(
+                'translate-text',
+                body: <String, dynamic>{
+                  'text': text,
+                  'source': sourceLanguage ?? 'auto',
+                  'target': targetLanguage,
+                },
+              ));
       final data = response.data;
       if (data is Map) {
         final translated = data['translatedText']?.toString().trim();
@@ -149,6 +149,7 @@ class LocalizedMediaText extends StatefulWidget {
   final int? maxLines;
   final TextOverflow? overflow;
   final TextAlign? textAlign;
+
   /// When true, render the supplied display title verbatim and never translate it.
   final bool preserveOriginal;
 

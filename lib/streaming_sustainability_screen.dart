@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'streaming_experience.dart';
@@ -340,7 +340,8 @@ class _AdviceCard extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(icon, size: 22, color: Theme.of(context).colorScheme.primary),
+              Icon(icon,
+                  size: 22, color: Theme.of(context).colorScheme.primary),
               const SizedBox(width: 11),
               Expanded(
                 child: Column(
@@ -377,7 +378,8 @@ class _SourceTile extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 7),
         child: ListTile(
           leading: const Icon(Icons.open_in_new_rounded),
-          title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+          title:
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
           subtitle: Text(subtitle,
               style: const TextStyle(color: Colors.white60, fontSize: 11)),
           trailing: const Icon(Icons.chevron_right_rounded),

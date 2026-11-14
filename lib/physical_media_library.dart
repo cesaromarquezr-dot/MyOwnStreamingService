@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'app_core.dart';
 import 'details.dart';
 import 'disc_ingestion_center.dart';
@@ -9,42 +9,71 @@ class PhysicalMediaLibraryScreen extends StatelessWidget {
   const PhysicalMediaLibraryScreen({super.key});
 
   static const formats = <DiscFormat>[
-    DiscFormat('DVD', 'DVD', Icons.album_outlined, 'Movies, TV, and extras imported from DVDs'),
-    DiscFormat('Blu-ray', 'Blu-ray', Icons.album_rounded, 'HD movies and TV imported from Blu-ray discs'),
-    DiscFormat('4K Ultra', '4K Ultra HD', Icons.high_quality_rounded, '4K UHD editions and their available HDR/audio metadata'),
-    DiscFormat('CDs', 'Audio CD', Icons.music_note_rounded, 'Albums and tracks imported from audio CDs'),
+    DiscFormat('DVD', 'DVD', Icons.album_outlined,
+        'Movies, TV, and extras imported from DVDs'),
+    DiscFormat('Blu-ray', 'Blu-ray', Icons.album_rounded,
+        'HD movies and TV imported from Blu-ray discs'),
+    DiscFormat('4K Ultra', '4K Ultra HD', Icons.high_quality_rounded,
+        '4K UHD editions and their available HDR/audio metadata'),
+    DiscFormat('CDs', 'Audio CD', Icons.music_note_rounded,
+        'Albums and tracks imported from audio CDs'),
   ];
 
   @override
   Widget build(BuildContext context) {
     final controller = AppController.instance;
     final profile = controller.currentProfile;
-    final library = controller.library.where((media) => media.isAccessibleTo(profile)).toList(growable: false);
-    int countFor(DiscFormat f) => library.where((m) => _matches(m.discType, f.sourceType)).length;
+    final library = controller.library
+        .where((media) => media.isAccessibleTo(profile))
+        .toList(growable: false);
+    int countFor(DiscFormat f) =>
+        library.where((m) => _matches(m.discType, f.sourceType)).length;
     final dvdTotal = library.where((m) => _matches(m.discType, 'DVD')).length;
-    final bluRayTotal = library.where((m) => _matches(m.discType, 'Blu-ray')).length;
-    final fourKUltraTotal = library.where((m) => _matches(m.discType, '4K Ultra HD')).length;
-    final cdTotal = library.where((m) => _matches(m.discType, 'Audio CD')).length;
-    final totalAmount = library.where((m) => _isKnownDiscType(m.discType)).length;
+    final bluRayTotal =
+        library.where((m) => _matches(m.discType, 'Blu-ray')).length;
+    final fourKUltraTotal =
+        library.where((m) => _matches(m.discType, '4K Ultra HD')).length;
+    final cdTotal =
+        library.where((m) => _matches(m.discType, 'Audio CD')).length;
+    final totalAmount =
+        library.where((m) => _isKnownDiscType(m.discType)).length;
     return Scaffold(
       backgroundColor: const Color(0xFF0B0B10),
-      appBar: AppBar(title: const Text('Physical Media'), backgroundColor: const Color(0xFF11111A)),
+      appBar: AppBar(
+          title: const Text('Physical Media'),
+          backgroundColor: const Color(0xFF11111A)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text('Your imported disc collection', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
+          const Text('Your imported disc collection',
+              style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
-          const Text('Browse imported media by the format recorded in its disc metadata.', style: TextStyle(color: Colors.white60)),
+          const Text(
+              'Browse imported media by the format recorded in its disc metadata.',
+              style: TextStyle(color: Colors.white60)),
           const SizedBox(height: 14),
           Card(
             color: const Color(0xFF201A31),
             child: ListTile(
-              leading: const CircleAvatar(backgroundColor: Color(0x338B7CFF), child: Icon(Icons.album_rounded, color: _physicalAccent)),
-              title: const Text('Disc Ingestion Center', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
-              subtitle: const Text('Monitor MakeMKV ripping jobs, verify completed MKVs, and add reviewed metadata to your library.', style: TextStyle(color: Colors.white70)),
+              leading: const CircleAvatar(
+                  backgroundColor: Color(0x338B7CFF),
+                  child: Icon(Icons.album_rounded, color: _physicalAccent)),
+              title: const Text('Disc Ingestion Center',
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w800)),
+              subtitle: const Text(
+                  'Monitor MakeMKV ripping jobs, verify completed MKVs, and add reviewed metadata to your library.',
+                  style: TextStyle(color: Colors.white70)),
               isThreeLine: true,
-              trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white60),
-              onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const DiscIngestionCenterScreen())),
+              trailing: const Icon(Icons.chevron_right_rounded,
+                  color: Colors.white60),
+              onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                      builder: (_) => const DiscIngestionCenterScreen())),
             ),
           ),
           const SizedBox(height: 18),
@@ -52,10 +81,12 @@ class PhysicalMediaLibraryScreen extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _PhysicalMediaSummaryStat(label: 'Total', count: totalAmount, featured: true),
+              _PhysicalMediaSummaryStat(
+                  label: 'Total', count: totalAmount, featured: true),
               _PhysicalMediaSummaryStat(label: 'DVD', count: dvdTotal),
               _PhysicalMediaSummaryStat(label: 'Blu-ray', count: bluRayTotal),
-              _PhysicalMediaSummaryStat(label: '4K Ultra', count: fourKUltraTotal),
+              _PhysicalMediaSummaryStat(
+                  label: '4K Ultra', count: fourKUltraTotal),
               _PhysicalMediaSummaryStat(label: 'CDs', count: cdTotal),
             ],
           ),
@@ -68,12 +99,14 @@ class PhysicalMediaLibraryScreen extends StatelessWidget {
                 child: Icon(Icons.album_rounded, color: _physicalAccent),
               ),
               title: const Text('Disc & Box Set Collections',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w800)),
               subtitle: Text(
                 '${_discCollectionCount(library)} collections · multi-disc editions, anthologies and TV-special discs',
                 style: const TextStyle(color: Colors.white70),
               ),
-              trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white60),
+              trailing: const Icon(Icons.chevron_right_rounded,
+                  color: Colors.white60),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute<void>(
@@ -89,18 +122,35 @@ class PhysicalMediaLibraryScreen extends StatelessWidget {
               color: const Color(0xFF171722),
               margin: const EdgeInsets.only(bottom: 12),
               child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                leading: CircleAvatar(backgroundColor: _physicalAccent.withValues(alpha: .18), child: Icon(format.icon, color: _physicalAccent)),
-                title: Text(format.label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
-                subtitle: Padding(padding: const EdgeInsets.only(top: 4), child: Text('${format.description}\n$count ${count == 1 ? 'item' : 'items'}', style: const TextStyle(color: Colors.white60, height: 1.35))),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                leading: CircleAvatar(
+                    backgroundColor: _physicalAccent.withValues(alpha: .18),
+                    child: Icon(format.icon, color: _physicalAccent)),
+                title: Text(format.label,
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w800)),
+                subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                        '${format.description}\n$count ${count == 1 ? 'item' : 'items'}',
+                        style: const TextStyle(
+                            color: Colors.white60, height: 1.35))),
                 isThreeLine: true,
-                trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white60),
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PhysicalMediaFormatScreen(format: format))),
+                trailing: const Icon(Icons.chevron_right_rounded,
+                    color: Colors.white60),
+                onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) =>
+                            PhysicalMediaFormatScreen(format: format))),
               ),
             );
           }),
           const SizedBox(height: 8),
-          const Text('Only items with matching disc-format metadata appear in these categories. A file’s resolution alone is not used to guess which disc it came from.', style: TextStyle(color: Colors.white54, fontSize: 12)),
+          const Text(
+              'Only items with matching disc-format metadata appear in these categories. A file’s resolution alone is not used to guess which disc it came from.',
+              style: TextStyle(color: Colors.white54, fontSize: 12)),
         ],
       ),
     );
@@ -108,7 +158,8 @@ class PhysicalMediaLibraryScreen extends StatelessWidget {
 }
 
 class _PhysicalMediaSummaryStat extends StatelessWidget {
-  const _PhysicalMediaSummaryStat({required this.label, required this.count, this.featured = false});
+  const _PhysicalMediaSummaryStat(
+      {required this.label, required this.count, this.featured = false});
 
   final String label;
   final int count;
@@ -116,26 +167,36 @@ class _PhysicalMediaSummaryStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    width: 142,
-    padding: const EdgeInsets.all(13),
-    decoration: BoxDecoration(
-      color: featured ? const Color(0xFF28213F) : const Color(0xFF171722),
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: featured ? _physicalAccent : Colors.white12),
-    ),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w700)),
-      const SizedBox(height: 5),
-      Text('$count', style: const TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.w900)),
-    ]),
-  );
+        width: 142,
+        padding: const EdgeInsets.all(13),
+        decoration: BoxDecoration(
+          color: featured ? const Color(0xFF28213F) : const Color(0xFF171722),
+          borderRadius: BorderRadius.circular(12),
+          border:
+              Border.all(color: featured ? _physicalAccent : Colors.white12),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label,
+              style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700)),
+          const SizedBox(height: 5),
+          Text('$count',
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 23,
+                  fontWeight: FontWeight.w900)),
+        ]),
+      );
 }
 
 class PhysicalMediaFormatScreen extends StatefulWidget {
   final DiscFormat format;
   const PhysicalMediaFormatScreen({super.key, required this.format});
   @override
-  State<PhysicalMediaFormatScreen> createState() => _PhysicalMediaFormatScreenState();
+  State<PhysicalMediaFormatScreen> createState() =>
+      _PhysicalMediaFormatScreenState();
 }
 
 class _PhysicalMediaFormatScreenState extends State<PhysicalMediaFormatScreen> {
@@ -154,17 +215,23 @@ class _PhysicalMediaFormatScreenState extends State<PhysicalMediaFormatScreen> {
     final query = _searchController.text.trim().toLowerCase();
     final controller = AppController.instance;
     final profile = controller.currentProfile;
-    final items = controller.library.where((m) =>
-      m.isAccessibleTo(profile) &&
-      _matches(m.discType, format.sourceType) &&
-      (query.isEmpty || m.title.toLowerCase().contains(query) ||
-       (m.discTitle ?? '').toLowerCase().contains(query) ||
-       m.type.toLowerCase().contains(query) ||
-       (m.releaseYear?.toString() ?? '').contains(query))
-    ).toList();
+    final items = controller.library
+        .where((m) =>
+            m.isAccessibleTo(profile) &&
+            _matches(m.discType, format.sourceType) &&
+            (query.isEmpty ||
+                m.title.toLowerCase().contains(query) ||
+                (m.discTitle ?? '').toLowerCase().contains(query) ||
+                m.type.toLowerCase().contains(query) ||
+                (m.releaseYear?.toString() ?? '').contains(query)))
+        .toList();
     items.sort((a, b) {
-      if (_sort == 'Newest year') return (b.releaseYear ?? 0).compareTo(a.releaseYear ?? 0);
-      if (_sort == 'Oldest year') return (a.releaseYear ?? 9999).compareTo(b.releaseYear ?? 9999);
+      if (_sort == 'Newest year') {
+        return (b.releaseYear ?? 0).compareTo(a.releaseYear ?? 0);
+      }
+      if (_sort == 'Oldest year') {
+        return (a.releaseYear ?? 9999).compareTo(b.releaseYear ?? 9999);
+      }
       return a.title.toLowerCase().compareTo(b.title.toLowerCase());
     });
     return Scaffold(
@@ -186,62 +253,129 @@ class _PhysicalMediaFormatScreenState extends State<PhysicalMediaFormatScreen> {
         ],
       ),
       body: Column(children: [
-        Padding(padding: const EdgeInsets.fromLTRB(12, 12, 12, 4), child: TextField(
-          controller: _searchController,
-          style: const TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            hintText: 'Search title, year, or disc name',
-            prefixIcon: const Icon(Icons.search_rounded),
-            suffixIcon: _searchController.text.isEmpty ? null : IconButton(
-              tooltip: 'Clear search', icon: const Icon(Icons.close_rounded),
-              onPressed: () { _searchController.clear(); setState(() {}); },
-            ),
-            border: const OutlineInputBorder(),
-          ),
-          onChanged: (_) => setState(() {}),
-        )),
-        Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4), child: Row(children: [
-          Expanded(child: Text('${items.length} ${items.length == 1 ? 'item' : 'items'}', style: const TextStyle(color: Colors.white60))),
-          const Text('Sort: ', style: TextStyle(color: Colors.white60)),
-          DropdownButton<String>(value: _sort, dropdownColor: const Color(0xFF171722), underline: const SizedBox.shrink(),
-            items: const [DropdownMenuItem(value: 'Title A–Z', child: Text('Title A–Z')), DropdownMenuItem(value: 'Newest year', child: Text('Newest year')), DropdownMenuItem(value: 'Oldest year', child: Text('Oldest year'))],
-            onChanged: (v) { if (v != null) setState(() => _sort = v); }),
-        ])),
-        Expanded(child: items.isEmpty
-          ? Center(child: Padding(padding: const EdgeInsets.all(28), child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(format.icon, color: _physicalAccent, size: 54), const SizedBox(height: 14), Text('No ${format.label} imports yet', style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w700)), const SizedBox(height: 8), const Text('When you import media and its disc format is recorded, it will appear here automatically.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white60))])))
-          : ListView.builder(
-              padding: const EdgeInsets.all(12), itemCount: items.length,
-              itemBuilder: (context, index) {
-                final item = items[index];
-                final detail = [item.type, if (item.releaseYear != null) '${item.releaseYear}', if ((item.discTitle ?? '').trim().isNotEmpty) item.discTitle!.trim()].join(' · ');
-                return Card(color: const Color(0xFF171722), child: ListTile(
-                  leading: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: (item.imageUrl ?? '').trim().isNotEmpty
-                        ? Image.network(
-                            item.imageUrl!, width: 52, height: 72, fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const SizedBox(
-                              width: 52, height: 72,
-                              child: Icon(Icons.movie_outlined, color: _physicalAccent),
-                            ),
-                          )
-                        : const SizedBox(
-                            width: 52, height: 72,
-                            child: Icon(Icons.movie_outlined, color: _physicalAccent),
+        Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+            child: TextField(
+              controller: _searchController,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'Search title, year, or disc name',
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: _searchController.text.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Clear search',
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {});
+                        },
+                      ),
+                border: const OutlineInputBorder(),
+              ),
+              onChanged: (_) => setState(() {}),
+            )),
+        Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: Row(children: [
+              Expanded(
+                  child: Text(
+                      '${items.length} ${items.length == 1 ? 'item' : 'items'}',
+                      style: const TextStyle(color: Colors.white60))),
+              const Text('Sort: ', style: TextStyle(color: Colors.white60)),
+              DropdownButton<String>(
+                  value: _sort,
+                  dropdownColor: const Color(0xFF171722),
+                  underline: const SizedBox.shrink(),
+                  items: const [
+                    DropdownMenuItem(
+                        value: 'Title A–Z', child: Text('Title A–Z')),
+                    DropdownMenuItem(
+                        value: 'Newest year', child: Text('Newest year')),
+                    DropdownMenuItem(
+                        value: 'Oldest year', child: Text('Oldest year'))
+                  ],
+                  onChanged: (v) {
+                    if (v != null) setState(() => _sort = v);
+                  }),
+            ])),
+        Expanded(
+          child: items.isEmpty
+              ? Center(
+                  child: Padding(
+                      padding: const EdgeInsets.all(28),
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(format.icon, color: _physicalAccent, size: 54),
+                        const SizedBox(height: 14),
+                        Text('No ${format.label} imports yet',
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 19,
+                                fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 8),
+                        const Text(
+                            'When you import media and its disc format is recorded, it will appear here automatically.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.white60))
+                      ])))
+              : ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: items.length,
+                  itemBuilder: (context, index) {
+                    final item = items[index];
+                    final detail = [
+                      item.type,
+                      if (item.releaseYear != null) '${item.releaseYear}',
+                      if ((item.discTitle ?? '').trim().isNotEmpty)
+                        item.discTitle!.trim()
+                    ].join(' · ');
+                    return Card(
+                        color: const Color(0xFF171722),
+                        child: ListTile(
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: (item.imageUrl ?? '').trim().isNotEmpty
+                                ? Image.network(
+                                    item.imageUrl!,
+                                    width: 52,
+                                    height: 72,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) =>
+                                        const SizedBox(
+                                      width: 52,
+                                      height: 72,
+                                      child: Icon(Icons.movie_outlined,
+                                          color: _physicalAccent),
+                                    ),
+                                  )
+                                : const SizedBox(
+                                    width: 52,
+                                    height: 72,
+                                    child: Icon(Icons.movie_outlined,
+                                        color: _physicalAccent),
+                                  ),
                           ),
-                  ),
-                  title: Text(item.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                  subtitle: Text(detail, style: const TextStyle(color: Colors.white60)), trailing: const Icon(Icons.chevron_right, color: Colors.white54),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: item))),
-                ));
-              },
-            ),
+                          title: Text(item.title,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700)),
+                          subtitle: Text(detail,
+                              style: const TextStyle(color: Colors.white60)),
+                          trailing: const Icon(Icons.chevron_right,
+                              color: Colors.white54),
+                          onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) =>
+                                      MediaDetailsScreen(media: item))),
+                        ));
+                  },
+                ),
         ),
       ]),
     );
   }
 }
-
 
 int _discCollectionCount(List<MediaItem> items) {
   final keys = <String>{};
@@ -312,17 +446,19 @@ class PhysicalDiscCollectionsScreen extends StatelessWidget {
               itemBuilder: (context, index) {
                 final items = rows[index].value;
                 final first = items.first;
-                final title = first.discCollectionTitle?.trim().isNotEmpty == true
-                    ? first.discCollectionTitle!.trim()
-                    : first.discTitle?.trim().isNotEmpty == true
-                        ? first.discTitle!.trim()
-                        : first.editionName?.trim().isNotEmpty == true
-                            ? first.editionName!.trim()
-                            : first.title;
+                final title =
+                    first.discCollectionTitle?.trim().isNotEmpty == true
+                        ? first.discCollectionTitle!.trim()
+                        : first.discTitle?.trim().isNotEmpty == true
+                            ? first.discTitle!.trim()
+                            : first.editionName?.trim().isNotEmpty == true
+                                ? first.editionName!.trim()
+                                : first.title;
                 final discNumbers = items
-                    .map((item) => item.physicalDiscId?.trim().isNotEmpty == true
-                        ? 'id:${item.physicalDiscId!.trim()}'
-                        : 'number:${item.discNumber ?? 1}')
+                    .map((item) =>
+                        item.physicalDiscId?.trim().isNotEmpty == true
+                            ? 'id:${item.physicalDiscId!.trim()}'
+                            : 'number:${item.discNumber ?? 1}')
                     .toSet()
                     .length;
                 return Card(
@@ -419,7 +555,8 @@ class PhysicalDiscCollectionDetailsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFF0B0B10),
       appBar: AppBar(
-        title: Text(collectionTitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+        title:
+            Text(collectionTitle, maxLines: 1, overflow: TextOverflow.ellipsis),
         backgroundColor: const Color(0xFF11111A),
       ),
       body: ListView(
@@ -467,10 +604,10 @@ class PhysicalDiscCollectionDetailsScreen extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(4, 18, 4, 8),
                 child: Text(
                   'DISC $discNumber${discTitle.isNotEmpty ? ' · ${discTitle.toUpperCase()}' : ''} · ${discItems.length} ${discItems.length == 1 ? 'PROGRAM' : 'PROGRAMS'}',
-                style: const TextStyle(
-                    color: _physicalAccent,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.1),
+                  style: const TextStyle(
+                      color: _physicalAccent,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.1),
                 ),
               );
             }),
@@ -512,18 +649,27 @@ class PhysicalDiscCollectionDetailsScreen extends StatelessWidget {
   }
 }
 
-String _discKey(String? value) => (value ?? '').toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+String _discKey(String? value) =>
+    (value ?? '').toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
 
-bool matchesDiscType(String? value, String expected) => _matches(value, expected);
+bool matchesDiscType(String? value, String expected) =>
+    _matches(value, expected);
 
 bool _matches(String? value, String expected) {
   final actual = _discKey(value);
   final wanted = _discKey(expected);
   if (actual.isEmpty) return false;
   if (wanted == 'dvd') return actual == 'dvd' || actual == 'dvddisc';
-  if (wanted == 'bluray') return actual == 'bluray' || actual == 'bluraydisc' || actual == 'bd';
-  if (wanted == '4kultrahd') return <String>{'4kultrahd', '4kuhd', 'uhd4k', '4kbluray', '4kultra'}.contains(actual);
-  if (wanted == 'audiocd') return <String>{'cd', 'audiocd', 'compactdisc'}.contains(actual);
+  if (wanted == 'bluray') {
+    return actual == 'bluray' || actual == 'bluraydisc' || actual == 'bd';
+  }
+  if (wanted == '4kultrahd') {
+    return <String>{'4kultrahd', '4kuhd', 'uhd4k', '4kbluray', '4kultra'}
+        .contains(actual);
+  }
+  if (wanted == 'audiocd') {
+    return <String>{'cd', 'audiocd', 'compactdisc'}.contains(actual);
+  }
   return actual == wanted;
 }
 

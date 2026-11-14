@@ -4,7 +4,7 @@
 
 import 'dart:ui';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'localization.dart';
@@ -167,6 +167,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
   }
 
   @override
+
   /// Builds the trailer screen.
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
@@ -420,9 +421,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
           widget.trailer.title.trim().isEmpty
               ? 'Trailer'
               : widget.trailer.title.trim(),
-          textAlign: compactLayout
-              ? TextAlign.center
-              : TextAlign.left,
+          textAlign: compactLayout ? TextAlign.center : TextAlign.left,
           style: TextStyle(
             color: Colors.white,
             fontSize: compactLayout ? 27 : 35,
@@ -481,9 +480,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
     bool compactLayout,
     bool narrowLayout,
   ) {
-    final aspectRatio = compactLayout
-        ? (narrowLayout ? 1.55 : 1.60)
-        : 2.0;
+    final aspectRatio = compactLayout ? (narrowLayout ? 1.55 : 1.60) : 2.0;
 
     final radius = compactLayout ? 20.0 : 26.0;
 
@@ -727,10 +724,8 @@ class _TrailerScreenState extends State<TrailerScreen> {
           style: FilledButton.styleFrom(
             backgroundColor: Colors.white,
             foregroundColor: Colors.black,
-            disabledBackgroundColor:
-                Colors.white.withValues(alpha: 0.15),
-            disabledForegroundColor:
-                Colors.white.withValues(alpha: 0.50),
+            disabledBackgroundColor: Colors.white.withValues(alpha: 0.15),
+            disabledForegroundColor: Colors.white.withValues(alpha: 0.50),
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
@@ -788,6 +783,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
 
 class _TrailerBackgroundPainter extends CustomPainter {
   @override
+
   /// Paints the subtle background grid.
   void paint(
     Canvas canvas,
@@ -817,6 +813,7 @@ class _TrailerBackgroundPainter extends CustomPainter {
   }
 
   @override
+
   /// Prevents repainting because the painter has no mutable state.
   bool shouldRepaint(
     covariant CustomPainter oldDelegate,
@@ -827,6 +824,7 @@ class _TrailerBackgroundPainter extends CustomPainter {
 
 class _FilmPatternPainter extends CustomPainter {
   @override
+
   /// Paints the decorative film-strip pattern.
   void paint(
     Canvas canvas,
@@ -857,11 +855,7 @@ class _FilmPatternPainter extends CustomPainter {
     const holeSize = 8.0;
     const holeSpacing = 25.0;
 
-    for (
-      double x = 20;
-      x < size.width - 20;
-      x += holeSpacing
-    ) {
+    for (double x = 20; x < size.width - 20; x += holeSpacing) {
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromCenter(
@@ -895,6 +889,7 @@ class _FilmPatternPainter extends CustomPainter {
   }
 
   @override
+
   /// Prevents repainting because the painter has no mutable state.
   bool shouldRepaint(
     covariant CustomPainter oldDelegate,

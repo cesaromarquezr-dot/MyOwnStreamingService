@@ -2,7 +2,7 @@
 // Live, read-only view of the authenticated home-server storage endpoint.
 // It never invents usage values and never mutates media files.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'backend_api.dart';
 import 'app_core.dart';
 import 'localization.dart';

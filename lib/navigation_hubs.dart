@@ -3,7 +3,7 @@
 // The primary navbar stays intentionally small; detailed destinations live
 // inside this hub or behind More.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'backend_api.dart';
 import 'app_core.dart';
 import 'app_customization.dart';

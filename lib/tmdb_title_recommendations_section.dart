@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'core/services/cinematic_title_metadata_service.dart';
 import 'home_arrow_rail.dart';
@@ -32,7 +32,8 @@ class TMDBTitleRecommendationsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final selectedMood = CinematicRecommendationMood.byKey(selectedMoodKey ?? '');
+    final selectedMood =
+        CinematicRecommendationMood.byKey(selectedMoodKey ?? '');
     final hasTitleRecommendations =
         recommendations.isNotEmpty || loading || moodOptionsEnabled;
 
@@ -68,7 +69,8 @@ class TMDBTitleRecommendationsSection extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           if (recommendations.isEmpty && loading)
-            const _RecommendationLoading(message: 'Finding movies and shows you may enjoy…')
+            const _RecommendationLoading(
+                message: 'Finding movies and shows you may enjoy…')
           else if (recommendations.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 18),
@@ -142,7 +144,8 @@ class TMDBTitleRecommendationsSection extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             if (loadingMoodRecommendations)
-              const _RecommendationLoading(message: 'Finding picks for this mood…')
+              const _RecommendationLoading(
+                  message: 'Finding picks for this mood…')
             else if (moodRecommendations.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
@@ -212,123 +215,127 @@ class _RecommendationCarousel extends StatelessWidget {
       itemBuilder: (context, index) {
         final item = recommendations[index];
         final poster = item.posterUrl;
-        final yearLabel = item.releaseYear == null ? '' : ' · ${item.releaseYear}';
+        final yearLabel =
+            item.releaseYear == null ? '' : ' · ${item.releaseYear}';
         return SizedBox(
-            width: 142,
-            child: Material(
-              color: const Color(0xFF17171C),
-              borderRadius: BorderRadius.circular(12),
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: () => onOpen(item),
-                child: Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: SizedBox(
-                          width: double.infinity,
-                          height: 156,
-                          child: poster == null
-                              ? _PosterFallback(title: item.title)
-                              : Image.network(
-                                  poster,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) =>
-                                      _PosterFallback(title: item.title),
-                                ),
+          width: 142,
+          child: Material(
+            color: const Color(0xFF17171C),
+            borderRadius: BorderRadius.circular(12),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => onOpen(item),
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 156,
+                        child: poster == null
+                            ? _PosterFallback(title: item.title)
+                            : Image.network(
+                                poster,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) =>
+                                    _PosterFallback(title: item.title),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      item.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                        height: 1.15,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      '${item.mediaTypeLabel}$yearLabel',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white60,
+                        fontSize: 11,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: item.isOwned
+                            ? const Color(0x2239C879)
+                            : const Color(0x22FF8A65),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: item.isOwned
+                              ? const Color(0xAA39C879)
+                              : const Color(0xAAFF8A65),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      child: Text(
+                        item.isOwned ? 'IN YOUR LIBRARY' : 'NOT OWNED',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: item.isOwned
+                              ? const Color(0xFF8BE0AD)
+                              : const Color(0xFFFFB19A),
+                          fontSize: 8,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: .35,
+                        ),
+                      ),
+                    ),
+                    if ((item.recommendationReason ?? '')
+                        .trim()
+                        .isNotEmpty) ...[
+                      const SizedBox(height: 4),
                       Text(
-                        item.title,
+                        item.recommendationReason!,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 13,
+                          color: Colors.white54,
+                          fontSize: 9,
                           height: 1.15,
                         ),
                       ),
-                      const SizedBox(height: 5),
-                      Text(
-                        '${item.mediaTypeLabel}$yearLabel',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white60,
-                          fontSize: 11,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: item.isOwned
-                              ? const Color(0x2239C879)
-                              : const Color(0x22FF8A65),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: item.isOwned
-                                ? const Color(0xAA39C879)
-                                : const Color(0xAAFF8A65),
-                          ),
-                        ),
-                        child: Text(
-                          item.isOwned ? 'IN YOUR LIBRARY' : 'NOT OWNED',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: item.isOwned
-                                ? const Color(0xFF8BE0AD)
-                                : const Color(0xFFFFB19A),
-                            fontSize: 8,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: .35,
-                          ),
-                        ),
-                      ),
-                      if ((item.recommendationReason ?? '').trim().isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          item.recommendationReason!,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white54,
-                            fontSize: 9,
-                            height: 1.15,
-                          ),
-                        ),
-                      ],
-                      const Spacer(),
-                      if (item.voteAverage != null && item.voteAverage! > 0)
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.star_rounded,
-                              size: 15,
-                              color: Color(0xFFFFC857),
-                            ),
-                            const SizedBox(width: 3),
-                            Text(
-                              '${item.voteAverage!.toStringAsFixed(1)}/10',
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
                     ],
-                  ),
+                    const Spacer(),
+                    if (item.voteAverage != null && item.voteAverage! > 0)
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.star_rounded,
+                            size: 15,
+                            color: Color(0xFFFFC857),
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            '${item.voteAverage!.toStringAsFixed(1)}/10',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
                 ),
               ),
             ),
+          ),
         );
       },
     );

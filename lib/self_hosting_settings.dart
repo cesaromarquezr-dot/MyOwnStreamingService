@@ -2,7 +2,7 @@
 // Purpose: Displays the authenticated home-server self-hosting status and
 // explains the public HTTPS/reverse-proxy connection used by the app.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'backend_api.dart';
 import 'app_core.dart';
 import 'localization.dart';

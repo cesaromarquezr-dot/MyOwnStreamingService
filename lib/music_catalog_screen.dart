@@ -5,7 +5,7 @@ import 'dart:async';
 // community album artwork from the Cover Art Archive. This does not imply
 // playback rights; playable audio comes from a separately licensed/local source.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'music_video_search_screen.dart';
@@ -13,6 +13,21 @@ import 'music_video_search_screen.dart';
 import 'app_core.dart';
 import 'cinematic_title_fonts.dart';
 import 'library_view_modes.dart';
+import 'details.dart';
+import 'rating_system.dart';
+import 'community/media_music_history_store.dart';
+import 'widgets/media_community_hub.dart';
+import 'widgets/media_album_context_sections.dart';
+import 'widgets/media_detail_discovery_sections.dart';
+
+void _openMediaDiscoveryItem(BuildContext context, MediaItem item) {
+  Navigator.of(context).push(MaterialPageRoute<void>(
+    settings: RouteSettings(name: '/app/media/${item.id}'),
+    builder: (_) => isMusicAlbumType(item.type)
+        ? MusicAlbumPageScreen(media: item)
+        : MediaDetailsScreen(media: item),
+  ));
+}
 
 /// Returns true for media records that belong to the music album experience.
 /// This is shared by navigation entry points so an album never opens the
@@ -60,7 +75,8 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
 
   Future<void> _loadStatus() async {
     try {
-      final payload = await AppController.instance.backendApi.getMusicCatalogStatus();
+      final payload =
+          await AppController.instance.backendApi.getMusicCatalogStatus();
       if (!mounted) return;
       setState(() {
         _providerStatus = payload['providers'] is Map
@@ -83,7 +99,8 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
     }
     if (!AppController.instance.isBackendAuthenticated) {
       setState(() {
-        _error = 'Sign in to your MyOwnStreamingService backend before searching the online music catalog.';
+        _error =
+            'Sign in to your MyOwnStreamingService backend before searching the online music catalog.';
         _result = null;
       });
       return;
@@ -95,7 +112,8 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
       _error = null;
     });
     try {
-      final payload = await AppController.instance.backendApi.searchMusicCatalog(
+      final payload =
+          await AppController.instance.backendApi.searchMusicCatalog(
         query,
         type: _type,
         limit: 10,
@@ -135,14 +153,16 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
         ? Map<String, dynamic>.from(_providerStatus!['coverArtArchive'] as Map)
         : <String, dynamic>{};
     final youtubeVideos = _providerStatus?['youtubeMusicVideos'] is Map
-        ? Map<String, dynamic>.from(_providerStatus!['youtubeMusicVideos'] as Map)
+        ? Map<String, dynamic>.from(
+            _providerStatus!['youtubeMusicVideos'] as Map)
         : <String, dynamic>{};
 
     return Scaffold(
       backgroundColor: const Color(0xFF101010),
       appBar: AppBar(
         backgroundColor: const Color(0xFF101010),
-        title: const Text('Music Catalog', style: TextStyle(fontWeight: FontWeight.w800)),
+        title: const Text('Music Catalog',
+            style: TextStyle(fontWeight: FontWeight.w800)),
         actions: [
           IconButton(
             tooltip: 'Clear search',
@@ -174,7 +194,9 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
               prefixIcon: const Icon(Icons.search_rounded),
               filled: true,
               fillColor: Colors.white.withValues(alpha: .06),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none),
             ),
           ),
           const SizedBox(height: 10),
@@ -194,9 +216,13 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
             child: FilledButton.icon(
               onPressed: _loading ? null : _search,
               icon: _loading
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.travel_explore_rounded),
-              label: Text(_loading ? 'Searching catalogs…' : 'Search Music Catalog'),
+              label: Text(
+                  _loading ? 'Searching catalogs…' : 'Search Music Catalog'),
             ),
           ),
           const SizedBox(height: 12),
@@ -207,13 +233,16 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
               children: [
                 _providerChip('Spotify', spotify['configured'] == true),
                 _providerChip('MusicBrainz', musicBrainz['configured'] == true),
-                _providerChip('Cover Art Archive', coverArt['configured'] == true),
-                _providerChip('YouTube Videos', youtubeVideos['configured'] == true),
+                _providerChip(
+                    'Cover Art Archive', coverArt['configured'] == true),
+                _providerChip(
+                    'YouTube Videos', youtubeVideos['configured'] == true),
               ],
             ),
           if (!authenticated) ...[
             const SizedBox(height: 12),
-            _notice('Backend sign-in required', 'The online catalog is routed through your authenticated backend. Sign in first; Spotify credentials stay on the server.'),
+            _notice('Backend sign-in required',
+                'The online catalog is routed through your authenticated backend. Sign in first; Spotify credentials stay on the server.'),
           ],
           if (_error != null) ...[
             const SizedBox(height: 14),
@@ -223,7 +252,9 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
             const SizedBox(height: 20),
             const LinearProgressIndicator(),
             const SizedBox(height: 8),
-            const Text('MusicBrainz requests are rate-limited to protect the public service.', style: TextStyle(color: Colors.white54, fontSize: 12)),
+            const Text(
+                'MusicBrainz requests are rate-limited to protect the public service.',
+                style: TextStyle(color: Colors.white54, fontSize: 12)),
           ],
           if (_result != null) ..._resultSections(_result!),
           const SizedBox(height: 22),
@@ -256,17 +287,23 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
           configured
               ? (label == 'Spotify' ? '$label configured' : '$label available')
               : '$label setup needed',
-          style: TextStyle(color: configured ? Colors.lightGreenAccent : Colors.orangeAccent, fontSize: 11, fontWeight: FontWeight.w700),
+          style: TextStyle(
+              color: configured ? Colors.lightGreenAccent : Colors.orangeAccent,
+              fontSize: 11,
+              fontWeight: FontWeight.w700),
         ),
       );
 
   Widget _notice(String title, String body) => Container(
         padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(color: Colors.white.withValues(alpha: .05), borderRadius: BorderRadius.circular(12)),
+        decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .05),
+            borderRadius: BorderRadius.circular(12)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
           const SizedBox(height: 4),
-          Text(body, style: const TextStyle(color: Colors.white70, height: 1.4)),
+          Text(body,
+              style: const TextStyle(color: Colors.white70, height: 1.4)),
         ]),
       );
 
@@ -276,12 +313,16 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
     final output = <Widget>[];
     void addGroup(String title, dynamic raw) {
       final items = raw is List
-          ? raw.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
+          ? raw
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList()
           : <Map<String, dynamic>>[];
       if (items.isEmpty) return;
       output.add(Padding(
         padding: const EdgeInsets.only(top: 22, bottom: 8),
-        child: Text('$title (${items.length})', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+        child: Text('$title (${items.length})',
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
       ));
       output.addAll(items.map((item) => _resultTile(item)));
     }
@@ -297,18 +338,23 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
     if (warnings is List && warnings.isNotEmpty) {
       output.add(const Padding(
         padding: EdgeInsets.only(top: 16, bottom: 6),
-        child: Text('Provider notes', style: TextStyle(fontWeight: FontWeight.w800)),
+        child: Text('Provider notes',
+            style: TextStyle(fontWeight: FontWeight.w800)),
       ));
       output.addAll(warnings.map((warning) => Padding(
             padding: const EdgeInsets.only(bottom: 5),
-            child: Text('• $warning', style: const TextStyle(color: Colors.orangeAccent, fontSize: 12, height: 1.4)),
+            child: Text('• $warning',
+                style: const TextStyle(
+                    color: Colors.orangeAccent, fontSize: 12, height: 1.4)),
           )));
     }
 
     if (output.isEmpty) {
       output.add(const Padding(
         padding: EdgeInsets.only(top: 24),
-        child: Text('No results returned. Try a different spelling or select another category.', style: TextStyle(color: Colors.white60)),
+        child: Text(
+            'No results returned. Try a different spelling or select another category.',
+            style: TextStyle(color: Colors.white60)),
       ));
     }
     return output;
@@ -319,9 +365,11 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
     final source = (item['source'] ?? 'Catalog').toString();
     final kind = (item['type'] ?? item['entityType'] ?? '').toString();
     final artist = (item['artist'] ?? '').toString();
-    final releaseDate = (item['releaseDate'] ?? item['firstReleaseDate'] ?? '').toString();
+    final releaseDate =
+        (item['releaseDate'] ?? item['firstReleaseDate'] ?? '').toString();
     final year = releaseDate.length >= 4 ? releaseDate.substring(0, 4) : '';
-    final primaryType = (item['primaryType'] ?? item['albumType'] ?? kind).toString();
+    final primaryType =
+        (item['primaryType'] ?? item['albumType'] ?? kind).toString();
     final disambiguation = (item['disambiguation'] ?? '').toString();
     final subtitleParts = <String>[
       if (artist.isNotEmpty) artist,
@@ -332,16 +380,24 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
     ];
     final imageUrl = (item['imageUrl'] ?? item['coverArtUrl'] ?? '').toString();
     final id = (item['id'] ?? '').toString();
-    final isMbArtist = source == 'MusicBrainz' && kind == 'artist' && id.isNotEmpty;
-    final isMbAlbum = source == 'MusicBrainz' && (kind == 'album' || item.containsKey('coverArtApiUrl')) && id.isNotEmpty;
-    final isSpotifyArtist = source == 'Spotify' && kind == 'artist' && id.isNotEmpty;
-    final isSpotifyAlbum = source == 'Spotify' && kind == 'album' && id.isNotEmpty;
-    final isSpotifyTrack = source == 'Spotify' && kind == 'track' && id.isNotEmpty;
+    final isMbArtist =
+        source == 'MusicBrainz' && kind == 'artist' && id.isNotEmpty;
+    final isMbAlbum = source == 'MusicBrainz' &&
+        (kind == 'album' || item.containsKey('coverArtApiUrl')) &&
+        id.isNotEmpty;
+    final isSpotifyArtist =
+        source == 'Spotify' && kind == 'artist' && id.isNotEmpty;
+    final isSpotifyAlbum =
+        source == 'Spotify' && kind == 'album' && id.isNotEmpty;
+    final isSpotifyTrack =
+        source == 'Spotify' && kind == 'track' && id.isNotEmpty;
     final externalUrl = (item['spotifyUrl'] ?? '').toString();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: .045), borderRadius: BorderRadius.circular(13)),
+      decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .045),
+          borderRadius: BorderRadius.circular(13)),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         leading: ClipRRect(
@@ -356,64 +412,88 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
                 )
               : _placeholderArt(),
         ),
-        title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: CinematicTitleFonts.captionStyleForTitle(title, type: (isSpotifyAlbum || isMbAlbum) ? 'album' : kind, baseFontSize: 15, color: Colors.white)),
-        subtitle: Text(subtitleParts.join(' · '), maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60, fontSize: 11, height: 1.3)),
+        title: Text(title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: CinematicTitleFonts.captionStyleForTitle(title,
+                type: (isSpotifyAlbum || isMbAlbum) ? 'album' : kind,
+                baseFontSize: 15,
+                color: Colors.white)),
+        subtitle: Text(subtitleParts.join(' · '),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+                color: Colors.white60, fontSize: 11, height: 1.3)),
         trailing: SizedBox(
-          width: isSpotifyTrack ? (externalUrl.isNotEmpty ? 96 : 48) : (isMbArtist || externalUrl.isNotEmpty || isMbAlbum) ? 100 : 24,
-          child: Row(mainAxisAlignment: MainAxisAlignment.end, mainAxisSize: MainAxisSize.min, children: [
-            if (isSpotifyArtist)
-              IconButton(
-                padding: EdgeInsets.zero,
-                tooltip: 'View artist profile, bio, and albums',
-                onPressed: () => _openSpotifyArtist(title, id),
-                icon: const Icon(Icons.person_search_rounded),
-              ),
-            if (isSpotifyAlbum)
-              IconButton(
-                padding: EdgeInsets.zero,
-                tooltip: 'View album and track list',
-                onPressed: () => _openSpotifyAlbum(title, id),
-                icon: const Icon(Icons.queue_music_rounded),
-              ),
-            if (isSpotifyTrack)
-              IconButton(
-                padding: EdgeInsets.zero,
-                tooltip: 'Find this song’s music video',
-                onPressed: () => _openMusicVideoSearch(title, artist),
-                icon: const Icon(Icons.music_video_rounded),
-              ),
-            if (isMbArtist)
-              IconButton(
-                padding: EdgeInsets.zero,
-                tooltip: 'Browse discography',
-                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => MusicDiscographyScreen(artistName: title, artistMbid: id))),
-                icon: const Icon(Icons.album_outlined),
-              ),
-            if (isMbAlbum)
-              IconButton(
-                padding: EdgeInsets.zero,
-                tooltip: 'View Cover Art Archive images',
-                onPressed: () => _showCoverArt(title, id),
-                icon: const Icon(Icons.image_search_outlined),
-              ),
-            if (externalUrl.startsWith('https://'))
-              IconButton(
-                padding: EdgeInsets.zero,
-                tooltip: 'Open in Spotify',
-                onPressed: () => _openExternal(externalUrl),
-                icon: const Icon(Icons.open_in_new_rounded),
-              ),
-          ]),
+          width: isSpotifyTrack
+              ? (externalUrl.isNotEmpty ? 96 : 48)
+              : (isMbArtist || externalUrl.isNotEmpty || isMbAlbum)
+                  ? 100
+                  : 24,
+          child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isSpotifyArtist)
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    tooltip: 'View artist profile, bio, and albums',
+                    onPressed: () => _openSpotifyArtist(title, id),
+                    icon: const Icon(Icons.person_search_rounded),
+                  ),
+                if (isSpotifyAlbum)
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    tooltip: 'View album and track list',
+                    onPressed: () => _openSpotifyAlbum(title, id),
+                    icon: const Icon(Icons.queue_music_rounded),
+                  ),
+                if (isSpotifyTrack)
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    tooltip: 'Find this song’s music video',
+                    onPressed: () => _openMusicVideoSearch(title, artist),
+                    icon: const Icon(Icons.music_video_rounded),
+                  ),
+                if (isMbArtist)
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    tooltip: 'Browse discography',
+                    onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                            builder: (_) => MusicDiscographyScreen(
+                                artistName: title, artistMbid: id))),
+                    icon: const Icon(Icons.album_outlined),
+                  ),
+                if (isMbAlbum)
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    tooltip: 'View Cover Art Archive images',
+                    onPressed: () => _showCoverArt(title, id),
+                    icon: const Icon(Icons.image_search_outlined),
+                  ),
+                if (externalUrl.startsWith('https://'))
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    tooltip: 'Open in Spotify',
+                    onPressed: () => _openExternal(externalUrl),
+                    icon: const Icon(Icons.open_in_new_rounded),
+                  ),
+              ]),
         ),
         onTap: isSpotifyArtist
             ? () => _openSpotifyArtist(title, id)
             : isSpotifyAlbum
                 ? () => _openSpotifyAlbum(title, id)
                 : isMbArtist
-                    ? () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => MusicDiscographyScreen(artistName: title, artistMbid: id)))
+                    ? () => Navigator.of(context).push(MaterialPageRoute<void>(
+                        builder: (_) => MusicDiscographyScreen(
+                            artistName: title, artistMbid: id)))
                     : isMbAlbum
                         ? () => _showCoverArt(title, id)
-                        : externalUrl.startsWith('https://') ? () => _openExternal(externalUrl) : null,
+                        : externalUrl.startsWith('https://')
+                            ? () => _openExternal(externalUrl)
+                            : null,
       ),
     );
   }
@@ -458,52 +538,83 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
 
   Future<void> _showCoverArt(String albumTitle, String mbid) async {
     try {
-      final payload = await AppController.instance.backendApi.getMusicCoverArt(mbid);
+      final payload =
+          await AppController.instance.backendApi.getMusicCoverArt(mbid);
       if (!mounted) return;
       final raw = payload['images'];
       final images = raw is List
-          ? raw.whereType<Map>().map((image) => Map<String, dynamic>.from(image)).toList()
+          ? raw
+              .whereType<Map>()
+              .map((image) => Map<String, dynamic>.from(image))
+              .toList()
           : <Map<String, dynamic>>[];
       await showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
           backgroundColor: const Color(0xFF1B1B1B),
-          title: Text(albumTitle, style: CinematicTitleFonts.captionStyleForTitle(albumTitle, type: 'album', baseFontSize: 18)),
+          title: Text(albumTitle,
+              style: CinematicTitleFonts.captionStyleForTitle(albumTitle,
+                  type: 'album', baseFontSize: 18)),
           content: SizedBox(
             width: 340,
             child: images.isEmpty
-                ? const Text('The Cover Art Archive has no artwork attached to this release group yet.')
+                ? const Text(
+                    'The Cover Art Archive has no artwork attached to this release group yet.')
                 : SingleChildScrollView(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: images.map((image) {
-                        final url = (image['thumbnail500'] ?? image['image'] ?? '').toString();
-                        final types = image['types'] is List ? (image['types'] as List).join(', ') : 'Artwork';
-                        if (!url.startsWith('https://')) return const SizedBox.shrink();
+                        final url =
+                            (image['thumbnail500'] ?? image['image'] ?? '')
+                                .toString();
+                        final types = image['types'] is List
+                            ? (image['types'] as List).join(', ')
+                            : 'Artwork';
+                        if (!url.startsWith('https://')) {
+                          return const SizedBox.shrink();
+                        }
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 12),
-                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(url, errorBuilder: (_, __, ___) => const SizedBox(height: 70, child: Center(child: Icon(Icons.broken_image_outlined))))),
-                            const SizedBox(height: 4),
-                            Text(types, style: const TextStyle(color: Colors.white60, fontSize: 12)),
-                          ]),
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.network(url,
+                                        errorBuilder: (_, __, ___) =>
+                                            const SizedBox(
+                                                height: 70,
+                                                child: Center(
+                                                    child: Icon(Icons
+                                                        .broken_image_outlined))))),
+                                const SizedBox(height: 4),
+                                Text(types,
+                                    style: const TextStyle(
+                                        color: Colors.white60, fontSize: 12)),
+                              ]),
                         );
                       }).toList(),
                     ),
                   ),
           ),
-          actions: [TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Close'))],
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Close'))
+          ],
         ),
       );
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not load Cover Art Archive images.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Could not load Cover Art Archive images.')));
     }
   }
 }
 
 class MusicDiscographyScreen extends StatefulWidget {
-  const MusicDiscographyScreen({super.key, required this.artistName, required this.artistMbid});
+  const MusicDiscographyScreen(
+      {super.key, required this.artistName, required this.artistMbid});
 
   final String artistName;
   final String artistMbid;
@@ -518,7 +629,8 @@ class _MusicDiscographyScreenState extends State<MusicDiscographyScreen> {
   @override
   void initState() {
     super.initState();
-    _future = AppController.instance.backendApi.getMusicDiscography(widget.artistMbid);
+    _future = AppController.instance.backendApi
+        .getMusicDiscography(widget.artistMbid);
   }
 
   @override
@@ -526,7 +638,8 @@ class _MusicDiscographyScreenState extends State<MusicDiscographyScreen> {
         backgroundColor: const Color(0xFF101010),
         appBar: AppBar(
           backgroundColor: const Color(0xFF101010),
-          title: Text('${widget.artistName} · Discography', maxLines: 1, overflow: TextOverflow.ellipsis),
+          title: Text('${widget.artistName} · Discography',
+              maxLines: 1, overflow: TextOverflow.ellipsis),
         ),
         body: FutureBuilder<Map<String, dynamic>>(
           future: _future,
@@ -535,14 +648,25 @@ class _MusicDiscographyScreenState extends State<MusicDiscographyScreen> {
               return const Center(child: CircularProgressIndicator());
             }
             if (snapshot.hasError) {
-              return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('Could not load this discography. ${snapshot.error}', textAlign: TextAlign.center)));
+              return Center(
+                  child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                          'Could not load this discography. ${snapshot.error}',
+                          textAlign: TextAlign.center)));
             }
             final raw = snapshot.data?['items'];
             final items = raw is List
-                ? raw.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
+                ? raw
+                    .whereType<Map>()
+                    .map((item) => Map<String, dynamic>.from(item))
+                    .toList()
                 : <Map<String, dynamic>>[];
             if (items.isEmpty) {
-              return const Center(child: Text('No release groups were returned for this artist.', style: TextStyle(color: Colors.white60)));
+              return const Center(
+                  child: Text(
+                      'No release groups were returned for this artist.',
+                      style: TextStyle(color: Colors.white60)));
             }
             return ListView.separated(
               padding: const EdgeInsets.all(16),
@@ -552,44 +676,95 @@ class _MusicDiscographyScreenState extends State<MusicDiscographyScreen> {
                 final item = items[index];
                 final title = (item['title'] ?? 'Untitled release').toString();
                 final year = (item['year'] ?? '').toString();
-                final primaryType = (item['primaryType'] ?? 'Release').toString();
+                final primaryType =
+                    (item['primaryType'] ?? 'Release').toString();
                 final imageUrl = (item['coverArtUrl'] ?? '').toString();
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: imageUrl.startsWith('https://')
-                        ? Image.network(imageUrl, width: 58, height: 58, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _smallPlaceholder())
+                        ? Image.network(imageUrl,
+                            width: 58,
+                            height: 58,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => _smallPlaceholder())
                         : _smallPlaceholder(),
                   ),
-                  title: Text(title, style: CinematicTitleFonts.captionStyleForTitle(title, type: 'album', baseFontSize: 15, color: Colors.white)),
-                  subtitle: Text('$primaryType${year.isNotEmpty ? ' · $year' : ''} · MusicBrainz', style: const TextStyle(color: Colors.white60, fontSize: 12)),
+                  title: Text(title,
+                      style: CinematicTitleFonts.captionStyleForTitle(title,
+                          type: 'album',
+                          baseFontSize: 15,
+                          color: Colors.white)),
+                  subtitle: Text(
+                      '$primaryType${year.isNotEmpty ? ' · $year' : ''} · MusicBrainz',
+                      style:
+                          const TextStyle(color: Colors.white60, fontSize: 12)),
                   trailing: IconButton(
                     tooltip: 'View cover artwork',
                     icon: const Icon(Icons.image_search_outlined),
                     onPressed: () async {
                       try {
-                        final art = await AppController.instance.backendApi.getMusicCoverArt((item['id'] ?? '').toString());
+                        final art = await AppController.instance.backendApi
+                            .getMusicCoverArt((item['id'] ?? '').toString());
                         if (!context.mounted) return;
                         final imagesRaw = art['images'];
-                        final images = imagesRaw is List ? imagesRaw.whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList() : <Map<String, dynamic>>[];
+                        final images = imagesRaw is List
+                            ? imagesRaw
+                                .whereType<Map>()
+                                .map((m) => Map<String, dynamic>.from(m))
+                                .toList()
+                            : <Map<String, dynamic>>[];
                         showDialog<void>(
                           context: context,
                           builder: (dialogContext) => AlertDialog(
                             backgroundColor: const Color(0xFF1B1B1B),
-                            title: Text(title, style: CinematicTitleFonts.captionStyleForTitle(title, type: 'album', baseFontSize: 18)),
+                            title: Text(title,
+                                style: CinematicTitleFonts.captionStyleForTitle(
+                                    title,
+                                    type: 'album',
+                                    baseFontSize: 18)),
                             content: images.isEmpty
-                                ? const Text('No cover art is available for this release group.')
-                                : SizedBox(width: 320, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: images.map((image) {
-                                    final url = (image['thumbnail500'] ?? image['image'] ?? '').toString();
-                                    if (!url.startsWith('https://')) return const SizedBox.shrink();
-                                    return Padding(padding: const EdgeInsets.only(bottom: 12), child: Image.network(url, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined)));
-                                  }).toList()))),
-                            actions: [TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Close'))],
+                                ? const Text(
+                                    'No cover art is available for this release group.')
+                                : SizedBox(
+                                    width: 320,
+                                    child: SingleChildScrollView(
+                                        child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: images.map((image) {
+                                              final url =
+                                                  (image['thumbnail500'] ??
+                                                          image['image'] ??
+                                                          '')
+                                                      .toString();
+                                              if (!url.startsWith('https://')) {
+                                                return const SizedBox.shrink();
+                                              }
+                                              return Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                          bottom: 12),
+                                                  child: Image.network(url,
+                                                      errorBuilder: (_, __,
+                                                              ___) =>
+                                                          const Icon(Icons
+                                                              .broken_image_outlined)));
+                                            }).toList()))),
+                            actions: [
+                              TextButton(
+                                  onPressed: () =>
+                                      Navigator.of(dialogContext).pop(),
+                                  child: const Text('Close'))
+                            ],
                           ),
                         );
                       } catch (_) {
-                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not load cover art.')));
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text('Could not load cover art.')));
+                        }
                       }
                     },
                   ),
@@ -609,9 +784,8 @@ class _MusicDiscographyScreenState extends State<MusicDiscographyScreen> {
       );
 }
 
-Map<String, dynamic> _asMap(dynamic value) => value is Map
-    ? Map<String, dynamic>.from(value)
-    : <String, dynamic>{};
+Map<String, dynamic> _asMap(dynamic value) =>
+    value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
 
 /// Detailed Spotify artist view with imagery, genres, follower count, optional
 /// exact-match TMDB biography, and paginated album/single releases.
@@ -626,10 +800,12 @@ class SpotifyArtistDetailsScreen extends StatefulWidget {
   final String spotifyId;
 
   @override
-  State<SpotifyArtistDetailsScreen> createState() => _SpotifyArtistDetailsScreenState();
+  State<SpotifyArtistDetailsScreen> createState() =>
+      _SpotifyArtistDetailsScreenState();
 }
 
-class _SpotifyArtistDetailsScreenState extends State<SpotifyArtistDetailsScreen> {
+class _SpotifyArtistDetailsScreenState
+    extends State<SpotifyArtistDetailsScreen> {
   late final Future<Map<String, dynamic>> _future;
   final List<Map<String, dynamic>> _additionalAlbums = <Map<String, dynamic>>[];
   bool _loadingMore = false;
@@ -662,7 +838,8 @@ class _SpotifyArtistDetailsScreenState extends State<SpotifyArtistDetailsScreen>
       _loadMoreError = null;
     });
     try {
-      final payload = await AppController.instance.backendApi.getSpotifyArtistAlbums(
+      final payload =
+          await AppController.instance.backendApi.getSpotifyArtistAlbums(
         widget.spotifyId,
         limit: 10,
         offset: offset,
@@ -671,11 +848,15 @@ class _SpotifyArtistDetailsScreenState extends State<SpotifyArtistDetailsScreen>
       if (!mounted) return;
       setState(() {
         if (raw is List) {
-          _additionalAlbums.addAll(raw.whereType<Map>().map((v) => Map<String, dynamic>.from(v)));
+          _additionalAlbums.addAll(
+              raw.whereType<Map>().map((v) => Map<String, dynamic>.from(v)));
         }
       });
     } catch (_) {
-      if (mounted) setState(() => _loadMoreError = 'Could not load more Spotify releases.');
+      if (mounted) {
+        setState(
+            () => _loadMoreError = 'Could not load more Spotify releases.');
+      }
     } finally {
       if (mounted) setState(() => _loadingMore = false);
     }
@@ -686,7 +867,8 @@ class _SpotifyArtistDetailsScreenState extends State<SpotifyArtistDetailsScreen>
         backgroundColor: const Color(0xFF101010),
         appBar: AppBar(
           backgroundColor: const Color(0xFF101010),
-          title: Text(widget.artistName, maxLines: 1, overflow: TextOverflow.ellipsis),
+          title: Text(widget.artistName,
+              maxLines: 1, overflow: TextOverflow.ellipsis),
         ),
         body: FutureBuilder<Map<String, dynamic>>(
           future: _future,
@@ -695,18 +877,37 @@ class _SpotifyArtistDetailsScreenState extends State<SpotifyArtistDetailsScreen>
               return const Center(child: CircularProgressIndicator());
             }
             if (snapshot.hasError || snapshot.data == null) {
-              return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('Could not load the Spotify artist profile. ${snapshot.error ?? ''}', textAlign: TextAlign.center)));
+              return Center(
+                  child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                          'Could not load the Spotify artist profile. ${snapshot.error ?? ''}',
+                          textAlign: TextAlign.center)));
             }
             final artist = _asMap(snapshot.data!['artist']);
             final albumPayload = _asMap(snapshot.data!['albums']);
             final firstAlbums = _maps(albumPayload['items']);
-            final albums = <Map<String, dynamic>>[...firstAlbums, ..._additionalAlbums];
-            final total = int.tryParse(albumPayload['total']?.toString() ?? '') ?? albums.length;
+            final albums = <Map<String, dynamic>>[
+              ...firstAlbums,
+              ..._additionalAlbums
+            ];
+            final total =
+                int.tryParse(albumPayload['total']?.toString() ?? '') ??
+                    albums.length;
             final images = _maps(artist['images']);
-            final imageUrl = (artist['imageUrl'] ?? (images.isNotEmpty ? images.first['url'] : '') ?? '').toString();
-            final genres = artist['genres'] is List ? (artist['genres'] as List).map((v) => v.toString()).where((v) => v.isNotEmpty).toList() : <String>[];
+            final imageUrl = (artist['imageUrl'] ??
+                    (images.isNotEmpty ? images.first['url'] : '') ??
+                    '')
+                .toString();
+            final genres = artist['genres'] is List
+                ? (artist['genres'] as List)
+                    .map((v) => v.toString())
+                    .where((v) => v.isNotEmpty)
+                    .toList()
+                : <String>[];
             final biography = artist['biography']?.toString().trim() ?? '';
-            final followers = int.tryParse(artist['followers']?.toString() ?? '');
+            final followers =
+                int.tryParse(artist['followers']?.toString() ?? '');
             final spotifyUrl = artist['spotifyUrl']?.toString() ?? '';
 
             return ListView(
@@ -717,35 +918,82 @@ class _SpotifyArtistDetailsScreenState extends State<SpotifyArtistDetailsScreen>
                     width: 190,
                     height: 190,
                     alignment: Alignment.center,
-                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: .04), borderRadius: BorderRadius.circular(14)),
+                    decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: .04),
+                        borderRadius: BorderRadius.circular(14)),
                     child: imageUrl.startsWith('https://')
-                        ? Image.network(imageUrl, width: 190, height: 190, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.person_outline_rounded, size: 60))
+                        ? Image.network(imageUrl,
+                            width: 190,
+                            height: 190,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => const Icon(
+                                Icons.person_outline_rounded,
+                                size: 60))
                         : const Icon(Icons.person_outline_rounded, size: 60),
                   ),
                 ),
                 const SizedBox(height: 14),
-                Text(artist['name']?.toString() ?? widget.artistName, textAlign: TextAlign.center, style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w900)),
-                if (followers != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text('${_formatCount(followers)} Spotify followers', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white60))),
+                Text(artist['name']?.toString() ?? widget.artistName,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 25, fontWeight: FontWeight.w900)),
+                if (followers != null)
+                  Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                          '${_formatCount(followers)} Spotify followers',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.white60))),
                 if (genres.isNotEmpty) ...[
                   const SizedBox(height: 10),
-                  Wrap(alignment: WrapAlignment.center, spacing: 6, runSpacing: 5, children: genres.map((genre) => Chip(label: Text(genre, style: const TextStyle(fontSize: 11)), visualDensity: VisualDensity.compact)).toList()),
+                  Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 6,
+                      runSpacing: 5,
+                      children: genres
+                          .map((genre) => Chip(
+                              label: Text(genre,
+                                  style: const TextStyle(fontSize: 11)),
+                              visualDensity: VisualDensity.compact))
+                          .toList()),
                 ],
                 if (spotifyUrl.startsWith('https://')) ...[
                   const SizedBox(height: 8),
-                  Center(child: OutlinedButton.icon(onPressed: () => _openSpotifyUrl(spotifyUrl), icon: const Icon(Icons.open_in_new_rounded), label: const Text('Open artist in Spotify'))),
+                  Center(
+                      child: OutlinedButton.icon(
+                          onPressed: () => _openSpotifyUrl(spotifyUrl),
+                          icon: const Icon(Icons.open_in_new_rounded),
+                          label: const Text('Open artist in Spotify'))),
                 ],
                 const SizedBox(height: 12),
-                const Text('Artist images, genre tags, and profile metadata provided by Spotify.', style: TextStyle(color: Colors.white38, fontSize: 11, height: 1.4)),
+                const Text(
+                    'Artist images, genre tags, and profile metadata provided by Spotify.',
+                    style: TextStyle(
+                        color: Colors.white38, fontSize: 11, height: 1.4)),
                 const SizedBox(height: 20),
-                const Text('Biography', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                const Text('Biography',
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 6),
                 if (biography.isNotEmpty) ...[
-                  Text(biography, style: const TextStyle(color: Colors.white70, height: 1.5)),
-                  Text('Biography source: ${artist['biographySource'] ?? 'TMDB'}', style: const TextStyle(color: Colors.white38, fontSize: 11)),
+                  Text(biography,
+                      style:
+                          const TextStyle(color: Colors.white70, height: 1.5)),
+                  Text(
+                      'Biography source: ${artist['biographySource'] ?? 'TMDB'}',
+                      style:
+                          const TextStyle(color: Colors.white38, fontSize: 11)),
                 ] else
-                  Text(artist['biographyNote']?.toString() ?? 'Spotify does not supply biographies through its Web API. A matching TMDB biography is not available for this artist.', style: const TextStyle(color: Colors.white60, height: 1.4)),
+                  Text(
+                      artist['biographyNote']?.toString() ??
+                          'Spotify does not supply biographies through its Web API. A matching TMDB biography is not available for this artist.',
+                      style:
+                          const TextStyle(color: Colors.white60, height: 1.4)),
                 const SizedBox(height: 24),
-                Text('Albums, singles & appearances${total > 0 ? ' ($total)' : ''}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                Text(
+                    'Albums, singles & appearances${total > 0 ? ' ($total)' : ''}',
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 8),
                 LibraryViewModePicker(
                   scope: 'spotify-discography:${widget.spotifyId}',
@@ -753,40 +1001,65 @@ class _SpotifyArtistDetailsScreenState extends State<SpotifyArtistDetailsScreen>
                   onChanged: (mode) => setState(() => _albumsViewMode = mode),
                   compact: true,
                 ),
-                if (albums.isEmpty) const Text('No releases were returned for this artist.', style: TextStyle(color: Colors.white60)),
+                if (albums.isEmpty)
+                  const Text('No releases were returned for this artist.',
+                      style: TextStyle(color: Colors.white60)),
                 if (_albumsViewMode == LibraryViewMode.list)
                   for (final album in albums) _albumTile(context, album)
                 else
                   LibraryCollectionView(
                     entries: albums.map((album) {
-                      final title = album['title']?.toString() ?? 'Untitled album';
+                      final title =
+                          album['title']?.toString() ?? 'Untitled album';
                       final id = album['id']?.toString() ?? '';
                       final imageUrl = album['imageUrl']?.toString() ?? '';
-                      final artistName = album['artist']?.toString() ?? widget.artistName;
+                      final artistName =
+                          album['artist']?.toString() ?? widget.artistName;
                       final date = album['releaseDate']?.toString() ?? '';
                       final type = album['albumType']?.toString() ?? 'album';
-                      final releaseYear = date.length >= 4 ? int.tryParse(date.substring(0, 4)) : null;
+                      final releaseYear = date.length >= 4
+                          ? int.tryParse(date.substring(0, 4))
+                          : null;
                       return LibraryViewEntry(
                         title: title,
-                        subtitle: '$type${date.isEmpty ? '' : ' · $date'} · $artistName',
+                        subtitle:
+                            '$type${date.isEmpty ? '' : ' · $date'} · $artistName',
                         year: releaseYear,
                         imageUrl: imageUrl,
                         fallbackIcon: Icons.album_outlined,
-                        onTap: id.isEmpty ? null : () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SpotifyAlbumDetailsScreen(albumTitle: title, spotifyId: id))),
+                        onTap: id.isEmpty
+                            ? null
+                            : () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                    builder: (_) => SpotifyAlbumDetailsScreen(
+                                        albumTitle: title, spotifyId: id))),
                       );
                     }).toList(growable: false),
                     mode: _albumsViewMode,
                     padding: EdgeInsets.zero,
                   ),
-                if (_loadMoreError != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_loadMoreError!, style: const TextStyle(color: Colors.orangeAccent))),
-                if (albums.length < total) Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: OutlinedButton.icon(
-                    onPressed: _loadingMore ? null : () => _loadMore(albums.length),
-                    icon: _loadingMore ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.expand_more_rounded),
-                    label: Text(_loadingMore ? 'Loading releases…' : 'Load more releases'),
+                if (_loadMoreError != null)
+                  Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(_loadMoreError!,
+                          style: const TextStyle(color: Colors.orangeAccent))),
+                if (albums.length < total)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: OutlinedButton.icon(
+                      onPressed:
+                          _loadingMore ? null : () => _loadMore(albums.length),
+                      icon: _loadingMore
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.expand_more_rounded),
+                      label: Text(_loadingMore
+                          ? 'Loading releases…'
+                          : 'Load more releases'),
+                    ),
                   ),
-                ),
               ],
             );
           },
@@ -803,18 +1076,35 @@ class _SpotifyArtistDetailsScreenState extends State<SpotifyArtistDetailsScreen>
     return Card(
       color: Colors.white.withValues(alpha: .04),
       child: ListTile(
-        onTap: id.isEmpty ? null : () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SpotifyAlbumDetailsScreen(albumTitle: title, spotifyId: id))),
+        onTap: id.isEmpty
+            ? null
+            : () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => SpotifyAlbumDetailsScreen(
+                    albumTitle: title, spotifyId: id))),
         leading: Container(
           width: 56,
           height: 56,
           color: Colors.white.withValues(alpha: .04),
           alignment: Alignment.center,
           child: imageUrl.startsWith('https://')
-              ? Image.network(imageUrl, width: 56, height: 56, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.album_outlined))
+              ? Image.network(imageUrl,
+                  width: 56,
+                  height: 56,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) =>
+                      const Icon(Icons.album_outlined))
               : const Icon(Icons.album_outlined),
         ),
-        title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: CinematicTitleFonts.captionStyleForTitle(title, type: 'album', baseFontSize: 15, color: Colors.white)),
-        subtitle: Text('$type${date.isEmpty ? '' : ' · $date'}${artist.isEmpty ? '' : ' · $artist'}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60, fontSize: 11)),
+        title: Text(title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: CinematicTitleFonts.captionStyleForTitle(title,
+                type: 'album', baseFontSize: 15, color: Colors.white)),
+        subtitle: Text(
+            '$type${date.isEmpty ? '' : ' · $date'}${artist.isEmpty ? '' : ' · $artist'}',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white60, fontSize: 11)),
         trailing: const Icon(Icons.chevron_right_rounded),
       ),
     );
@@ -852,24 +1142,28 @@ class OwnedAlbumDetailsScreen extends StatefulWidget {
   final String artistName;
   final String? artworkUrl;
   final List<Map<String, dynamic>> localTracks;
+
   /// Whether this copy is already owned. Defaults to true for compatibility
   /// with existing callers that explicitly open their library album.
   final bool isOwned;
+
   /// Set false if the caller has already attempted the same catalog lookup.
   final bool resolveSpotifyMetadata;
   final ValueChanged<Map<String, dynamic>>? onPlayLocalTrack;
 
   @override
-  State<OwnedAlbumDetailsScreen> createState() => _OwnedAlbumDetailsScreenState();
+  State<OwnedAlbumDetailsScreen> createState() =>
+      _OwnedAlbumDetailsScreenState();
 }
 
 class _OwnedAlbumDetailsScreenState extends State<OwnedAlbumDetailsScreen> {
   late final Future<String?> _spotifyAlbumId = _resolveSpotifyAlbumId();
 
-  static String _normalize(String value) => value.toLowerCase().trim().replaceAll(
-        RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"),
-        '',
-      );
+  static String _normalize(String value) =>
+      value.toLowerCase().trim().replaceAll(
+            RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"),
+            '',
+          );
 
   Future<String?> _resolveSpotifyAlbumId() async {
     if (!widget.resolveSpotifyMetadata ||
@@ -879,7 +1173,8 @@ class _OwnedAlbumDetailsScreenState extends State<OwnedAlbumDetailsScreen> {
     final title = widget.albumTitle.trim();
     if (title.isEmpty) return null;
     try {
-      final payload = await AppController.instance.backendApi.searchMusicCatalog(
+      final payload =
+          await AppController.instance.backendApi.searchMusicCatalog(
         title,
         type: 'album',
         limit: 10,
@@ -900,27 +1195,34 @@ class _OwnedAlbumDetailsScreenState extends State<OwnedAlbumDetailsScreen> {
       final matches = raw
           .whereType<Map>()
           .map((value) => Map<String, dynamic>.from(value))
-          .where((value) => _normalize(value['title']?.toString() ?? '') == wantedTitle)
+          .where((value) =>
+              _normalize(value['title']?.toString() ?? '') == wantedTitle)
           .toList();
       if (matches.isEmpty) return null;
       matches.sort((a, b) {
         int score(Map<String, dynamic> row) {
           final artists = _normalize(row['artist']?.toString() ?? '');
           final artistMatch = wantedArtists.isEmpty ||
-              (artists.isNotEmpty && wantedArtists.any((artist) => artists.contains(artist) || artist.contains(artists)));
+              (artists.isNotEmpty &&
+                  wantedArtists.any((artist) =>
+                      artists.contains(artist) || artist.contains(artists)));
           final candidateDate = row['releaseDate']?.toString() ?? '';
           final wantedYear = widget.media?.releaseYear;
           final yearMatch = wantedYear == null ||
-              (candidateDate.length >= 4 && candidateDate.startsWith(wantedYear.toString()));
+              (candidateDate.length >= 4 &&
+                  candidateDate.startsWith(wantedYear.toString()));
           return (artistMatch ? 0 : 4) + (yearMatch ? 0 : 1);
         }
+
         return score(a).compareTo(score(b));
       });
       final selected = matches.first;
       final selectedArtist = _normalize(selected['artist']?.toString() ?? '');
       if (wantedArtists.isNotEmpty &&
           (selectedArtist.isEmpty ||
-              !wantedArtists.any((artist) => selectedArtist.contains(artist) || artist.contains(selectedArtist)))) {
+              !wantedArtists.any((artist) =>
+                  selectedArtist.contains(artist) ||
+                  artist.contains(selectedArtist)))) {
         return null;
       }
       final id = selected['id']?.toString() ?? '';
@@ -1004,7 +1306,9 @@ class _OwnedAlbumLocalDetailsScreen extends StatelessWidget {
     final artists = <String>{
       ...?media?.music,
       if (artistName.trim().isNotEmpty) artistName.trim(),
-      ...localTracks.map((row) => row['artist']?.toString().trim() ?? '').where((v) => v.isNotEmpty),
+      ...localTracks
+          .map((row) => row['artist']?.toString().trim() ?? '')
+          .where((v) => v.isNotEmpty),
     }.toList(growable: false);
     final companies = <String>{
       ...?media?.studios,
@@ -1017,8 +1321,11 @@ class _OwnedAlbumLocalDetailsScreen extends StatelessWidget {
       backgroundColor: const Color(0xFF101010),
       appBar: AppBar(
         backgroundColor: const Color(0xFF101010),
-        title: Text(albumTitle, maxLines: 1, overflow: TextOverflow.ellipsis,
-            style: CinematicTitleFonts.captionStyleForTitle(albumTitle, type: 'album', baseFontSize: 18)),
+        title: Text(albumTitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: CinematicTitleFonts.captionStyleForTitle(albumTitle,
+                type: 'album', baseFontSize: 18)),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
@@ -1028,57 +1335,87 @@ class _OwnedAlbumLocalDetailsScreen extends StatelessWidget {
               width: 240,
               height: 240,
               alignment: Alignment.center,
-              decoration: BoxDecoration(color: Colors.white.withValues(alpha: .04), borderRadius: BorderRadius.circular(10)),
+              decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .04),
+                  borderRadius: BorderRadius.circular(10)),
               child: shownArtwork.startsWith('https://')
-                  ? Image.network(shownArtwork, width: 240, height: 240, fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => const Icon(Icons.album_outlined, size: 70))
+                  ? Image.network(shownArtwork,
+                      width: 240,
+                      height: 240,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) =>
+                          const Icon(Icons.album_outlined, size: 70))
                   : const Icon(Icons.album_outlined, size: 70),
             ),
           ),
           const SizedBox(height: 16),
-          Text(albumTitle, textAlign: TextAlign.center,
-              style: CinematicTitleFonts.captionStyleForTitle(albumTitle, type: 'album', baseFontSize: 25, color: Colors.white)),
-          if (artists.isNotEmpty) Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text(artists.join(', '), textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
-          ),
-          if (dateLabel != null || localTracks.isNotEmpty) Padding(
-            padding: const EdgeInsets.only(top: 5),
-            child: Text([
-              if (dateLabel != null && dateLabel.isNotEmpty) dateLabel,
-              '${localTracks.length} track${localTracks.length == 1 ? '' : 's'}',
-            ].join(' · '), textAlign: TextAlign.center, style: const TextStyle(color: Colors.white54)),
-          ),
+          Text(albumTitle,
+              textAlign: TextAlign.center,
+              style: CinematicTitleFonts.captionStyleForTitle(albumTitle,
+                  type: 'album', baseFontSize: 25, color: Colors.white)),
+          if (artists.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(artists.join(', '),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white70)),
+            ),
+          if (dateLabel != null || localTracks.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 5),
+              child: Text(
+                  [
+                    if (dateLabel != null && dateLabel.isNotEmpty) dateLabel,
+                    '${localTracks.length} track${localTracks.length == 1 ? '' : 's'}',
+                  ].join(' · '),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white54)),
+            ),
           if (isOwned) ...[
             const SizedBox(height: 10),
-            const Center(child: Chip(avatar: Icon(Icons.library_music_rounded, size: 16), label: Text('In your library'))),
+            const Center(
+                child: Chip(
+                    avatar: Icon(Icons.library_music_rounded, size: 16),
+                    label: Text('In your library'))),
           ],
           if (lookupPending) ...[
             const SizedBox(height: 12),
             const LinearProgressIndicator(minHeight: 2),
             const SizedBox(height: 5),
-            const Text('Looking for additional album credits and release metadata…', textAlign: TextAlign.center,
+            const Text(
+                'Looking for additional album credits and release metadata…',
+                textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.white38, fontSize: 11)),
           ],
           if (media?.description?.trim().isNotEmpty == true) ...[
             const SizedBox(height: 18),
-            const Text('Album details', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+            const Text('Album details',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
             const SizedBox(height: 6),
-            Text(media!.description!, style: const TextStyle(color: Colors.white70, height: 1.45)),
+            Text(media!.description!,
+                style: const TextStyle(color: Colors.white70, height: 1.45)),
           ],
-          if (artists.isNotEmpty || companies.isNotEmpty || (media?.genres.isNotEmpty ?? false)) ...[
+          if (artists.isNotEmpty ||
+              companies.isNotEmpty ||
+              (media?.genres.isNotEmpty ?? false)) ...[
             const SizedBox(height: 20),
-            const Text('Album credits', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+            const Text('Album credits',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
             const SizedBox(height: 8),
-            if (artists.isNotEmpty) _localCreditRow('Artist / performer(s)', artists.join(', ')),
-            if (companies.isNotEmpty) _localCreditRow('Label / company', companies.join(', ')),
-            if (media?.genres.isNotEmpty == true) _localCreditRow('Genres', media!.genres.join(', ')),
+            if (artists.isNotEmpty)
+              _localCreditRow('Artist / performer(s)', artists.join(', ')),
+            if (companies.isNotEmpty)
+              _localCreditRow('Label / company', companies.join(', ')),
+            if (media?.genres.isNotEmpty == true)
+              _localCreditRow('Genres', media!.genres.join(', ')),
           ],
           const SizedBox(height: 18),
-          const Text('Track list', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+          const Text('Track list',
+              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
           const SizedBox(height: 5),
           if (localTracks.isEmpty)
-            const Text('No locally indexed tracks were found for this album yet. Connect the music catalog to enrich this view with provider track metadata.',
+            const Text(
+                'No locally indexed tracks were found for this album yet. Connect the music catalog to enrich this view with provider track metadata.',
                 style: TextStyle(color: Colors.white60, height: 1.4))
           else
             for (var index = 0; index < localTracks.length; index++)
@@ -1086,7 +1423,11 @@ class _OwnedAlbumLocalDetailsScreen extends StatelessWidget {
                 dense: true,
                 contentPadding: EdgeInsets.zero,
                 onTap: onPlayLocalTrack != null &&
-                        (localTracks[index]['audioUrl']?.toString().trim().isNotEmpty ?? false)
+                        (localTracks[index]['audioUrl']
+                                ?.toString()
+                                .trim()
+                                .isNotEmpty ??
+                            false)
                     ? () => onPlayLocalTrack!(localTracks[index])
                     : null,
                 trailing: onPlayLocalTrack == null
@@ -1094,25 +1435,88 @@ class _OwnedAlbumLocalDetailsScreen extends StatelessWidget {
                     : IconButton(
                         tooltip: 'Play from this album',
                         icon: const Icon(Icons.play_arrow_rounded),
-                        onPressed: (localTracks[index]['audioUrl']?.toString().trim().isNotEmpty ?? false)
+                        onPressed: (localTracks[index]['audioUrl']
+                                    ?.toString()
+                                    .trim()
+                                    .isNotEmpty ??
+                                false)
                             ? () => onPlayLocalTrack!(localTracks[index])
                             : null,
                       ),
-                leading: SizedBox(width: 28, child: Center(child: Text(
-                  (localTracks[index]['trackNumber'] ?? (index + 1)).toString(),
-                  style: const TextStyle(color: Colors.white54, fontSize: 11),
-                ))),
-                title: Text(localTracks[index]['title']?.toString() ?? 'Track', maxLines: 2, overflow: TextOverflow.ellipsis,
+                leading: SizedBox(
+                    width: 28,
+                    child: Center(
+                        child: Text(
+                      (localTracks[index]['trackNumber'] ?? (index + 1))
+                          .toString(),
+                      style:
+                          const TextStyle(color: Colors.white54, fontSize: 11),
+                    ))),
+                title: Text(localTracks[index]['title']?.toString() ?? 'Track',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: Text([
-                  if ((localTracks[index]['artist']?.toString() ?? '').trim().isNotEmpty)
-                    localTracks[index]['artist'].toString(),
-                  _durationLabel(localTracks[index]['durationMs']),
-                ].join(' · '), style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                subtitle: Text(
+                    [
+                      if ((localTracks[index]['artist']?.toString() ?? '')
+                          .trim()
+                          .isNotEmpty)
+                        localTracks[index]['artist'].toString(),
+                      _durationLabel(localTracks[index]['durationMs']),
+                    ].join(' · '),
+                    style:
+                        const TextStyle(color: Colors.white54, fontSize: 11)),
               ),
           const SizedBox(height: 12),
-          const Text('Track names and runtimes above come from files indexed in your local library. Additional credits and official release details appear when the music catalog has an exact album match.',
-              style: TextStyle(color: Colors.white38, fontSize: 11, height: 1.4)),
+          const Text(
+              'Track names and runtimes above come from files indexed in your local library. Additional credits and official release details appear when the music catalog has an exact album match.',
+              style:
+                  TextStyle(color: Colors.white38, fontSize: 11, height: 1.4)),
+          const SizedBox(height: 20),
+          MediaRatingsPanel(
+            mediaId:
+                media?.id ?? 'music-album:${albumTitle.toLowerCase().trim()}',
+            title: albumTitle,
+            year:
+                media?.releaseYear ?? DateTime.tryParse(dateLabel ?? '')?.year,
+            mediaType: 'album',
+          ),
+          MediaAlbumContextSections(
+            albumTitle: albumTitle,
+            media: media,
+            profileId: AppController.instance.currentProfile?.id,
+            trackIds: localTracks
+                .map((row) => row['id']?.toString() ?? '')
+                .where((id) => id.trim().isNotEmpty)
+                .toList(growable: false),
+          ),
+          MediaCommunityHub(
+            mediaKey: media == null
+                ? 'music-album:${albumTitle.toLowerCase().trim()}:${artistName.toLowerCase().trim()}'
+                : 'catalog:${media!.id}',
+            mediaTitle: albumTitle,
+            mediaType: 'album',
+            activityProfileId: AppController.instance.currentProfile?.id,
+            consumptionActivityFuture:
+                MediaMusicHistoryStore.albumHasListeningActivity(
+              profileId: AppController.instance.currentProfile?.id,
+              trackIds: localTracks
+                  .map((row) => row['id']?.toString() ?? '')
+                  .where((id) => id.trim().isNotEmpty),
+            ),
+          ),
+          MediaDetailDiscoverySections(
+            media: media ??
+                MediaItem(
+                  id: 'music-album:${albumTitle.toLowerCase().trim()}',
+                  title: albumTitle,
+                  type: 'album',
+                  imageUrl: artworkUrl,
+                  music: artists,
+                  companies: companies,
+                ),
+            onOpenMedia: (item) => _openMediaDiscoveryItem(context, item),
+          ),
         ],
       ),
     );
@@ -1121,8 +1525,14 @@ class _OwnedAlbumLocalDetailsScreen extends StatelessWidget {
   Widget _localCreditRow(String label, String value) => Padding(
         padding: const EdgeInsets.only(bottom: 7),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(width: 155, child: Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12))),
-          Expanded(child: Text(value, style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4))),
+          SizedBox(
+              width: 155,
+              child: Text(label,
+                  style: const TextStyle(color: Colors.white54, fontSize: 12))),
+          Expanded(
+              child: Text(value,
+                  style: const TextStyle(
+                      color: Colors.white70, fontSize: 12, height: 1.4))),
         ]),
       );
 }
@@ -1183,38 +1593,59 @@ class SpotifyAlbumDetailsScreen extends StatefulWidget {
   final void Function(Map<String, dynamic> localTrack)? onPlayLocalTrack;
 
   @override
-  State<SpotifyAlbumDetailsScreen> createState() => _SpotifyAlbumDetailsScreenState();
+  State<SpotifyAlbumDetailsScreen> createState() =>
+      _SpotifyAlbumDetailsScreenState();
 }
 
 class _SpotifyAlbumDetailsScreenState extends State<SpotifyAlbumDetailsScreen> {
   late final Future<Map<String, dynamic>> _future;
 
   static List<Map<String, dynamic>> _maps(dynamic raw) => raw is List
-      ? raw.whereType<Map>().map((value) => Map<String, dynamic>.from(value)).toList()
+      ? raw
+          .whereType<Map>()
+          .map((value) => Map<String, dynamic>.from(value))
+          .toList()
       : <Map<String, dynamic>>[];
 
   @override
   void initState() {
     super.initState();
-    _future = AppController.instance.backendApi.getSpotifyAlbum(widget.spotifyId);
+    _future =
+        AppController.instance.backendApi.getSpotifyAlbum(widget.spotifyId);
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: const Color(0xFF101010),
-        appBar: AppBar(backgroundColor: const Color(0xFF101010), title: Text(widget.albumTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: CinematicTitleFonts.captionStyleForTitle(widget.albumTitle, type: 'album', baseFontSize: 18))),
+        appBar: AppBar(
+            backgroundColor: const Color(0xFF101010),
+            title: Text(widget.albumTitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: CinematicTitleFonts.captionStyleForTitle(
+                    widget.albumTitle,
+                    type: 'album',
+                    baseFontSize: 18))),
         body: FutureBuilder<Map<String, dynamic>>(
           future: _future,
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
-              if (widget.isOwned && (widget.localMedia != null || widget.localTracks.isNotEmpty)) {
+              if (widget.isOwned &&
+                  (widget.localMedia != null ||
+                      widget.localTracks.isNotEmpty)) {
                 return _OwnedAlbumLocalDetailsScreen(
                   media: widget.localMedia,
                   albumTitle: widget.localMedia?.title ?? widget.albumTitle,
-                  artistName: widget.localMedia?.music.join(', ') ?? widget.localArtistName,
-                  artworkUrl: (widget.localMedia?.imageUrl?.trim().isNotEmpty == true)
-                      ? widget.localMedia!.imageUrl!
-                      : (widget.localTracks.isNotEmpty ? widget.localTracks.first['artworkUrl']?.toString() ?? '' : ''),
+                  artistName: widget.localMedia?.music.join(', ') ??
+                      widget.localArtistName,
+                  artworkUrl:
+                      (widget.localMedia?.imageUrl?.trim().isNotEmpty == true)
+                          ? widget.localMedia!.imageUrl!
+                          : (widget.localTracks.isNotEmpty
+                              ? widget.localTracks.first['artworkUrl']
+                                      ?.toString() ??
+                                  ''
+                              : ''),
                   localTracks: widget.localTracks,
                   lookupPending: true,
                 );
@@ -1222,70 +1653,135 @@ class _SpotifyAlbumDetailsScreenState extends State<SpotifyAlbumDetailsScreen> {
               return const Center(child: CircularProgressIndicator());
             }
             if (snapshot.hasError || snapshot.data == null) {
-              if (widget.isOwned && (widget.localMedia != null || widget.localTracks.isNotEmpty)) {
+              if (widget.isOwned &&
+                  (widget.localMedia != null ||
+                      widget.localTracks.isNotEmpty)) {
                 return _OwnedAlbumLocalDetailsScreen(
                   media: widget.localMedia,
                   albumTitle: widget.localMedia?.title ?? widget.albumTitle,
-                  artistName: widget.localMedia?.music.join(', ') ?? widget.localArtistName,
-                  artworkUrl: (widget.localMedia?.imageUrl?.trim().isNotEmpty == true)
-                      ? widget.localMedia!.imageUrl!
-                      : (widget.localTracks.isNotEmpty ? widget.localTracks.first['artworkUrl']?.toString() ?? '' : ''),
+                  artistName: widget.localMedia?.music.join(', ') ??
+                      widget.localArtistName,
+                  artworkUrl:
+                      (widget.localMedia?.imageUrl?.trim().isNotEmpty == true)
+                          ? widget.localMedia!.imageUrl!
+                          : (widget.localTracks.isNotEmpty
+                              ? widget.localTracks.first['artworkUrl']
+                                      ?.toString() ??
+                                  ''
+                              : ''),
                   localTracks: widget.localTracks,
                 );
               }
-              return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('Could not load this album. ${snapshot.error ?? ''}', textAlign: TextAlign.center)));
+              return Center(
+                  child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                          'Could not load this album. ${snapshot.error ?? ''}',
+                          textAlign: TextAlign.center)));
             }
             final album = snapshot.data!;
             final providerTracks = album['tracks'] is List
-                ? (album['tracks'] as List).whereType<Map>().map((v) => Map<String, dynamic>.from(v)).toList()
+                ? (album['tracks'] as List)
+                    .whereType<Map>()
+                    .map((v) => Map<String, dynamic>.from(v))
+                    .toList()
                 : <Map<String, dynamic>>[];
-            final tracks = providerTracks.isNotEmpty ? providerTracks : widget.localTracks;
-            final imageUrl = [album['imageUrl']?.toString() ?? '', widget.localMedia?.imageUrl ?? '',
-              if (widget.localTracks.isNotEmpty) widget.localTracks.first['artworkUrl']?.toString() ?? ''].firstWhere((v) => v.startsWith('https://'), orElse: () => '');
+            final tracks =
+                providerTracks.isNotEmpty ? providerTracks : widget.localTracks;
+            final activityTrackIds = <String>{
+              ...tracks.map((row) => row['id']?.toString() ?? ''),
+              ...widget.localTracks.map((row) => row['id']?.toString() ?? ''),
+            }.where((id) => id.trim().isNotEmpty).toList(growable: false);
+            final imageUrl = [
+              album['imageUrl']?.toString() ?? '',
+              widget.localMedia?.imageUrl ?? '',
+              if (widget.localTracks.isNotEmpty)
+                widget.localTracks.first['artworkUrl']?.toString() ?? ''
+            ].firstWhere((v) => v.startsWith('https://'), orElse: () => '');
             final title = widget.isOwned
                 ? (widget.localMedia?.title ?? widget.albumTitle)
-                : (widget.localMedia?.title ?? album['title']?.toString() ?? widget.albumTitle);
+                : (widget.localMedia?.title ??
+                    album['title']?.toString() ??
+                    widget.albumTitle);
             final localArtists = widget.localMedia?.music ?? const <String>[];
             final artist = (album['artist']?.toString() ?? '').trim().isNotEmpty
                 ? album['artist'].toString()
-                : (localArtists.isNotEmpty ? localArtists.join(', ') : widget.localTracks.map((v) => v['artist']?.toString() ?? '').where((v) => v.isNotEmpty).toSet().join(', '));
+                : (localArtists.isNotEmpty
+                    ? localArtists.join(', ')
+                    : widget.localTracks
+                        .map((v) => v['artist']?.toString() ?? '')
+                        .where((v) => v.isNotEmpty)
+                        .toSet()
+                        .join(', '));
             final date = (album['releaseDate']?.toString() ?? '').isNotEmpty
                 ? album['releaseDate'].toString()
-                : (widget.localMedia?.releaseDate?.toIso8601String().split('T').first ?? widget.localMedia?.releaseYear?.toString() ?? '');
+                : (widget.localMedia?.releaseDate
+                        ?.toIso8601String()
+                        .split('T')
+                        .first ??
+                    widget.localMedia?.releaseYear?.toString() ??
+                    '');
             final type = album['albumType']?.toString() ?? 'Album';
-            final parsedTrackCount = int.tryParse(album['totalTracks']?.toString() ?? '') ?? 0;
-            final totalTracks = (parsedTrackCount > 0 ? parsedTrackCount : tracks.length).toString();
+            final parsedTrackCount =
+                int.tryParse(album['totalTracks']?.toString() ?? '') ?? 0;
+            final totalTracks =
+                (parsedTrackCount > 0 ? parsedTrackCount : tracks.length)
+                    .toString();
             final spotifyUrl = album['spotifyUrl']?.toString() ?? '';
             final label = (album['label']?.toString().trim() ?? '').isNotEmpty
                 ? album['label'].toString().trim()
-                : <String>{...?widget.localMedia?.studios, ...?widget.localMedia?.companies}.where((v) => v.trim().isNotEmpty).join(', ');
+                : <String>{
+                    ...?widget.localMedia?.studios,
+                    ...?widget.localMedia?.companies
+                  }.where((v) => v.trim().isNotEmpty).join(', ');
             final producers = album['producers'] is List
-                ? (album['producers'] as List).map((v) => v.toString()).where((v) => v.trim().isNotEmpty).toList()
+                ? (album['producers'] as List)
+                    .map((v) => v.toString())
+                    .where((v) => v.trim().isNotEmpty)
+                    .toList()
                 : <String>[];
             final composers = album['composers'] is List
-                ? (album['composers'] as List).map((v) => v.toString()).where((v) => v.trim().isNotEmpty).toList()
+                ? (album['composers'] as List)
+                    .map((v) => v.toString())
+                    .where((v) => v.trim().isNotEmpty)
+                    .toList()
                 : <String>[];
             final albumArtists = _maps(album['artists']);
             final copyrights = _maps(album['copyrights']);
-            final musicBrainzReleaseCredits = _maps(album['musicBrainzReleaseCredits']);
-            final musicBrainzReleaseDetails = album['musicBrainzReleaseDetails'] is Map
-                ? Map<String, dynamic>.from(album['musicBrainzReleaseDetails'] as Map)
-                : <String, dynamic>{};
-            final hasOwnedCopy = widget.isOwned || _hasOwnedAlbum(title, artist);
+            final musicBrainzReleaseCredits =
+                _maps(album['musicBrainzReleaseCredits']);
+            final musicBrainzReleaseDetails =
+                album['musicBrainzReleaseDetails'] is Map
+                    ? Map<String, dynamic>.from(
+                        album['musicBrainzReleaseDetails'] as Map)
+                    : <String, dynamic>{};
+            final hasOwnedCopy =
+                widget.isOwned || _hasOwnedAlbum(title, artist);
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
               children: [
-                Center(child: Container(
+                Center(
+                    child: Container(
                   width: 240,
                   height: 240,
                   alignment: Alignment.center,
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: .04), borderRadius: BorderRadius.circular(10)),
+                  decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .04),
+                      borderRadius: BorderRadius.circular(10)),
                   child: imageUrl.startsWith('https://')
-                      ? Image.network(imageUrl, width: 240, height: 240, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.album_outlined, size: 70))
+                      ? Image.network(imageUrl,
+                          width: 240,
+                          height: 240,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) =>
+                              const Icon(Icons.album_outlined, size: 70))
                       : const Icon(Icons.album_outlined, size: 70),
                 )),
                 const SizedBox(height: 16),
-                Text(title, textAlign: TextAlign.center, style: CinematicTitleFonts.captionStyleForTitle(title, type: 'album', baseFontSize: 25, color: Colors.white)),
+                Text(title,
+                    textAlign: TextAlign.center,
+                    style: CinematicTitleFonts.captionStyleForTitle(title,
+                        type: 'album', baseFontSize: 25, color: Colors.white)),
                 if (albumArtists.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Wrap(
@@ -1296,64 +1792,237 @@ class _SpotifyAlbumDetailsScreenState extends State<SpotifyAlbumDetailsScreen> {
                       final artistId = row['id']?.toString() ?? '';
                       final artistName = row['name']?.toString() ?? '';
                       return ActionChip(
-                        avatar: const Icon(Icons.person_outline_rounded, size: 16),
+                        avatar:
+                            const Icon(Icons.person_outline_rounded, size: 16),
                         label: Text(artistName),
-                        onPressed: artistId.isEmpty ? null : () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SpotifyArtistDetailsScreen(artistName: artistName, spotifyId: artistId))),
+                        onPressed: artistId.isEmpty
+                            ? null
+                            : () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                    builder: (_) => SpotifyArtistDetailsScreen(
+                                        artistName: artistName,
+                                        spotifyId: artistId))),
                       );
                     }).toList(),
                   ),
                 ] else if (artist.isNotEmpty)
-                  Padding(padding: const EdgeInsets.only(top: 5), child: Text(artist, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70))),
-                Padding(padding: const EdgeInsets.only(top: 5), child: Text('$type${date.isEmpty ? '' : ' · $date'} · $totalTracks tracks', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white54))),
-                if (spotifyUrl.startsWith('https://')) Padding(padding: const EdgeInsets.only(top: 12), child: Center(child: OutlinedButton.icon(onPressed: () => _openSpotifyUrl(spotifyUrl), icon: const Icon(Icons.open_in_new_rounded), label: const Text('Open album in Spotify')))),
+                  Padding(
+                      padding: const EdgeInsets.only(top: 5),
+                      child: Text(artist,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.white70))),
+                Padding(
+                    padding: const EdgeInsets.only(top: 5),
+                    child: Text(
+                        '$type${date.isEmpty ? '' : ' · $date'} · $totalTracks tracks',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white54))),
+                if (spotifyUrl.startsWith('https://'))
+                  Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Center(
+                          child: OutlinedButton.icon(
+                              onPressed: () => _openSpotifyUrl(spotifyUrl),
+                              icon: const Icon(Icons.open_in_new_rounded),
+                              label: const Text('Open album in Spotify')))),
                 if (hasOwnedCopy)
                   const Padding(
                     padding: EdgeInsets.only(top: 10),
-                    child: Center(child: Chip(avatar: Icon(Icons.library_music_rounded, size: 16), label: Text('In your library'))),
+                    child: Center(
+                        child: Chip(
+                            avatar: Icon(Icons.library_music_rounded, size: 16),
+                            label: Text('In your library'))),
                   )
-                else
-                if (label.isNotEmpty || producers.isNotEmpty || composers.isNotEmpty || copyrights.isNotEmpty || localArtists.isNotEmpty || artist.isNotEmpty || musicBrainzReleaseCredits.isNotEmpty || musicBrainzReleaseDetails.isNotEmpty) ...[
+                else if (label.isNotEmpty ||
+                    producers.isNotEmpty ||
+                    composers.isNotEmpty ||
+                    copyrights.isNotEmpty ||
+                    localArtists.isNotEmpty ||
+                    artist.isNotEmpty ||
+                    musicBrainzReleaseCredits.isNotEmpty ||
+                    musicBrainzReleaseDetails.isNotEmpty) ...[
                   const SizedBox(height: 20),
-                  const Text('Album credits', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                  const Text('Album credits',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
                   const SizedBox(height: 8),
-                  if (localArtists.isNotEmpty) _creditRow('Artist / performer(s)', localArtists.join(', '))
-                  else if (artist.isNotEmpty) _creditRow('Artist / performer(s)', artist),
-                  if (label.isNotEmpty) _creditRow('Record label / music company', label),
-                  if (producers.isNotEmpty) _creditRow('Producer(s)', producers.join(', ')),
-                  if (composers.isNotEmpty) _creditRow('Composer(s) / writers', composers.join(', ')),
-                  if (copyrights.isNotEmpty) _creditRow('Copyright', copyrights.map((v) => '${v['type'] ?? 'Copyright'}: ${v['text'] ?? ''}'.trim()).where((v) => v.isNotEmpty).join(' · ')),
+                  if (localArtists.isNotEmpty)
+                    _creditRow('Artist / performer(s)', localArtists.join(', '))
+                  else if (artist.isNotEmpty)
+                    _creditRow('Artist / performer(s)', artist),
+                  if (label.isNotEmpty)
+                    _creditRow('Record label / music company', label),
+                  if (producers.isNotEmpty)
+                    _creditRow('Producer(s)', producers.join(', ')),
+                  if (composers.isNotEmpty)
+                    _creditRow('Composer(s) / writers', composers.join(', ')),
+                  if (copyrights.isNotEmpty)
+                    _creditRow(
+                        'Copyright',
+                        copyrights
+                            .map((v) =>
+                                '${v['type'] ?? 'Copyright'}: ${v['text'] ?? ''}'
+                                    .trim())
+                            .where((v) => v.isNotEmpty)
+                            .join(' · ')),
                   MusicBrainzCreditRows(
                     rows: musicBrainzReleaseCredits
-                        .where((row) => !_isCommonCreditAlreadyShown(row['role']?.toString() ?? ''))
+                        .where((row) => !_isCommonCreditAlreadyShown(
+                            row['role']?.toString() ?? ''))
                         .toList(),
                   ),
-                  if ((album['musicBrainzReleaseUrl']?.toString() ?? '').startsWith('https://'))
-                    Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: () => _openSpotifyUrl(album['musicBrainzReleaseUrl'].toString()), icon: const Icon(Icons.open_in_new_rounded, size: 15), label: const Text('Open full release credits on MusicBrainz'))),
+                  if ((album['musicBrainzReleaseUrl']?.toString() ?? '')
+                      .startsWith('https://'))
+                    Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                            onPressed: () => _openSpotifyUrl(
+                                album['musicBrainzReleaseUrl'].toString()),
+                            icon:
+                                const Icon(Icons.open_in_new_rounded, size: 15),
+                            label: const Text(
+                                'Open full release credits on MusicBrainz'))),
                   if ((album['creditNote']?.toString() ?? '').trim().isNotEmpty)
-                    Text(album['creditNote'].toString(), style: const TextStyle(color: Colors.white38, fontSize: 11, height: 1.4)),
+                    Text(album['creditNote'].toString(),
+                        style: const TextStyle(
+                            color: Colors.white38, fontSize: 11, height: 1.4)),
                 ],
                 if (musicBrainzReleaseDetails.isNotEmpty) ...[
                   const SizedBox(height: 18),
-                  const Text('Release edition details', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+                  const Text('Release edition details',
+                      style:
+                          TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
                   const SizedBox(height: 8),
-                  if ((musicBrainzReleaseDetails['date']?.toString() ?? '').isNotEmpty) _creditRow('MusicBrainz release date', musicBrainzReleaseDetails['date'].toString()),
-                  if ((musicBrainzReleaseDetails['releaseGroupFirstDate']?.toString() ?? '').isNotEmpty) _creditRow('First release date', musicBrainzReleaseDetails['releaseGroupFirstDate'].toString()),
-                  if ((musicBrainzReleaseDetails['country']?.toString() ?? '').isNotEmpty) _creditRow('Release country', musicBrainzReleaseDetails['country'].toString()),
-                  if ((musicBrainzReleaseDetails['status']?.toString() ?? '').isNotEmpty) _creditRow('Release status', musicBrainzReleaseDetails['status'].toString()),
-                  if ((musicBrainzReleaseDetails['primaryType']?.toString() ?? '').isNotEmpty) _creditRow('Release group type', [musicBrainzReleaseDetails['primaryType'], if (musicBrainzReleaseDetails['secondaryTypes'] is List) ...(musicBrainzReleaseDetails['secondaryTypes'] as List)].map((v) => v.toString()).join(' · ')),
-                  if ((musicBrainzReleaseDetails['format'] is List) && (musicBrainzReleaseDetails['format'] as List).isNotEmpty) _creditRow('Format', (musicBrainzReleaseDetails['format'] as List).map((v) => v.toString()).join(', ')),
-                  if ((musicBrainzReleaseDetails['packaging']?.toString() ?? '').isNotEmpty) _creditRow('Packaging', musicBrainzReleaseDetails['packaging'].toString()),
-                  if ((musicBrainzReleaseDetails['barcode']?.toString() ?? '').isNotEmpty) _creditRow('Barcode', musicBrainzReleaseDetails['barcode'].toString()),
-                  if ((musicBrainzReleaseDetails['catalogNumbers'] is List) && (musicBrainzReleaseDetails['catalogNumbers'] as List).isNotEmpty) _creditRow('Catalog number(s)', (musicBrainzReleaseDetails['catalogNumbers'] as List).map((v) => v.toString()).join(', ')),
-                  if ((musicBrainzReleaseDetails['mediumCount']?.toString() ?? '').isNotEmpty && (musicBrainzReleaseDetails['trackCount']?.toString() ?? '') != '0') _creditRow('Media / track count', '${musicBrainzReleaseDetails['mediumCount']} medium(s) · ${musicBrainzReleaseDetails['trackCount']} tracks'),
-                  if ((musicBrainzReleaseDetails['disambiguation']?.toString() ?? '').isNotEmpty) _creditRow('Release edition', musicBrainzReleaseDetails['disambiguation'].toString()),
+                  if ((musicBrainzReleaseDetails['date']?.toString() ?? '')
+                      .isNotEmpty)
+                    _creditRow('MusicBrainz release date',
+                        musicBrainzReleaseDetails['date'].toString()),
+                  if ((musicBrainzReleaseDetails['releaseGroupFirstDate']
+                              ?.toString() ??
+                          '')
+                      .isNotEmpty)
+                    _creditRow(
+                        'First release date',
+                        musicBrainzReleaseDetails['releaseGroupFirstDate']
+                            .toString()),
+                  if ((musicBrainzReleaseDetails['country']?.toString() ?? '')
+                      .isNotEmpty)
+                    _creditRow('Release country',
+                        musicBrainzReleaseDetails['country'].toString()),
+                  if ((musicBrainzReleaseDetails['status']?.toString() ?? '')
+                      .isNotEmpty)
+                    _creditRow('Release status',
+                        musicBrainzReleaseDetails['status'].toString()),
+                  if ((musicBrainzReleaseDetails['primaryType']?.toString() ??
+                          '')
+                      .isNotEmpty)
+                    _creditRow(
+                        'Release group type',
+                        [
+                          musicBrainzReleaseDetails['primaryType'],
+                          if (musicBrainzReleaseDetails['secondaryTypes']
+                              is List)
+                            ...(musicBrainzReleaseDetails['secondaryTypes']
+                                as List)
+                        ].map((v) => v.toString()).join(' · ')),
+                  if ((musicBrainzReleaseDetails['format'] is List) &&
+                      (musicBrainzReleaseDetails['format'] as List).isNotEmpty)
+                    _creditRow(
+                        'Format',
+                        (musicBrainzReleaseDetails['format'] as List)
+                            .map((v) => v.toString())
+                            .join(', ')),
+                  if ((musicBrainzReleaseDetails['packaging']?.toString() ?? '')
+                      .isNotEmpty)
+                    _creditRow('Packaging',
+                        musicBrainzReleaseDetails['packaging'].toString()),
+                  if ((musicBrainzReleaseDetails['barcode']?.toString() ?? '')
+                      .isNotEmpty)
+                    _creditRow('Barcode',
+                        musicBrainzReleaseDetails['barcode'].toString()),
+                  if ((musicBrainzReleaseDetails['catalogNumbers'] is List) &&
+                      (musicBrainzReleaseDetails['catalogNumbers'] as List)
+                          .isNotEmpty)
+                    _creditRow(
+                        'Catalog number(s)',
+                        (musicBrainzReleaseDetails['catalogNumbers'] as List)
+                            .map((v) => v.toString())
+                            .join(', ')),
+                  if ((musicBrainzReleaseDetails['mediumCount']?.toString() ??
+                              '')
+                          .isNotEmpty &&
+                      (musicBrainzReleaseDetails['trackCount']?.toString() ??
+                              '') !=
+                          '0')
+                    _creditRow('Media / track count',
+                        '${musicBrainzReleaseDetails['mediumCount']} medium(s) · ${musicBrainzReleaseDetails['trackCount']} tracks'),
+                  if ((musicBrainzReleaseDetails['disambiguation']
+                              ?.toString() ??
+                          '')
+                      .isNotEmpty)
+                    _creditRow('Release edition',
+                        musicBrainzReleaseDetails['disambiguation'].toString()),
                 ],
                 const SizedBox(height: 18),
-                const Text('Track list', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+                const Text('Track list',
+                    style:
+                        TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 5),
-                if (album['trackWarning']?.toString().isNotEmpty == true) Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(album['trackWarning'].toString(), style: const TextStyle(color: Colors.orangeAccent, fontSize: 12))),
-                if (tracks.isEmpty) const Text('Spotify did not return track rows for this album.', style: TextStyle(color: Colors.white60)),
-                for (var index = 0; index < tracks.length; index++) _trackTile(index, tracks[index]),
+                if (album['trackWarning']?.toString().isNotEmpty == true)
+                  Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(album['trackWarning'].toString(),
+                          style: const TextStyle(
+                              color: Colors.orangeAccent, fontSize: 12))),
+                if (tracks.isEmpty)
+                  const Text(
+                      'Spotify did not return track rows for this album.',
+                      style: TextStyle(color: Colors.white60)),
+                for (var index = 0; index < tracks.length; index++)
+                  _trackTile(index, tracks[index]),
+                const SizedBox(height: 20),
+                MediaRatingsPanel(
+                  mediaId: widget.localMedia?.id ??
+                      'spotify:album:${widget.spotifyId}',
+                  title: title,
+                  year: DateTime.tryParse(date)?.year,
+                  mediaType: 'album',
+                ),
+                MediaAlbumContextSections(
+                  albumTitle: title,
+                  media: widget.localMedia,
+                  profileId: AppController.instance.currentProfile?.id,
+                  trackIds: activityTrackIds,
+                ),
+                MediaCommunityHub(
+                  mediaKey: widget.localMedia == null
+                      ? 'spotify:album:${widget.spotifyId}'
+                      : 'catalog:${widget.localMedia!.id}',
+                  mediaTitle: title,
+                  mediaType: 'album',
+                  activityProfileId: AppController.instance.currentProfile?.id,
+                  consumptionActivityFuture:
+                      MediaMusicHistoryStore.albumHasListeningActivity(
+                    profileId: AppController.instance.currentProfile?.id,
+                    trackIds: activityTrackIds,
+                  ),
+                ),
+                MediaDetailDiscoverySections(
+                  media: widget.localMedia ??
+                      MediaItem(
+                        id: 'spotify:album:${widget.spotifyId}',
+                        title: title,
+                        type: 'album',
+                        imageUrl: imageUrl,
+                        music: artist.isEmpty
+                            ? const <String>[]
+                            : <String>[artist],
+                        companies:
+                            label.isEmpty ? const <String>[] : <String>[label],
+                        releaseDate: DateTime.tryParse(date),
+                      ),
+                  onOpenMedia: (item) => _openMediaDiscoveryItem(context, item),
+                ),
                 const SizedBox(height: 14),
                 Text(
                   providerTracks.isNotEmpty
@@ -1361,7 +2030,8 @@ class _SpotifyAlbumDetailsScreenState extends State<SpotifyAlbumDetailsScreen> {
                       : widget.localTracks.isNotEmpty
                           ? 'The track list and runtimes are from files indexed in your local library. Album credits and release data are from the connected catalog where available.'
                           : 'Spotify returned album details but no track rows. Track names and runtimes are unavailable until the metadata provider supplies them or your files are indexed.',
-                  style: const TextStyle(color: Colors.white38, fontSize: 11, height: 1.4),
+                  style: const TextStyle(
+                      color: Colors.white38, fontSize: 11, height: 1.4),
                 ),
               ],
             );
@@ -1371,17 +2041,27 @@ class _SpotifyAlbumDetailsScreenState extends State<SpotifyAlbumDetailsScreen> {
 
   bool _hasOwnedAlbum(String albumTitle, String artistNames) {
     String normalize(String value) => value.toLowerCase().trim().replaceAll(
-      RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"),
-      '',
-    );
+          RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"),
+          '',
+        );
     final wantedTitle = normalize(albumTitle);
     if (wantedTitle.isEmpty) return false;
-    final wantedArtists = artistNames.split(',').map(normalize).where((value) => value.isNotEmpty).toSet();
+    final wantedArtists = artistNames
+        .split(',')
+        .map(normalize)
+        .where((value) => value.isNotEmpty)
+        .toSet();
     for (final item in AppController.instance.library) {
-      if (!item.type.toLowerCase().contains('album') || normalize(item.title) != wantedTitle) continue;
+      if (!item.type.toLowerCase().contains('album') ||
+          normalize(item.title) != wantedTitle) {
+        continue;
+      }
       if (!AppController.instance.isOwned(item.id)) continue;
-      final localArtists = item.music.map(normalize).where((value) => value.isNotEmpty).toSet();
-      if (wantedArtists.isEmpty || localArtists.isEmpty || wantedArtists.intersection(localArtists).isNotEmpty) {
+      final localArtists =
+          item.music.map(normalize).where((value) => value.isNotEmpty).toSet();
+      if (wantedArtists.isEmpty ||
+          localArtists.isEmpty ||
+          wantedArtists.intersection(localArtists).isNotEmpty) {
         return true;
       }
     }
@@ -1399,8 +2079,14 @@ class _SpotifyAlbumDetailsScreenState extends State<SpotifyAlbumDetailsScreen> {
   Widget _creditRow(String label, String value) => Padding(
         padding: const EdgeInsets.only(bottom: 7),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(width: 155, child: Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12))),
-          Expanded(child: Text(value, style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4))),
+          SizedBox(
+              width: 155,
+              child: Text(label,
+                  style: const TextStyle(color: Colors.white54, fontSize: 12))),
+          Expanded(
+              child: Text(value,
+                  style: const TextStyle(
+                      color: Colors.white70, fontSize: 12, height: 1.4))),
         ]),
       );
 
@@ -1413,12 +2099,30 @@ class _SpotifyAlbumDetailsScreenState extends State<SpotifyAlbumDetailsScreen> {
     final trackNo = track['trackNumber']?.toString() ?? '${index + 1}';
     final discNo = int.tryParse(track['discNumber']?.toString() ?? '1') ?? 1;
     final spotifyUrl = track['spotifyUrl']?.toString() ?? '';
-    final composers = track['composers'] is List ? (track['composers'] as List).map((v) => v.toString()).where((v) => v.isNotEmpty).join(', ') : '';
-    final producers = track['producers'] is List ? (track['producers'] as List).map((v) => v.toString()).where((v) => v.isNotEmpty).join(', ') : '';
+    final composers = track['composers'] is List
+        ? (track['composers'] as List)
+            .map((v) => v.toString())
+            .where((v) => v.isNotEmpty)
+            .join(', ')
+        : '';
+    final producers = track['producers'] is List
+        ? (track['producers'] as List)
+            .map((v) => v.toString())
+            .where((v) => v.isNotEmpty)
+            .join(', ')
+        : '';
     final credits = track['musicBrainzCredits'] is List
-        ? (track['musicBrainzCredits'] as List).whereType<Map>().map((v) => Map<String, dynamic>.from(v)).toList()
+        ? (track['musicBrainzCredits'] as List)
+            .whereType<Map>()
+            .map((v) => Map<String, dynamic>.from(v))
+            .toList()
         : <Map<String, dynamic>>[];
-    final isrcs = track['isrcs'] is List ? (track['isrcs'] as List).map((v) => v.toString()).where((v) => v.isNotEmpty).toList() : <String>[];
+    final isrcs = track['isrcs'] is List
+        ? (track['isrcs'] as List)
+            .map((v) => v.toString())
+            .where((v) => v.isNotEmpty)
+            .toList()
+        : <String>[];
     final recordingMbid = track['musicBrainzRecordingMbid']?.toString() ?? '';
     final subtitle = <String>[
       if (artist.isNotEmpty) artist,
@@ -1430,33 +2134,56 @@ class _SpotifyAlbumDetailsScreenState extends State<SpotifyAlbumDetailsScreen> {
       if (credits.isNotEmpty) '${credits.length} credit roles',
     ].join(' · ');
     Map<String, dynamic>? localMatch;
-    final wantedTitle = title.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+    final wantedTitle =
+        title.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
     for (final candidate in widget.localTracks) {
-      final candidateTitle = (candidate['title']?.toString() ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
-      if (candidateTitle == wantedTitle && (candidate['audioUrl']?.toString().trim().isNotEmpty ?? false)) {
+      final candidateTitle = (candidate['title']?.toString() ?? '')
+          .trim()
+          .toLowerCase()
+          .replaceAll(RegExp(r'\s+'), ' ');
+      if (candidateTitle == wantedTitle &&
+          (candidate['audioUrl']?.toString().trim().isNotEmpty ?? false)) {
         localMatch = candidate;
         break;
       }
     }
     final canPlayLocal = localMatch != null && widget.onPlayLocalTrack != null;
-    final leading = SizedBox(width: 28, child: Center(child: Text(trackNo, style: const TextStyle(color: Colors.white54, fontSize: 11))));
+    final leading = SizedBox(
+        width: 28,
+        child: Center(
+            child: Text(trackNo,
+                style: const TextStyle(color: Colors.white54, fontSize: 11))));
     if (credits.isEmpty && isrcs.isEmpty && recordingMbid.isEmpty) {
       return ListTile(
         dense: true,
         contentPadding: EdgeInsets.zero,
         leading: leading,
-        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
-        subtitle: Text(subtitle, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+        title: Text(title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: Text(subtitle,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white54, fontSize: 11)),
         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
           IconButton(
-            tooltip: canPlayLocal ? 'Play imported track' : 'Not in your library — playback disabled',
-            icon: Icon(canPlayLocal ? Icons.play_arrow_rounded : Icons.lock_outline_rounded),
-            onPressed: canPlayLocal ? () => widget.onPlayLocalTrack!(localMatch!) : null,
+            tooltip: canPlayLocal
+                ? 'Play imported track'
+                : 'Not in your library — playback disabled',
+            icon: Icon(canPlayLocal
+                ? Icons.play_arrow_rounded
+                : Icons.lock_outline_rounded),
+            onPressed: canPlayLocal
+                ? () => widget.onPlayLocalTrack!(localMatch!)
+                : null,
           ),
           IconButton(
             tooltip: 'Open track in Spotify',
             icon: const Icon(Icons.open_in_new_rounded),
-            onPressed: spotifyUrl.startsWith('https://') ? () => _openSpotifyUrl(spotifyUrl) : null,
+            onPressed: spotifyUrl.startsWith('https://')
+                ? () => _openSpotifyUrl(spotifyUrl)
+                : null,
           ),
         ]),
       );
@@ -1465,18 +2192,31 @@ class _SpotifyAlbumDetailsScreenState extends State<SpotifyAlbumDetailsScreen> {
       tilePadding: EdgeInsets.zero,
       childrenPadding: const EdgeInsets.only(left: 36, right: 8, bottom: 10),
       leading: leading,
-      title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
-      subtitle: Text(subtitle, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+      title: Text(title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w700)),
+      subtitle: Text(subtitle,
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: Colors.white54, fontSize: 11)),
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
         IconButton(
-          tooltip: canPlayLocal ? 'Play imported track' : 'Not in your library — playback disabled',
-          icon: Icon(canPlayLocal ? Icons.play_arrow_rounded : Icons.lock_outline_rounded),
-          onPressed: canPlayLocal ? () => widget.onPlayLocalTrack!(localMatch!) : null,
+          tooltip: canPlayLocal
+              ? 'Play imported track'
+              : 'Not in your library — playback disabled',
+          icon: Icon(canPlayLocal
+              ? Icons.play_arrow_rounded
+              : Icons.lock_outline_rounded),
+          onPressed:
+              canPlayLocal ? () => widget.onPlayLocalTrack!(localMatch!) : null,
         ),
         IconButton(
           tooltip: 'Open track in Spotify',
           icon: const Icon(Icons.open_in_new_rounded),
-          onPressed: spotifyUrl.startsWith('https://') ? () => _openSpotifyUrl(spotifyUrl) : null,
+          onPressed: spotifyUrl.startsWith('https://')
+              ? () => _openSpotifyUrl(spotifyUrl)
+              : null,
         ),
         const Icon(Icons.expand_more_rounded, color: Colors.white54),
       ]),
@@ -1485,14 +2225,17 @@ class _SpotifyAlbumDetailsScreenState extends State<SpotifyAlbumDetailsScreen> {
           for (final row in credits)
             _creditRow(
               row['role']?.toString() ?? 'Credit',
-              row['people'] is List ? (row['people'] as List).map((v) => v.toString()).join(', ') : '',
+              row['people'] is List
+                  ? (row['people'] as List).map((v) => v.toString()).join(', ')
+                  : '',
             ),
         if (isrcs.isNotEmpty) _creditRow('ISRC', isrcs.join(', ')),
         if (recordingMbid.isNotEmpty)
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
-              onPressed: () => _openSpotifyUrl('https://musicbrainz.org/recording/$recordingMbid'),
+              onPressed: () => _openSpotifyUrl(
+                  'https://musicbrainz.org/recording/$recordingMbid'),
               icon: const Icon(Icons.open_in_new_rounded, size: 14),
               label: const Text('View recording credits on MusicBrainz'),
             ),
@@ -1500,7 +2243,6 @@ class _SpotifyAlbumDetailsScreenState extends State<SpotifyAlbumDetailsScreen> {
       ],
     );
   }
-
 }
 
 /// Displays release-level MusicBrainz relationships as role/person rows.
@@ -1530,12 +2272,18 @@ class MusicBrainzCreditRows extends StatelessWidget {
               children: [
                 SizedBox(
                   width: 155,
-                  child: Text(row['role'].toString(), style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                  child: Text(row['role'].toString(),
+                      style:
+                          const TextStyle(color: Colors.white54, fontSize: 12)),
                 ),
                 Expanded(
                   child: Text(
-                    (row['people'] as List).map((value) => value.toString()).where((value) => value.trim().isNotEmpty).join(', '),
-                    style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
+                    (row['people'] as List)
+                        .map((value) => value.toString())
+                        .where((value) => value.trim().isNotEmpty)
+                        .join(', '),
+                    style: const TextStyle(
+                        color: Colors.white70, fontSize: 12, height: 1.4),
                   ),
                 ),
               ],
@@ -1567,12 +2315,15 @@ class SpotifyHomeAlbumsShelf extends StatefulWidget {
 
   /// Optional lookup supplied by the app's indexed music library.
   final bool Function(String albumTitle, String artistName)? isOwnedAlbum;
-  final List<Map<String, dynamic>> Function(String albumTitle, String artistName)? localTracksForAlbum;
+  final List<Map<String, dynamic>> Function(
+      String albumTitle, String artistName)? localTracksForAlbum;
   final List<String> Function()? ownedArtistNames;
+
   /// Ensures profile-scoped local tracks and credits are initialized before
   /// building personalized discovery results.
   final Future<void> Function()? prepareMusicLibrary;
-  final void Function(String albumTitle, String artistName, bool hovering)? onAlbumHover;
+  final void Function(String albumTitle, String artistName, bool hovering)?
+      onAlbumHover;
   final void Function(Map<String, dynamic> localTrack)? onPlayLocalTrack;
 
   @override
@@ -1598,7 +2349,9 @@ class _SpotifyHomeAlbumsShelfState extends State<SpotifyHomeAlbumsShelf> {
   }
 
   void _onAppControllerChanged() {
-    if (!mounted || _attempted || _loading ||
+    if (!mounted ||
+        _attempted ||
+        _loading ||
         !AppController.instance.isBackendAuthenticated) {
       return;
     }
@@ -1621,7 +2374,8 @@ class _SpotifyHomeAlbumsShelfState extends State<SpotifyHomeAlbumsShelf> {
     final canLeft = position.pixels > position.minScrollExtent + 2;
     final canRight = position.pixels < position.maxScrollExtent - 2;
     if (!mounted ||
-        (canLeft == _canScrollAlbumsLeft && canRight == _canScrollAlbumsRight)) {
+        (canLeft == _canScrollAlbumsLeft &&
+            canRight == _canScrollAlbumsRight)) {
       return;
     }
     setState(() {
@@ -1639,9 +2393,10 @@ class _SpotifyHomeAlbumsShelfState extends State<SpotifyHomeAlbumsShelf> {
   Future<void> _scrollAlbumsByPage(int direction) async {
     if (!_albumsScrollController.hasClients) return;
     final position = _albumsScrollController.position;
-    final target = (position.pixels + direction * position.viewportDimension * .72)
-        .clamp(position.minScrollExtent, position.maxScrollExtent)
-        .toDouble();
+    final target =
+        (position.pixels + direction * position.viewportDimension * .72)
+            .clamp(position.minScrollExtent, position.maxScrollExtent)
+            .toDouble();
     await _albumsScrollController.animateTo(
       target,
       duration: const Duration(milliseconds: 280),
@@ -1650,8 +2405,15 @@ class _SpotifyHomeAlbumsShelfState extends State<SpotifyHomeAlbumsShelf> {
   }
 
   Future<void> _loadAlbums() async {
-    if (_loading || _attempted || !AppController.instance.isBackendAuthenticated) return;
-    setState(() { _loading = true; _attempted = true; });
+    if (_loading ||
+        _attempted ||
+        !AppController.instance.isBackendAuthenticated) {
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _attempted = true;
+    });
     try {
       // Wait for the profile's local track metadata so New Albums is actually
       // personalized instead of racing library initialization on first launch.
@@ -1666,17 +2428,25 @@ class _SpotifyHomeAlbumsShelfState extends State<SpotifyHomeAlbumsShelf> {
           .toList(growable: false);
       final discoveryArtists = <String>[...ownedArtists];
       const relatedSeeds = <String, List<String>>{
-        'morgan wallen': <String>['Ella Langley', 'Blake Shelton', 'Bailey Zimmerman', 'Post Malone', 'Tate McRae'],
+        'morgan wallen': <String>[
+          'Ella Langley',
+          'Blake Shelton',
+          'Bailey Zimmerman',
+          'Post Malone',
+          'Tate McRae'
+        ],
         'j balvin': <String>['Maluma', 'Bad Bunny', 'Feid'],
         'selena gomez': <String>['Taylor Swift', 'Ariana Grande'],
       };
       for (final artistName in ownedArtists) {
-        final key = artistName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+        final key =
+            artistName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
         for (final entry in relatedSeeds.entries) {
           final seedKey = entry.key.replaceAll(RegExp(r'[^a-z0-9]'), '');
           if (key == seedKey) {
             for (final relatedName in entry.value) {
-              if (!discoveryArtists.any((value) => value.toLowerCase() == relatedName.toLowerCase())) {
+              if (!discoveryArtists.any((value) =>
+                  value.toLowerCase() == relatedName.toLowerCase())) {
                 discoveryArtists.add(relatedName);
               }
             }
@@ -1689,14 +2459,18 @@ class _SpotifyHomeAlbumsShelfState extends State<SpotifyHomeAlbumsShelf> {
       // collaborators when they are represented in the local credits.
       for (final artistName in ownedArtists.take(2)) {
         try {
-          final related = await AppController.instance.backendApi.getRelatedMusicArtists(
+          final related =
+              await AppController.instance.backendApi.getRelatedMusicArtists(
             artistName,
             limit: 4,
           );
           for (final candidate in _albumRows(related['items'])) {
-            final name = (candidate['name'] ?? candidate['artist'] ?? '').toString().trim();
+            final name = (candidate['name'] ?? candidate['artist'] ?? '')
+                .toString()
+                .trim();
             if (name.isNotEmpty &&
-                !discoveryArtists.any((value) => value.toLowerCase() == name.toLowerCase())) {
+                !discoveryArtists.any(
+                    (value) => value.toLowerCase() == name.toLowerCase())) {
               discoveryArtists.add(name);
             }
           }
@@ -1711,14 +2485,18 @@ class _SpotifyHomeAlbumsShelfState extends State<SpotifyHomeAlbumsShelf> {
       // Spotify's restricted new-release feed is not the only discovery source.
       for (final artistName in discoveryQueue) {
         try {
-          final search = await AppController.instance.backendApi.searchMusicCatalog(
-            artistName, type: 'artist', limit: 5,
+          final search =
+              await AppController.instance.backendApi.searchMusicCatalog(
+            artistName,
+            type: 'artist',
+            limit: 5,
           );
           final spotify = _asMap(search['spotify']);
           final artists = _albumRows(spotify['artists']);
           Map<String, dynamic>? match;
           for (final candidate in artists) {
-            if ((candidate['name']?.toString() ?? '').trim().toLowerCase() == artistName.toLowerCase()) {
+            if ((candidate['name']?.toString() ?? '').trim().toLowerCase() ==
+                artistName.toLowerCase()) {
               match = candidate;
               break;
             }
@@ -1726,8 +2504,11 @@ class _SpotifyHomeAlbumsShelfState extends State<SpotifyHomeAlbumsShelf> {
           if (match == null) continue;
           final spotifyId = match['id']?.toString() ?? '';
           if (spotifyId.isEmpty) continue;
-          final page = await AppController.instance.backendApi.getSpotifyArtistAlbums(
-            spotifyId, limit: 10, offset: 0,
+          final page =
+              await AppController.instance.backendApi.getSpotifyArtistAlbums(
+            spotifyId,
+            limit: 10,
+            offset: 0,
           );
           for (final album in _albumRows(page['items'])) {
             final id = album['id']?.toString() ?? '';
@@ -1737,11 +2518,17 @@ class _SpotifyHomeAlbumsShelfState extends State<SpotifyHomeAlbumsShelf> {
             // New Albums is a discovery shelf: owned editions remain in the
             // local library and missing releases are promoted here.
             if (widget.isOwnedAlbum?.call(title, artist) == true) continue;
-            final titleKey = title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-            final artistKey = artist.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+            final titleKey =
+                title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+            final artistKey =
+                artist.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
             final duplicate = albumsById.values.any((existing) {
-              final existingTitle = (existing['title']?.toString() ?? '').toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-              final existingArtist = (existing['artist']?.toString() ?? '').toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+              final existingTitle = (existing['title']?.toString() ?? '')
+                  .toLowerCase()
+                  .replaceAll(RegExp(r'[^a-z0-9]'), '');
+              final existingArtist = (existing['artist']?.toString() ?? '')
+                  .toLowerCase()
+                  .replaceAll(RegExp(r'[^a-z0-9]'), '');
               return titleKey == existingTitle && artistKey == existingArtist;
             });
             if (!duplicate) albumsById.putIfAbsent(id, () => album);
@@ -1757,15 +2544,22 @@ class _SpotifyHomeAlbumsShelfState extends State<SpotifyHomeAlbumsShelf> {
         final year = DateTime.now().year;
         for (final query in <String>['year:$year', 'year:${year - 1}']) {
           try {
-            final search = await AppController.instance.backendApi.searchMusicCatalog(
-              query, type: 'album', limit: 10,
+            final search =
+                await AppController.instance.backendApi.searchMusicCatalog(
+              query,
+              type: 'album',
+              limit: 10,
             );
             final spotify = _asMap(search['spotify']);
             for (final album in _albumRows(spotify['albums'])) {
               final id = album['id']?.toString() ?? '';
               final title = album['title']?.toString() ?? '';
               final artist = album['artist']?.toString() ?? '';
-              if (id.isEmpty || title.isEmpty || (widget.isOwnedAlbum?.call(title, artist) ?? false)) continue;
+              if (id.isEmpty ||
+                  title.isEmpty ||
+                  (widget.isOwnedAlbum?.call(title, artist) ?? false)) {
+                continue;
+              }
               albumsById.putIfAbsent(id, () => album);
             }
           } catch (_) {
@@ -1776,13 +2570,17 @@ class _SpotifyHomeAlbumsShelfState extends State<SpotifyHomeAlbumsShelf> {
       }
 
       final albums = albumsById.values.toList();
-      DateTime release(String value) => DateTime.tryParse(value) ?? DateTime(1900);
+      DateTime release(String value) =>
+          DateTime.tryParse(value) ?? DateTime(1900);
       albums.sort((a, b) => release(b['releaseDate']?.toString() ?? '')
           .compareTo(release(a['releaseDate']?.toString() ?? '')));
       if (!mounted) return;
-      setState(() => _albums = albums.where((album) =>
-          (album['id']?.toString() ?? '').isNotEmpty &&
-          (album['imageUrl']?.toString() ?? '').startsWith('https://')).take(16).toList(growable: false));
+      setState(() => _albums = albums
+          .where((album) =>
+              (album['id']?.toString() ?? '').isNotEmpty &&
+              (album['imageUrl']?.toString() ?? '').startsWith('https://'))
+          .take(16)
+          .toList(growable: false));
       _scheduleAlbumArrowStateUpdate();
     } catch (_) {
       if (mounted) setState(() => _albums = <Map<String, dynamic>>[]);
@@ -1832,12 +2630,14 @@ class _SpotifyHomeAlbumsShelfState extends State<SpotifyHomeAlbumsShelf> {
               ),
               IconButton(
                 tooltip: 'Scroll albums left',
-                onPressed: _canScrollAlbumsLeft ? () => _scrollAlbumsByPage(-1) : null,
+                onPressed:
+                    _canScrollAlbumsLeft ? () => _scrollAlbumsByPage(-1) : null,
                 icon: const Icon(Icons.chevron_left_rounded),
               ),
               IconButton(
                 tooltip: 'Scroll albums right',
-                onPressed: _canScrollAlbumsRight ? () => _scrollAlbumsByPage(1) : null,
+                onPressed:
+                    _canScrollAlbumsRight ? () => _scrollAlbumsByPage(1) : null,
                 icon: const Icon(Icons.chevron_right_rounded),
               ),
               TextButton(
@@ -1853,60 +2653,103 @@ class _SpotifyHomeAlbumsShelfState extends State<SpotifyHomeAlbumsShelf> {
             ],
           ),
         ),
-        if (_loading && _albums.isEmpty) const Padding(padding: EdgeInsets.fromLTRB(20, 12, 20, 8), child: LinearProgressIndicator(minHeight: 2)),
-        if (_albums.isNotEmpty) SizedBox(
-          height: 218,
-          child: NotificationListener<ScrollMetricsNotification>(
-            onNotification: (_) {
-              _scheduleAlbumArrowStateUpdate();
-              return false;
-            },
-            child: ListView.separated(
-            controller: _albumsScrollController,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            scrollDirection: Axis.horizontal,
-            itemCount: _albums.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
-            itemBuilder: (context, index) {
-              final album = _albums[index];
-              final id = album['id']?.toString() ?? '';
-              final title = album['title']?.toString() ?? 'Album';
-              final artist = album['artist']?.toString() ?? '';
-              final image = album['imageUrl']?.toString() ?? '';
-              final date = album['releaseDate']?.toString() ?? '';
-              final isOwned = widget.isOwnedAlbum?.call(title, artist) ?? false;
-              final localTracks = widget.localTracksForAlbum?.call(title, artist) ?? const <Map<String, dynamic>>[];
-              return SizedBox(width: 142, child: MouseRegion(
-                cursor: SystemMouseCursors.click,
-                onEnter: (_) => widget.onAlbumHover?.call(title, artist, true),
-                onExit: (_) => widget.onAlbumHover?.call(title, artist, false),
-                child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: id.isEmpty ? null : () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SpotifyAlbumDetailsScreen(
-                  albumTitle: title,
-                  spotifyId: id,
-                  isOwned: isOwned,
-                  localArtistName: artist,
-                  localTracks: localTracks,
-                  onPlayLocalTrack: widget.onPlayLocalTrack,
-                ))),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  ClipRRect(borderRadius: BorderRadius.circular(10), child: SizedBox(
-                    width: 142, height: 142,
-                    child: Image.network(image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: Colors.white10, child: const Icon(Icons.album_outlined, size: 36))),
-                  )),
-                  const SizedBox(height: 7),
-                  Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: CinematicTitleFonts.captionStyleForTitle(title, type: 'album', baseFontSize: 12, color: Colors.white)),
-                  Text([if (artist.isNotEmpty) artist, if (date.length >= 4) date.substring(0, 4)].join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: Colors.white54)),
-                ]),
-              )),
-              );
-            },
+        if (_loading && _albums.isEmpty)
+          const Padding(
+              padding: EdgeInsets.fromLTRB(20, 12, 20, 8),
+              child: LinearProgressIndicator(minHeight: 2)),
+        if (_albums.isNotEmpty)
+          SizedBox(
+            height: 218,
+            child: NotificationListener<ScrollMetricsNotification>(
+              onNotification: (_) {
+                _scheduleAlbumArrowStateUpdate();
+                return false;
+              },
+              child: ListView.separated(
+                controller: _albumsScrollController,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                scrollDirection: Axis.horizontal,
+                itemCount: _albums.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (context, index) {
+                  final album = _albums[index];
+                  final id = album['id']?.toString() ?? '';
+                  final title = album['title']?.toString() ?? 'Album';
+                  final artist = album['artist']?.toString() ?? '';
+                  final image = album['imageUrl']?.toString() ?? '';
+                  final date = album['releaseDate']?.toString() ?? '';
+                  final isOwned =
+                      widget.isOwnedAlbum?.call(title, artist) ?? false;
+                  final localTracks =
+                      widget.localTracksForAlbum?.call(title, artist) ??
+                          const <Map<String, dynamic>>[];
+                  return SizedBox(
+                    width: 142,
+                    child: MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        onEnter: (_) =>
+                            widget.onAlbumHover?.call(title, artist, true),
+                        onExit: (_) =>
+                            widget.onAlbumHover?.call(title, artist, false),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: id.isEmpty
+                              ? null
+                              : () => Navigator.of(context)
+                                  .push(MaterialPageRoute<void>(
+                                      builder: (_) => SpotifyAlbumDetailsScreen(
+                                            albumTitle: title,
+                                            spotifyId: id,
+                                            isOwned: isOwned,
+                                            localArtistName: artist,
+                                            localTracks: localTracks,
+                                            onPlayLocalTrack:
+                                                widget.onPlayLocalTrack,
+                                          ))),
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                ClipRRect(
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: SizedBox(
+                                      width: 142,
+                                      height: 142,
+                                      child: Image.network(image,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) =>
+                                              Container(
+                                                  color: Colors.white10,
+                                                  child: const Icon(
+                                                      Icons.album_outlined,
+                                                      size: 36))),
+                                    )),
+                                const SizedBox(height: 7),
+                                Text(title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: CinematicTitleFonts
+                                        .captionStyleForTitle(title,
+                                            type: 'album',
+                                            baseFontSize: 12,
+                                            color: Colors.white)),
+                                Text(
+                                    [
+                                      if (artist.isNotEmpty) artist,
+                                      if (date.length >= 4) date.substring(0, 4)
+                                    ].join(' · '),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        fontSize: 10, color: Colors.white54)),
+                              ]),
+                        )),
+                  );
+                },
+              ),
+            ),
           ),
-          ),
-        ),
       ]),
     );
   }
 }
-

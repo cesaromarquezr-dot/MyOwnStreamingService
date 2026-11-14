@@ -4,7 +4,7 @@
 // This widget deliberately does not own navigation or domain behavior. Each
 // callback routes to the canonical capability owner for that destination.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class ConnectedDestination {
   final String label;

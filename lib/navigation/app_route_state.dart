@@ -1,7 +1,7 @@
 // Owns the app shell's current page identity and Navigator route tracking.
 // Kept separate from main.dart so routing behavior can be maintained and tested
 // without editing the large root application widget.
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 final AppPageState appPageState = AppPageState();
 final AppPageRouteObserver appPageRouteObserver = AppPageRouteObserver();

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Device/layout information shared by every screen in the application.
 ///
@@ -40,7 +40,11 @@ class ResponsiveMetrics {
     return 1900;
   }
 
-  double get controlHeight => isTv ? 64 : isPhone ? 48 : 54;
+  double get controlHeight => isTv
+      ? 64
+      : isPhone
+          ? 48
+          : 54;
 
   double get spacing {
     if (isPhone) return 12;
@@ -100,7 +104,8 @@ class _ResponsiveInherited extends InheritedWidget {
 
 extension ResponsiveContext on BuildContext {
   ResponsiveMetrics get responsive {
-    final inherited = dependOnInheritedWidgetOfExactType<_ResponsiveInherited>();
+    final inherited =
+        dependOnInheritedWidgetOfExactType<_ResponsiveInherited>();
     if (inherited != null) return inherited.metrics;
 
     final size = MediaQuery.sizeOf(this);

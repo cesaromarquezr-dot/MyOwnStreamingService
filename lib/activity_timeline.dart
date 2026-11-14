@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app_core.dart';
 import 'localization.dart';
 import 'backend_api_compatibility.dart';
+
 /// A profile-scoped feed of interactions recorded by the shared media action
 /// contract. Domain state is still read from its owning service.
 class ActivityTimeline extends StatefulWidget {

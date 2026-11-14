@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -187,7 +187,10 @@ class _ProfilePinSetupDialogState extends State<_ProfilePinSetupDialog> {
       setState(() => _error = 'The PIN entries do not match.');
       return;
     }
-    setState(() { _saving = true; _error = null; });
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
     try {
       await ProfilePinService.setPin(
         accountId: widget.accountId,
@@ -196,7 +199,10 @@ class _ProfilePinSetupDialogState extends State<_ProfilePinSetupDialog> {
       );
       if (mounted) Navigator.pop(context, true);
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString().replaceFirst('Exception: ', ''));
+      if (mounted) {
+        setState(
+            () => _error = error.toString().replaceFirst('Exception: ', ''));
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -208,16 +214,38 @@ class _ProfilePinSetupDialogState extends State<_ProfilePinSetupDialog> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('This PIN is stored in this device’s secure storage. Set it separately on other devices.'),
+            const Text(
+                'This PIN is stored in this device’s secure storage. Set it separately on other devices.'),
             const SizedBox(height: 12),
-            TextField(controller: _pin, obscureText: true, keyboardType: TextInputType.number, maxLength: 8, decoration: const InputDecoration(labelText: 'New PIN', counterText: '4–8 digits')),
-            TextField(controller: _confirm, obscureText: true, keyboardType: TextInputType.number, maxLength: 8, decoration: const InputDecoration(labelText: 'Confirm PIN', counterText: '')),
-            if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error))),
+            TextField(
+                controller: _pin,
+                obscureText: true,
+                keyboardType: TextInputType.number,
+                maxLength: 8,
+                decoration: const InputDecoration(
+                    labelText: 'New PIN', counterText: '4–8 digits')),
+            TextField(
+                controller: _confirm,
+                obscureText: true,
+                keyboardType: TextInputType.number,
+                maxLength: 8,
+                decoration: const InputDecoration(
+                    labelText: 'Confirm PIN', counterText: '')),
+            if (_error != null)
+              Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(_error!,
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.error))),
           ],
         ),
         actions: [
-          TextButton(onPressed: _saving ? null : () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: _saving ? null : _save, child: Text(_saving ? 'Saving…' : 'Save PIN')),
+          TextButton(
+              onPressed: _saving ? null : () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: _saving ? null : _save,
+              child: Text(_saving ? 'Saving…' : 'Save PIN')),
         ],
       );
 }
@@ -233,7 +261,8 @@ class _ProfilePinUnlockDialog extends StatefulWidget {
   final String profileName;
 
   @override
-  State<_ProfilePinUnlockDialog> createState() => _ProfilePinUnlockDialogState();
+  State<_ProfilePinUnlockDialog> createState() =>
+      _ProfilePinUnlockDialogState();
 }
 
 class _ProfilePinUnlockDialogState extends State<_ProfilePinUnlockDialog> {
@@ -242,10 +271,16 @@ class _ProfilePinUnlockDialogState extends State<_ProfilePinUnlockDialog> {
   String? _error;
 
   @override
-  void dispose() { _pin.dispose(); super.dispose(); }
+  void dispose() {
+    _pin.dispose();
+    super.dispose();
+  }
 
   Future<void> _verify() async {
-    setState(() { _checking = true; _error = null; });
+    setState(() {
+      _checking = true;
+      _error = null;
+    });
     try {
       final valid = await ProfilePinService.verifyPin(
         accountId: widget.accountId,
@@ -259,7 +294,10 @@ class _ProfilePinUnlockDialogState extends State<_ProfilePinUnlockDialog> {
         setState(() => _error = 'That PIN is not correct.');
       }
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString().replaceFirst('Exception: ', ''));
+      if (mounted) {
+        setState(
+            () => _error = error.toString().replaceFirst('Exception: ', ''));
+      }
     } finally {
       if (mounted) setState(() => _checking = false);
     }
@@ -273,13 +311,29 @@ class _ProfilePinUnlockDialogState extends State<_ProfilePinUnlockDialog> {
           children: [
             const Text('Enter this profile’s PIN to continue.'),
             const SizedBox(height: 12),
-            TextField(controller: _pin, autofocus: true, obscureText: true, keyboardType: TextInputType.number, maxLength: 8, decoration: const InputDecoration(labelText: 'Profile PIN', counterText: '')),
-            if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error))),
+            TextField(
+                controller: _pin,
+                autofocus: true,
+                obscureText: true,
+                keyboardType: TextInputType.number,
+                maxLength: 8,
+                decoration: const InputDecoration(
+                    labelText: 'Profile PIN', counterText: '')),
+            if (_error != null)
+              Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(_error!,
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.error))),
           ],
         ),
         actions: [
-          TextButton(onPressed: _checking ? null : () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: _checking ? null : _verify, child: Text(_checking ? 'Checking…' : 'Unlock')),
+          TextButton(
+              onPressed: _checking ? null : () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: _checking ? null : _verify,
+              child: Text(_checking ? 'Checking…' : 'Unlock')),
         ],
       );
 }
