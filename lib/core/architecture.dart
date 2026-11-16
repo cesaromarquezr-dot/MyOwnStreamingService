@@ -16,6 +16,8 @@ enum ProductDomain {
   intelligence,
   notifications,
   themes,
+  operations,
+  engineering,
 }
 
 class ProductCapability {
@@ -70,5 +72,7 @@ abstract final class MasterProductCapabilities {
     ProductCapability(key: 'accessibility', domain: ProductDomain.experience, label: 'Accessibility Preferences'),
     ProductCapability(key: 'privacy_controls', domain: ProductDomain.identity, label: 'Privacy Controls'),
     ProductCapability(key: 'ai_action_confirmation', domain: ProductDomain.intelligence, label: 'AI Action Confirmation', requiresConfirmation: true),
+    ProductCapability(key: 'background_tasks', domain: ProductDomain.operations, label: 'Background Tasks & Activity', longRunning: true),
+    ProductCapability(key: 'developer_testing', domain: ProductDomain.engineering, label: 'Developer & Testing Studio'),
   ];
 }

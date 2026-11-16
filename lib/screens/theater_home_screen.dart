@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 
 import '../app_core.dart';
+import '../interface_appearance.dart';
 import '../catalog_poster_image.dart';
 import '../widgets/media_status_badges.dart';
 import '../data/theater_repository.dart';
@@ -581,10 +582,14 @@ class _TheaterHomeScreenState extends State<TheaterHomeScreen> {
     }).length;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0D12),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Private Theater',
-            style: TextStyle(fontWeight: FontWeight.w900)),
+        title: Row(mainAxisSize: MainAxisSize.min, children: [
+          const InterfaceBrandingLogo(mode: 'theater', width: 42, height: 30),
+          const SizedBox(width: 8),
+          const Text('Private Theater',
+              style: TextStyle(fontWeight: FontWeight.w900)),
+        ]),
         actions: [
           IconButton(
               tooltip: 'Add room',

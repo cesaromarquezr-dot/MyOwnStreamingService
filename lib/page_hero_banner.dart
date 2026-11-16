@@ -11,6 +11,11 @@ class PageHeroSettings {
   final int intervalSeconds;
   final String artworkMode;
   final double hoverScale;
+  final bool expandActiveSection;
+  final bool peekAdjacentSections;
+  final bool sectionNavigationArrows;
+  final bool sectionSnap;
+  final double expandedArtworkScale;
 
   const PageHeroSettings({
     this.enabled = true,
@@ -19,6 +24,11 @@ class PageHeroSettings {
     this.intervalSeconds = 12,
     this.artworkMode = 'Both',
     this.hoverScale = 1.08,
+    this.expandActiveSection = true,
+    this.peekAdjacentSections = true,
+    this.sectionNavigationArrows = true,
+    this.sectionSnap = false,
+    this.expandedArtworkScale = 1.18,
   });
 
   PageHeroSettings copyWith({
@@ -28,6 +38,11 @@ class PageHeroSettings {
     int? intervalSeconds,
     String? artworkMode,
     double? hoverScale,
+    bool? expandActiveSection,
+    bool? peekAdjacentSections,
+    bool? sectionNavigationArrows,
+    bool? sectionSnap,
+    double? expandedArtworkScale,
   }) =>
       PageHeroSettings(
         enabled: enabled ?? this.enabled,
@@ -36,6 +51,11 @@ class PageHeroSettings {
         intervalSeconds: intervalSeconds ?? this.intervalSeconds,
         artworkMode: artworkMode ?? this.artworkMode,
         hoverScale: hoverScale ?? this.hoverScale,
+        expandActiveSection: expandActiveSection ?? this.expandActiveSection,
+        peekAdjacentSections: peekAdjacentSections ?? this.peekAdjacentSections,
+        sectionNavigationArrows: sectionNavigationArrows ?? this.sectionNavigationArrows,
+        sectionSnap: sectionSnap ?? this.sectionSnap,
+        expandedArtworkScale: expandedArtworkScale ?? this.expandedArtworkScale,
       );
 }
 
@@ -67,6 +87,11 @@ class PageHeroSettingsStore {
           const <double>[1.03, 1.08, 1.15, 1.5, 2.0, 3.0].contains(hoverScale)
               ? hoverScale
               : 1.08,
+      expandActiveSection: prefs.getBool('${prefix}expandActiveSection') ?? true,
+      peekAdjacentSections: prefs.getBool('${prefix}peekAdjacentSections') ?? true,
+      sectionNavigationArrows: prefs.getBool('${prefix}sectionNavigationArrows') ?? true,
+      sectionSnap: prefs.getBool('${prefix}sectionSnap') ?? false,
+      expandedArtworkScale: (prefs.getDouble('${prefix}expandedArtworkScale') ?? 1.18).clamp(1, 1.5).toDouble(),
     );
   }
 
@@ -83,6 +108,11 @@ class PageHeroSettingsStore {
     );
     await prefs.setString('${prefix}artworkMode', settings.artworkMode);
     await prefs.setDouble('${prefix}hoverScale', settings.hoverScale);
+    await prefs.setBool('${prefix}expandActiveSection', settings.expandActiveSection);
+    await prefs.setBool('${prefix}peekAdjacentSections', settings.peekAdjacentSections);
+    await prefs.setBool('${prefix}sectionNavigationArrows', settings.sectionNavigationArrows);
+    await prefs.setBool('${prefix}sectionSnap', settings.sectionSnap);
+    await prefs.setDouble('${prefix}expandedArtworkScale', settings.expandedArtworkScale.clamp(1, 1.5).toDouble());
     revision.value++;
   }
 }
@@ -220,6 +250,54 @@ class PageHeroSettingsPanel extends StatelessWidget {
                     }
                   : null,
             ),
+            if (pageTitle.trim().toLowerCase() == 'home') ...[
+            const SizedBox(height: 18),
+            const Divider(color: Colors.white12),
+            const SizedBox(height: 8),
+            const Text('WHEN THE HERO BANNER IS OFF',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.1, color: Colors.white70)),
+            const SizedBox(height: 4),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Expand the active section'),
+              subtitle: const Text('Give the selected content row more height and larger artwork.'),
+              value: settings.expandActiveSection,
+              onChanged: (value) => onChanged(settings.copyWith(expandActiveSection: value)),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Show neighboring sections'),
+              subtitle: const Text('Keep a small portion of the previous and next sections visible.'),
+              value: settings.peekAdjacentSections,
+              onChanged: (value) => onChanged(settings.copyWith(peekAdjacentSections: value)),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Show up/down section arrows'),
+              subtitle: const Text('Navigate between content sections using on-screen arrows.'),
+              value: settings.sectionNavigationArrows,
+              onChanged: (value) => onChanged(settings.copyWith(sectionNavigationArrows: value)),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Snap to sections'),
+              subtitle: const Text('Align the active section after using the navigation arrows.'),
+              value: settings.sectionSnap,
+              onChanged: (value) => onChanged(settings.copyWith(sectionSnap: value)),
+            ),
+            if (settings.expandActiveSection)
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Expanded artwork size'),
+                Slider(
+                  value: settings.expandedArtworkScale.clamp(1, 1.5).toDouble(),
+                  min: 1,
+                  max: 1.5,
+                  divisions: 10,
+                  label: '${(settings.expandedArtworkScale * 100).round()}%',
+                  onChanged: (value) => onChanged(settings.copyWith(expandedArtworkScale: value)),
+                ),
+              ]),
+            ],
           ],
         ),
       ),

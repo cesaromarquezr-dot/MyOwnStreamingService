@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'app_core.dart' hide MediaCollection;
 import 'data/collection_repository.dart';
 import 'interface_experience.dart';
+import 'interface_appearance.dart';
 import 'models/media_case_style.dart';
 import 'models/media_collection_models.dart';
 import 'music.dart';
@@ -1477,10 +1478,21 @@ class _VirtualStoreExperienceScreenState
     final zoneLabels = _zoneLabels;
 
     return Scaffold(
-      backgroundColor: Color(design.wallColor),
+      backgroundColor: Color(design.wallColor).withValues(
+        alpha: InterfaceAppearanceStore.forMode('blockbuster').backdropPath.isNotEmpty ? .76 : 1,
+      ),
       appBar: AppBar(
-        backgroundColor: Color(design.shelfColor),
-        title: Text(design.name),
+        backgroundColor: Color(design.shelfColor).withValues(
+          alpha: InterfaceAppearanceStore.forMode('blockbuster').backdropPath.isNotEmpty ? .82 : 1,
+        ),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const InterfaceBrandingLogo(mode: 'blockbuster', width: 42, height: 30),
+            const SizedBox(width: 8),
+            Flexible(child: Text(design.name, overflow: TextOverflow.ellipsis)),
+          ],
+        ),
         actions: [
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 8, vertical: 12),

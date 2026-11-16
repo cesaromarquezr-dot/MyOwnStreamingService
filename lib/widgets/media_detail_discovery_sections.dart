@@ -5,6 +5,8 @@ import '../app_core.dart';
 import '../core/services/cinematic_title_metadata_service.dart'
     as cinematic_metadata;
 import '../featured_soundtrack_catalog.dart';
+import '../media_recommendation_kinds.dart';
+import '../recommendation_ownership.dart';
 import '../music.dart' show SoundtrackUniverseScreen;
 import 'media_detail_arrow_rail.dart';
 
@@ -65,8 +67,7 @@ class _MediaDetailDiscoverySectionsState
   String _normal(String value) => value
       .toLowerCase()
       .trim()
-      .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
-      .replaceAll(RegExp(r'\s+'), ' ');
+      .replaceAll(RegExp(r'[\s\-_.,:;!?()\[\]{}\\/]+'), '');
 
   List<MediaItem> _accessibleLibrary() {
     final app = AppController.instance;
@@ -190,15 +191,136 @@ class _MediaDetailDiscoverySectionsState
     }).toList(growable: false);
   }
 
+  Future<List<MediaItem>> _musicAlbumsForArtist(String artistName) async {
+    final app = AppController.instance;
+    if (!app.isBackendAuthenticated || artistName.trim().isEmpty) {
+      return const <MediaItem>[];
+    }
+    try {
+      final search = await app.backendApi.searchMusicCatalog(
+        artistName,
+        type: 'artist',
+        limit: 5,
+      );
+      final spotify = search['spotify'] is Map
+          ? Map<String, dynamic>.from(search['spotify'] as Map)
+          : <String, dynamic>{};
+      final rawArtists = spotify['artists'];
+      final artists = rawArtists is List
+          ? rawArtists
+              .whereType<Map>()
+              .map((row) => Map<String, dynamic>.from(row))
+              .toList(growable: false)
+          : const <Map<String, dynamic>>[];
+      final wanted = _normal(artistName);
+      Map<String, dynamic>? artist;
+      for (final candidate in artists) {
+        if (_normal(candidate['name']?.toString() ?? '') == wanted) {
+          artist = candidate;
+          break;
+        }
+      }
+      if (artist == null && artists.length == 1) artist = artists.first;
+      final spotifyId = artist?['id']?.toString().trim() ?? '';
+      if (spotifyId.isEmpty) return const <MediaItem>[];
+
+      final page = await app.backendApi.getSpotifyArtistAlbums(
+        spotifyId,
+        limit: 10,
+        offset: 0,
+      );
+      final rawAlbums = page['items'];
+      if (rawAlbums is! List) return const <MediaItem>[];
+      final output = <MediaItem>[];
+      final seen = <String>{};
+      for (final row in rawAlbums.whereType<Map>()) {
+        final album = Map<String, dynamic>.from(row);
+        final id = album['id']?.toString().trim() ?? '';
+        final title =
+            (album['title'] ?? album['name'])?.toString().trim() ?? '';
+        final imageUrl =
+            (album['imageUrl'] ?? album['coverArtUrl'])?.toString().trim() ??
+                '';
+        if (id.isEmpty || title.isEmpty) continue;
+        final key = _normal(title);
+        if (key.isEmpty || !seen.add(key)) continue;
+        final releaseDate = DateTime.tryParse(
+            (album['releaseDate'] ?? album['release_date'])?.toString() ?? '');
+        output.add(MediaItem(
+          id: 'spotify:album:$id',
+          title: title,
+          type: 'album',
+          imageUrl: imageUrl.isEmpty ? null : imageUrl,
+          description: '$artistName · Music catalog recommendation',
+          releaseYear: releaseDate?.year,
+          music: <String>[artistName],
+        ));
+      }
+      return output;
+    } catch (_) {
+      return const <MediaItem>[];
+    }
+  }
+
+  Future<List<_PersonShelf>> _loadMusicCreditShelves({
+    List<String> providerArtists = const <String>[],
+  }) async {
+    final names = <String>{
+      ...widget.media.music,
+      ...providerArtists,
+      // Some cast members are also recording artists. Exact artist-name
+      // matching in _musicAlbumsForArtist prevents arbitrary actor names from
+      // being treated as musicians when the music catalog has no match.
+      ...widget.media.actors.take(4),
+    }.map((value) => value.trim()).where((value) => value.isNotEmpty).take(5);
+    final shelves = <_PersonShelf>[];
+    for (final artist in names) {
+      final local = _localItemsForPerson(artist)
+          .where((item) =>
+              RecommendationMediaKinds.classify(item) ==
+              RecommendationMediaKind.musicAlbum)
+          .toList(growable: false);
+      final remote = await _musicAlbumsForArtist(artist);
+      final items = _unique(<MediaItem>[...local, ...remote]);
+      if (items.isNotEmpty) {
+        shelves.add(_PersonShelf(name: artist, items: items));
+      }
+    }
+    return shelves;
+  }
+
+  List<_PersonShelf> _mergePersonShelves(
+    Iterable<_PersonShelf> first,
+    Iterable<_PersonShelf> second,
+  ) {
+    final merged = <String, List<MediaItem>>{};
+    final labels = <String, String>{};
+    for (final shelf in <_PersonShelf>[...first, ...second]) {
+      final key = _normal(shelf.name);
+      if (key.isEmpty) continue;
+      labels.putIfAbsent(key, () => shelf.name);
+      merged.putIfAbsent(key, () => <MediaItem>[]).addAll(shelf.items);
+    }
+    return merged.entries
+        .map((entry) => _PersonShelf(
+              name: labels[entry.key] ?? entry.key,
+              items: _unique(entry.value),
+            ))
+        .where((shelf) => shelf.items.isNotEmpty)
+        .toList(growable: false);
+  }
+
   Future<void> _refresh() async {
     final provider = widget.metadata;
     final localSuggestions = _localSuggestions();
     if (provider == null ||
         !cinematic_metadata.CinematicTitleMetadataService.isConfigured) {
+      final localPeople = _buildLocalPeople();
+      final musicPeople = await _loadMusicCreditShelves();
       if (!mounted) return;
       setState(() {
         _suggested = localSuggestions;
-        _people = _buildLocalPeople();
+        _people = _mergePersonShelves(localPeople, musicPeople);
         _studios = _buildLocalStudios();
         _loading = false;
       });
@@ -293,10 +415,13 @@ class _MediaDetailDiscoverySectionsState
           studios.add(_StudioShelf(name: company.name, items: items));
         }
       }
+      final musicPeople = await _loadMusicCreditShelves(
+        providerArtists: provider.music,
+      );
 
       setState(() {
         _suggested = _unique(similar).take(16).toList(growable: false);
-        _people = people;
+        _people = _mergePersonShelves(people, musicPeople);
         _studios = studios;
         _loading = false;
       });
@@ -364,41 +489,92 @@ class _MediaDetailDiscoverySectionsState
   Widget _posterRail(List<MediaItem> items,
       {String semanticLabel = 'related titles'}) {
     if (items.isEmpty) return const SizedBox.shrink();
+    final controller = AppController.instance;
     return MediaDetailArrowRail(
-      height: 206,
+      height: 226,
       semanticLabel: semanticLabel,
       children: items.map((item) {
         final image = item.imageUrl?.trim() ?? '';
+        final kind = RecommendationMediaKinds.classify(item);
+        final ownedRecord =
+            RecommendationOwnershipMatcher.findOwnedMediaForMedia(
+          media: item,
+          controller: controller,
+        );
+        final isOwned = ownedRecord != null;
+        final isWatched = isOwned &&
+            kind != RecommendationMediaKind.musicAlbum &&
+            controller.watched.any((entry) => entry.id == ownedRecord.id);
         return SizedBox(
-          width: 116,
+          width: 122,
           child: InkWell(
             onTap: () => widget.onOpenMedia(item),
             borderRadius: BorderRadius.circular(10),
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(9),
-                child: SizedBox(
-                  width: 116,
-                  height: 154,
-                  child: image.startsWith('http')
-                      ? Image.network(image,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _posterFallback(item))
-                      : _posterFallback(item),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(9),
+                  child: SizedBox(
+                    width: 122,
+                    height: 150,
+                    child: Stack(fit: StackFit.expand, children: [
+                      if (image.startsWith('http'))
+                        Image.network(
+                          image,
+                          fit: kind == RecommendationMediaKind.musicAlbum
+                              ? BoxFit.contain
+                              : BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _posterFallback(item),
+                        )
+                      else
+                        _posterFallback(item),
+                      Positioned(
+                        left: 5,
+                        top: 5,
+                        child: RecommendationOwnershipBadge(
+                          isOwned: isOwned,
+                          isWatched: isWatched,
+                          watchedLabel: 'Watched',
+                          showWatchState:
+                              kind != RecommendationMediaKind.musicAlbum,
+                          compact: true,
+                        ),
+                      ),
+                    ]),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 6),
-              Text(item.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: 11, fontWeight: FontWeight.w700)),
-              Text(item.releaseYear?.toString() ?? item.type.toUpperCase(),
+                const SizedBox(height: 6),
+                Text(
+                  RecommendationMediaKinds.label(kind).toUpperCase(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 10, color: Colors.white54)),
-            ]),
+                  style: const TextStyle(
+                    color: Color(0xFFB9AEFF),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: .5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(item.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.w700)),
+                Text(
+                  item.releaseYear?.toString() ??
+                      (kind == RecommendationMediaKind.musicAlbum
+                          ? (item.music.isEmpty
+                              ? 'Album'
+                              : item.music.join(', '))
+                          : item.type.toUpperCase()),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 10, color: Colors.white54),
+                ),
+              ],
+            ),
           ),
         );
       }).toList(growable: false),
@@ -614,7 +790,7 @@ class _MediaDetailDiscoverySectionsState
       if (_people.isNotEmpty) ...[
         _sectionTitle('More from this Cast & Crew',
             subtitle:
-                'Other movies and shows credited to the same people, plus matching items indexed in your library.'),
+                'Separate Film, TV Show, and Music Album recommendations from the same credited people; each card shows whether you own it.'),
         for (final person in _people) ...[
           Padding(
             padding: const EdgeInsets.only(bottom: 7),
@@ -624,7 +800,27 @@ class _MediaDetailDiscoverySectionsState
                     fontWeight: FontWeight.w800,
                     color: Colors.white70)),
           ),
-          _posterRail(person.items, semanticLabel: 'more from ${person.name}'),
+          for (final kind in RecommendationMediaKinds.displayOrder)
+            if ((RecommendationMediaKinds.group(person.items)[kind] ??
+                    const <MediaItem>[])
+                .isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(
+                  RecommendationMediaKinds.pluralLabel(kind),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFFB9AEFF),
+                  ),
+                ),
+              ),
+              _posterRail(
+                RecommendationMediaKinds.group(person.items)[kind]!,
+                semanticLabel:
+                    '${RecommendationMediaKinds.pluralLabel(kind)} from ${person.name}',
+              ),
+            ],
         ],
       ],
       if (_studios.isNotEmpty) ...[

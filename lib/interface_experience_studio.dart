@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'app_core.dart';
 import 'interface_experience.dart';
+import 'interface_appearance.dart';
 import 'virtual_store_experience_screen.dart';
 import 'screens/redbox_home_screen.dart';
 import 'screens/theater_home_screen.dart';
@@ -32,7 +33,7 @@ class _InterfaceExperienceStudioScreenState
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 5, vsync: this);
+    _tabs = TabController(length: 6, vsync: this);
     _load();
   }
 
@@ -1057,6 +1058,7 @@ class _InterfaceExperienceStudioScreenState
             Tab(
                 icon: Icon(Icons.movie_filter_rounded),
                 text: 'Owned Library & Theater'),
+            Tab(icon: Icon(Icons.palette_rounded), text: 'Appearance & Skins'),
           ],
         ),
       ),
@@ -1068,6 +1070,7 @@ class _InterfaceExperienceStudioScreenState
           _buildKioskTab(activeKiosk),
           _buildCollectionsTab(),
           _buildOwnershipAndTheaterTab(),
+          InterfaceAppearanceStudioPanel(initialMode: config.activeExperience),
         ],
       ),
     );

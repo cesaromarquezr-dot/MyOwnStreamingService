@@ -9,6 +9,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'app_core.dart';
+import 'media_recommendation_kinds.dart';
 import 'genre_system.dart';
 import 'localization.dart';
 import 'supabase/supabase_config.dart';
@@ -19,7 +20,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'feature_center.dart';
 import 'device_features.dart';
 import 'remote_access.dart';
-import 'main.dart' show CustomizeHomeScreen;
+import 'main.dart'
+    show CustomizeHomeScreen, HomeCustomization, HomeCustomizationStore;
 import 'music_achievements.dart';
 import 'home_server.dart';
 import 'storage_dashboard.dart';
@@ -5377,58 +5379,246 @@ class SmartCollectionsScreen extends StatefulWidget {
 
 class _SmartCollectionsScreenState extends State<SmartCollectionsScreen> {
   String rule = 'Unwatched';
-  List<MediaItem> get items {
-    final l = _library();
-    switch (rule) {
-      case 'Watched':
-        return l.where((m) => AppController.instance.isWatched(m.id)).toList();
-      case 'Movies':
-        return l.where((m) => m.type == 'movie').toList();
-      case 'TV Shows':
-        return l.where((m) => m.type != 'movie').toList();
-      case 'Liked':
-        return l
-            .where((m) => AppController.instance.liked.any((x) => x.id == m.id))
-            .toList();
-      default:
-        return l.where((m) => !AppController.instance.isWatched(m.id)).toList();
-    }
+  String customKind = 'Any';
+  String customOwnership = 'Any';
+  String customWatchState = 'Any';
+  String customGenre = 'Any';
+
+  bool _isSpecial(MediaItem media) {
+    final type = media.type.toLowerCase().replaceAll(RegExp(r'[_-]+'), ' ');
+    return type.contains('special') ||
+        type.contains('concert') ||
+        type.contains('event');
   }
 
+  bool _isListened(MediaItem media) {
+    final wanted = media.title.trim().toLowerCase();
+    final tracks = MusicLibraryStore.instance.tracks.where((track) =>
+        track.album.trim().toLowerCase() == wanted &&
+        !track.catalogOnly &&
+        track.audioUrl?.trim().isNotEmpty == true);
+    return tracks.any((track) =>
+        (MusicLibraryStore.instance.listenCounts[track.id] ?? 0) > 0);
+  }
+
+  bool _hasConsumption(MediaItem media) {
+    if (RecommendationMediaKinds.classify(media) ==
+        RecommendationMediaKind.musicAlbum) {
+      return _isListened(media);
+    }
+    final controller = AppController.instance;
+    return controller.isWatched(media.id) ||
+        controller.getPlaybackProgress(media.id) >= 0.95;
+  }
+
+  List<MediaItem> get items {
+    final controller = AppController.instance;
+    final profile = controller.currentProfile;
+    var result = _library()
+        .where((media) => media.isAccessibleTo(profile))
+        .toList(growable: true);
+
+    switch (rule) {
+      case 'Watched':
+        result = result.where(_hasConsumption).toList();
+        break;
+      case 'Unwatched':
+        result = result.where((media) => !_hasConsumption(media)).toList();
+        break;
+      case 'Films':
+        result = result
+            .where((media) => RecommendationMediaKinds.classify(media) ==
+                RecommendationMediaKind.film)
+            .toList();
+        break;
+      case 'TV Shows':
+        result = result
+            .where((media) => RecommendationMediaKinds.classify(media) ==
+                RecommendationMediaKind.tvShow)
+            .toList();
+        break;
+      case 'Music Albums':
+        result = result
+            .where((media) => RecommendationMediaKinds.classify(media) ==
+                RecommendationMediaKind.musicAlbum)
+            .toList();
+        break;
+      case 'Specials & Events':
+        result = result.where(_isSpecial).toList();
+        break;
+      case 'Liked':
+        final likedIds = controller.liked.map((media) => media.id).toSet();
+        result = result.where((media) => likedIds.contains(media.id)).toList();
+        break;
+      case 'Owned':
+        result = result.where((media) => controller.isOwned(media.id)).toList();
+        break;
+      case 'Not Owned':
+        result = result.where((media) => !controller.isOwned(media.id)).toList();
+        break;
+      case 'Recently Added':
+        result.sort((a, b) => b.addedAt.compareTo(a.addedAt));
+        break;
+      case 'Almost Finished':
+        result = result.where((media) {
+          if (RecommendationMediaKinds.classify(media) ==
+              RecommendationMediaKind.musicAlbum) {
+            return false;
+          }
+          final progress = controller.getPlaybackProgress(media.id);
+          return progress > 0 && progress < 0.95;
+        }).toList();
+        break;
+      case '4K Favorites':
+        result = result.where((media) {
+          final format = '${media.discType ?? ''} ${media.editionType ?? ''}'
+              .toLowerCase();
+          return controller.liked.any((liked) => liked.id == media.id) &&
+              (format.contains('4k') || format.contains('uhd'));
+        }).toList();
+        break;
+      case 'Short Entertainment':
+        result = result
+            .where((media) =>
+                media.runtimeMinutes != null && media.runtimeMinutes! <= 30)
+            .toList();
+        break;
+      case 'Custom':
+        result = result.where((media) {
+          final kind = RecommendationMediaKinds.classify(media);
+          final kindMatches = switch (customKind) {
+            'Film' => kind == RecommendationMediaKind.film,
+            'TV Show' => kind == RecommendationMediaKind.tvShow,
+            'Music Album' => kind == RecommendationMediaKind.musicAlbum,
+            'Special' => _isSpecial(media),
+            _ => true,
+          };
+          final owned = controller.isOwned(media.id);
+          final ownershipMatches = customOwnership == 'Any' ||
+              (customOwnership == 'Owned' && owned) ||
+              (customOwnership == 'Not Owned' && !owned);
+          final consumed = _hasConsumption(media);
+          final watchMatches = customWatchState == 'Any' ||
+              (customWatchState == 'Watched' && consumed) ||
+              (customWatchState == 'Unwatched' && !consumed);
+          final genreMatches = customGenre == 'Any' ||
+              media.genres.any((genre) => genre.toLowerCase() ==
+                  customGenre.toLowerCase()) ||
+              media.tags.any((tag) =>
+                  tag.toLowerCase() == customGenre.toLowerCase());
+          return kindMatches && ownershipMatches && watchMatches && genreMatches;
+        }).toList();
+        break;
+    }
+    return result;
+  }
+
+  List<String> get _genres {
+    final profile = AppController.instance.currentProfile;
+    final visible = _library().where((media) => media.isAccessibleTo(profile));
+    return <String>{
+        for (final media in visible) ...media.genres,
+        for (final media in visible) ...media.tags,
+      }.where((value) => value.trim().isNotEmpty).toList()
+        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  }
+
+  Widget _filter(String label, String value, List<String> choices,
+      ValueChanged<String?> onChanged) =>
+      DropdownButtonFormField<String>(
+        initialValue: value,
+        decoration: InputDecoration(labelText: label),
+        items: choices
+            .map((choice) => DropdownMenuItem<String>(
+                value: choice, child: Text(choice)))
+            .toList(growable: false),
+        onChanged: onChanged,
+      );
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-      appBar: AppBar(title: const UniversalText('Smart Collections')),
+  Widget build(BuildContext context) {
+    final ruleChoices = <String>[
+      'Unwatched',
+      'Watched',
+      'Films',
+      'TV Shows',
+      'Music Albums',
+      'Specials & Events',
+      'Liked',
+      'Owned',
+      'Not Owned',
+      'Recently Added',
+      'Almost Finished',
+      '4K Favorites',
+      'Short Entertainment',
+      'Custom',
+    ];
+    final filtered = items;
+    return Scaffold(
+      appBar: AppBar(title: const UniversalText('Smart Collections 2.0')),
       body: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(children: [
-            DropdownButtonFormField<String>(
-                initialValue: rule,
-                items: const [
-                  'Unwatched',
-                  'Watched',
-                  'Movies',
-                  'TV Shows',
-                  'Liked'
-                ]
-                    .map((x) => DropdownMenuItem(value: x, child: Text(x)))
-                    .toList(),
-                onChanged: (v) => setState(() => rule = v!)),
-            const SizedBox(height: 12),
-            Align(
-                alignment: Alignment.centerLeft,
-                child: UniversalText(
-                    '${items.length} titles match this live rule')),
-            const SizedBox(height: 12),
-            Expanded(
-                child: ListView(
-                    children: items
-                        .map((m) => ListTile(
-                            leading: const Icon(Icons.movie_outlined),
-                            title: Text(m.title),
-                            subtitle: UniversalText(
-                                '${m.releaseYear ?? ''} • ${m.type}')))
-                        .toList()))
-          ])));
+        padding: const EdgeInsets.all(16),
+        child: Column(children: [
+          _filter('Collection rule', rule, ruleChoices,
+              (value) => setState(() => rule = value ?? rule)),
+          if (rule == 'Custom') ...[
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(child: _filter('Content type', customKind,
+                  const ['Any', 'Film', 'TV Show', 'Music Album', 'Special'],
+                  (value) => setState(() => customKind = value ?? 'Any'))),
+              const SizedBox(width: 8),
+              Expanded(child: _filter('Ownership', customOwnership,
+                  const ['Any', 'Owned', 'Not Owned'],
+                  (value) => setState(() => customOwnership = value ?? 'Any'))),
+            ]),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(child: _filter('Watch / listen state', customWatchState,
+                  const ['Any', 'Watched', 'Unwatched'],
+                  (value) => setState(() => customWatchState = value ?? 'Any'))),
+              const SizedBox(width: 8),
+              Expanded(child: _filter('Genre / tag', customGenre,
+                  ['Any', ..._genres],
+                  (value) => setState(() => customGenre = value ?? 'Any'))),
+            ]),
+          ],
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: UniversalText('${filtered.length} titles match this live rule'),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: filtered.isEmpty
+                ? const Center(
+                    child: Text('No titles match this collection rule yet.',
+                        style: TextStyle(color: Colors.white54)))
+                : ListView(
+                    children: filtered.map((media) {
+                      final kind = RecommendationMediaKinds.classify(media);
+                      final owned = controllerIsOwned(media);
+                      final consumed = _hasConsumption(media);
+                      return ListTile(
+                        leading: Icon(kind == RecommendationMediaKind.musicAlbum
+                            ? Icons.album_outlined
+                            : kind == RecommendationMediaKind.tvShow
+                                ? Icons.live_tv_outlined
+                                : Icons.movie_outlined),
+                        title: Text(media.title),
+                        subtitle: Text(
+                            '${RecommendationMediaKinds.label(kind)} · ${owned ? 'Owned' : 'Not owned'} · ${consumed ? (kind == RecommendationMediaKind.musicAlbum ? 'Listened' : 'Watched') : 'Not completed'}'),
+                      );
+                    }).toList(growable: false),
+                  ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  bool controllerIsOwned(MediaItem media) =>
+      AppController.instance.isOwned(media.id);
 }
 
 /// Account-wide recommendation voting and profile wishlist view.
@@ -5793,7 +5983,9 @@ class TrailerTheaterScreen extends StatelessWidget {
   }
 }
 
-/// Implements the `HomeWidgetsScreen` class for this feature or UI component.
+/// Profile-scoped Home layout editor backed by the same settings store used
+/// by the actual Home renderer. Reordering and visibility changes therefore
+/// immediately affect the selected profile's real Home screen.
 class HomeWidgetsScreen extends StatefulWidget {
   const HomeWidgetsScreen({super.key});
   @override
@@ -5801,30 +5993,138 @@ class HomeWidgetsScreen extends StatefulWidget {
 }
 
 class _HomeWidgetsScreenState extends State<HomeWidgetsScreen> {
-  final widgets = <String>[
-    'Continue Watching',
-    'Wishlist',
-    'Watch Streak',
-    'Recommendations',
-    'Recently Added',
-    'Storage'
-  ];
+  late HomeCustomization _draft;
+  String? _profileId;
+  bool _saving = false;
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-      appBar: AppBar(title: const UniversalText('Home Widgets')),
-      body: ReorderableListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: widgets.length,
-          onReorderItem: (a, b) => setState(() {
-                final item = widgets.removeAt(a);
-                widgets.insert(b, item);
-              }),
-          itemBuilder: (_, i) => Card(
-              key: ValueKey(widgets[i]),
-              child: ListTile(
-                  leading: const Icon(Icons.drag_handle_rounded),
-                  title: Text(widgets[i]),
-                  trailing: const Icon(Icons.widgets_rounded)))));
+  void initState() {
+    super.initState();
+    _loadProfileSettings();
+  }
+
+  void _loadProfileSettings() {
+    final profile = AppController.instance.currentProfile;
+    _profileId = profile?.id;
+    _draft = HomeCustomizationStore.settingsFor(profile);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final currentId = AppController.instance.currentProfile?.id;
+    if (_profileId != currentId) {
+      _loadProfileSettings();
+    }
+  }
+
+  void _save() {
+    // Apply on every interaction, even when the small saved-state indicator is
+    // already visible, so rapid toggles cannot skip the latest profile layout.
+    HomeCustomizationStore.apply(_draft);
+    if (_saving) return;
+    setState(() => _saving = true);
+    Future<void>.delayed(const Duration(milliseconds: 160), () {
+      if (mounted) setState(() => _saving = false);
+    });
+  }
+
+  void _toggleSection(String section, bool visible) {
+    setState(() => _draft.setSectionVisible(section, visible));
+    _save();
+  }
+
+  void _reorder(int oldIndex, int newIndex) {
+    setState(() {
+      final section = _draft.sectionOrder.removeAt(oldIndex);
+      _draft.sectionOrder.insert(newIndex, section);
+    });
+    _save();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final profileName =
+        AppController.instance.currentProfile?.name ?? 'Default profile';
+    return Scaffold(
+      appBar: AppBar(
+        title: const UniversalText('Home Widgets & Sections'),
+        actions: [
+          IconButton(
+            tooltip: 'Reset to default section layout',
+            onPressed: _saving
+                ? null
+                : () {
+                    setState(() => _draft = HomeCustomization());
+                    _save();
+                  },
+            icon: const Icon(Icons.restart_alt_rounded),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Row(
+              children: [
+                const Icon(Icons.person_outline_rounded, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Changes apply to $profileName and are saved to its Home layout.',
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ),
+                if (_saving)
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+              ],
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 10),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Drag to reorder. Turn a section off to hide it from Home.',
+                style: TextStyle(color: Colors.white54, fontSize: 11),
+              ),
+            ),
+          ),
+          Expanded(
+            child: ReorderableListView.builder(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
+              itemCount: _draft.sectionOrder.length,
+              onReorderItem: _reorder,
+              itemBuilder: (context, index) {
+                final section = _draft.sectionOrder[index];
+                return Card(
+                  key: ValueKey<String>(section),
+                  child: ListTile(
+                    leading: const Icon(Icons.drag_handle_rounded),
+                    title: Text(section,
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text(_draft.isSectionVisible(section)
+                        ? 'Visible on Home'
+                        : 'Hidden from Home'),
+                    trailing: Switch.adaptive(
+                      value: _draft.isSectionVisible(section),
+                      onChanged: (visible) =>
+                          _toggleSection(section, visible),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class ProfileRelationshipsScreen extends StatefulWidget {

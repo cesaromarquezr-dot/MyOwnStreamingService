@@ -6,8 +6,8 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart'
@@ -94,6 +94,7 @@ import 'performer_universe.dart';
 import 'personal_media_intelligence_center.dart';
 import 'interface_experience_studio.dart';
 import 'interface_experience.dart';
+import 'interface_appearance.dart';
 import 'media_experience/media_experience.dart';
 import 'kiosk/kiosk.dart';
 import 'theater/theater.dart';
@@ -4866,6 +4867,11 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             if (isHome) ...[
               const SizedBox(height: 12),
               _activeInterfaceCustomizationCard(),
+              const SizedBox(height: 12),
+              InterfaceAppearanceStudioPanel(
+                initialMode: activeInterfaceMode.name,
+                scrollable: false,
+              ),
             ],
             if (useClassicHomeCustomizer) ...[
               const SizedBox(height: 12),
@@ -5060,6 +5066,9 @@ class _GlobalPrimaryNavigationBar extends StatelessWidget {
       builder: (context, _) {
         const selectedIndex = 0;
         final profile = AppController.instance.currentProfile;
+        final activeIconMode = InterfaceExperienceRepository
+                .instance.notifier.value?.activeExperience ??
+            'classic';
         final rawProfileName = profile?.name.trim() ?? '';
         final profileLabel =
             rawProfileName.isEmpty ? 'Profile' : rawProfileName;
@@ -5074,16 +5083,21 @@ class _GlobalPrimaryNavigationBar extends StatelessWidget {
               selectedIndex: selectedIndex,
               labelType: NavigationRailLabelType.all,
               destinations: <NavigationRailDestination>[
-                const NavigationRailDestination(
-                    icon: Icon(Icons.home_outlined),
-                    selectedIcon: Icon(Icons.home_rounded),
-                    label: Text('Home')),
-                const NavigationRailDestination(
-                    icon: Icon(Icons.more_horiz_rounded),
-                    selectedIcon: Icon(Icons.more_horiz_rounded),
-                    label: Text('More')),
                 NavigationRailDestination(
-                    icon: profileAvatar,
+                    icon: InterfacePackIcon(
+                        semantic: 'home', mode: activeIconMode),
+                    selectedIcon: InterfacePackIcon(
+                        semantic: 'home', mode: activeIconMode, selected: true),
+                    label: const Text('Home')),
+                NavigationRailDestination(
+                    icon: InterfacePackIcon(
+                        semantic: 'more', mode: activeIconMode),
+                    selectedIcon: InterfacePackIcon(
+                        semantic: 'more', mode: activeIconMode, selected: true),
+                    label: const Text('More')),
+                NavigationRailDestination(
+                    icon: InterfacePackIcon(
+                        semantic: 'profile', mode: activeIconMode),
                     selectedIcon: profileAvatar,
                     label: Text(profileLabel)),
               ],
@@ -5095,15 +5109,17 @@ class _GlobalPrimaryNavigationBar extends StatelessWidget {
           height: 84,
           selectedIndex: selectedIndex,
           destinations: <NavigationDestination>[
-            const NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home_rounded),
+            NavigationDestination(
+              icon: InterfacePackIcon(semantic: 'home', mode: activeIconMode),
+              selectedIcon: InterfacePackIcon(
+                  semantic: 'home', mode: activeIconMode, selected: true),
               label: 'Home',
               tooltip: '',
             ),
-            const NavigationDestination(
-              icon: Icon(Icons.more_horiz_rounded),
-              selectedIcon: Icon(Icons.more_horiz_rounded),
+            NavigationDestination(
+              icon: InterfacePackIcon(semantic: 'more', mode: activeIconMode),
+              selectedIcon: InterfacePackIcon(
+                  semantic: 'more', mode: activeIconMode, selected: true),
               label: 'More',
               tooltip: '',
             ),
@@ -5489,102 +5505,129 @@ class _AppShellHeaderState extends State<AppShellHeader> {
   @override
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 760;
+    final activeMode = InterfaceExperienceRepository
+            .instance.notifier.value?.activeExperience ??
+        'classic';
+    final appearance = InterfaceAppearanceStore.forMode(activeMode);
+    final isGlass = appearance.skinPreset.toLowerCase().contains('glass') ||
+        appearance.skinPreset.toLowerCase().contains('crystal');
 
-    return Container(
-      padding:
-          EdgeInsets.fromLTRB(compact ? 12 : 20, 10, compact ? 12 : 20, 10),
-      decoration: BoxDecoration(
-        color: const Color(0xEE090909),
-        border: Border(
-            bottom: BorderSide(color: Colors.white.withValues(alpha: .07))),
-      ),
-      child: Row(
-        children: [
-          if (!compact) ...[
-            Text(widget.title,
-                style:
-                    const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-            const SizedBox(width: 18),
-          ],
-          Expanded(
-            child: Semantics(
-              button: true,
-              label: 'Open Smart Search',
-              child: Material(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(14),
-                child: InkWell(
-                  onTap: () => widget.onSearch(''),
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    height: 48,
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: .055),
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(
+          sigmaX:
+              isGlass ? appearance.blurSigma * appearance.glassIntensity : 0,
+          sigmaY:
+              isGlass ? appearance.blurSigma * appearance.glassIntensity : 0,
+        ),
+        child: Container(
+          padding:
+              EdgeInsets.fromLTRB(compact ? 12 : 20, 10, compact ? 12 : 20, 10),
+          decoration: BoxDecoration(
+            color: Color(appearance.backgroundColor).withValues(
+              alpha: isGlass
+                  ? (appearance.cardOpacity * (1 - appearance.transparency))
+                      .clamp(.1, .92)
+                      .toDouble()
+                  : .94,
+            ),
+            border: Border(
+              bottom: BorderSide(
+                  color: Colors.white.withValues(alpha: isGlass ? .18 : .07)),
+            ),
+          ),
+          child: Row(
+            children: [
+              InterfaceBrandingLogo(
+                  mode: activeMode, width: compact ? 30 : 38, height: 28),
+              const SizedBox(width: 8),
+              if (!compact) ...[
+                Text(widget.title,
+                    style: const TextStyle(
+                        fontSize: 22, fontWeight: FontWeight.w900)),
+                const SizedBox(width: 18),
+              ],
+              Expanded(
+                child: Semantics(
+                  button: true,
+                  label: 'Open Smart Search',
+                  child: Material(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(14),
+                    child: InkWell(
+                      onTap: () => widget.onSearch(''),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: .12),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.search_rounded,
-                          color: Colors.white.withValues(alpha: .72),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            compact
-                                ? 'Search everything…'
-                                : 'Search movies, TV, music and people…',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: .65),
-                              fontSize: 14,
-                            ),
+                      child: Container(
+                        height: 48,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: .055),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: .12),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Icon(
-                          Icons.arrow_forward_rounded,
-                          size: 19,
-                          color: Colors.white.withValues(alpha: .55),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.search_rounded,
+                              color: Colors.white.withValues(alpha: .72),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                compact
+                                    ? 'Search everything…'
+                                    : 'Search movies, TV, music and people…',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: .65),
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(
+                              Icons.arrow_forward_rounded,
+                              size: 19,
+                              color: Colors.white.withValues(alpha: .55),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          if (!compact)
-            FilledButton.tonalIcon(
-              onPressed: widget.onSurpriseMe,
-              icon: const Icon(Icons.shuffle_rounded, size: 19),
-              label: const UniversalText('Surprise Me'),
-            )
-          else
-            IconButton(
-              tooltip: 'Surprise Me',
-              onPressed: widget.onSurpriseMe,
-              icon: const Icon(Icons.shuffle_rounded),
-            ),
-          IconButton(
-            tooltip: 'Switch interface experience',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                settings:
-                    const RouteSettings(name: '/app/page/interface-experience'),
-                builder: (_) => const InterfaceExperienceStudioScreen(),
+              const SizedBox(width: 8),
+              if (!compact)
+                FilledButton.tonalIcon(
+                  onPressed: widget.onSurpriseMe,
+                  icon: const Icon(Icons.shuffle_rounded, size: 19),
+                  label: const UniversalText('Surprise Me'),
+                )
+              else
+                IconButton(
+                  tooltip: 'Surprise Me',
+                  onPressed: widget.onSurpriseMe,
+                  icon: const Icon(Icons.shuffle_rounded),
+                ),
+              IconButton(
+                tooltip: 'Switch interface experience',
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    settings: const RouteSettings(
+                        name: '/app/page/interface-experience'),
+                    builder: (_) => const InterfaceExperienceStudioScreen(),
+                  ),
+                ),
+                icon: const Icon(Icons.dashboard_customize_rounded),
               ),
-            ),
-            icon: const Icon(Icons.dashboard_customize_rounded),
+              PageCustomizeButton(pageId: widget.pageId),
+            ],
           ),
-          PageCustomizeButton(pageId: widget.pageId),
-        ],
+        ),
       ),
     );
   }
@@ -5886,7 +5929,106 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _heroController;
+  final ScrollController _homeSectionsController = ScrollController();
+  final Map<String, GlobalKey> _homeSectionAnchorKeys = <String, GlobalKey>{};
+  List<String> _homeNavigableSections = <String>[];
+  int _focusedHomeSectionIndex = 0;
   PageHeroSettings _homePageHeroSettings = const PageHeroSettings();
+
+  bool _canMoveHomeSection(int direction) {
+    if (direction == 0) return false;
+    for (var distance = 1;
+        distance < _homeNavigableSections.length;
+        distance++) {
+      final nextIndex =
+          _focusedHomeSectionIndex + ((direction < 0 ? -1 : 1) * distance);
+      if (nextIndex < 0 || nextIndex >= _homeNavigableSections.length) break;
+      final section = _homeNavigableSections[nextIndex];
+      if (_homeSectionAnchorKeys[section]?.currentContext != null) return true;
+    }
+    return false;
+  }
+
+  void _focusFirstRenderableHomeSectionAfterLayout() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _homeNavigableSections.isEmpty) return;
+      final currentIndex =
+          _focusedHomeSectionIndex.clamp(0, _homeNavigableSections.length - 1);
+      final currentKey =
+          _homeSectionAnchorKeys[_homeNavigableSections[currentIndex]];
+      if (currentKey?.currentContext != null) return;
+      for (var index = 0; index < _homeNavigableSections.length; index++) {
+        final key = _homeSectionAnchorKeys[_homeNavigableSections[index]];
+        if (key?.currentContext != null) {
+          if (_focusedHomeSectionIndex != index) {
+            setState(() => _focusedHomeSectionIndex = index);
+          }
+          return;
+        }
+      }
+    });
+  }
+
+  Future<void> _moveBetweenHomeSections(int direction) async {
+    if (_homeNavigableSections.isEmpty || !_homeSectionsController.hasClients) {
+      return;
+    }
+    if (direction == 0) return;
+
+    // Some optional shelves are empty for a profile and therefore have no
+    // sliver context. Skip those entries rather than trapping the arrows.
+    for (var distance = 1;
+        distance < _homeNavigableSections.length;
+        distance++) {
+      final nextIndex =
+          _focusedHomeSectionIndex + ((direction < 0 ? -1 : 1) * distance);
+      if (nextIndex < 0 || nextIndex >= _homeNavigableSections.length) break;
+      final section = _homeNavigableSections[nextIndex];
+      final targetContext = _homeSectionAnchorKeys[section]?.currentContext;
+      if (targetContext == null) continue;
+
+      setState(() => _focusedHomeSectionIndex = nextIndex);
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      final laidOutContext = _homeSectionAnchorKeys[section]?.currentContext;
+      if (laidOutContext == null || !laidOutContext.mounted) continue;
+      await Scrollable.ensureVisible(
+        laidOutContext,
+        duration: _homePageHeroSettings.sectionSnap
+            ? const Duration(milliseconds: 460)
+            : const Duration(milliseconds: 340),
+        curve: Curves.easeInOutCubic,
+        alignment: _homePageHeroSettings.sectionSnap
+            ? (_homePageHeroSettings.peekAdjacentSections ? .08 : .02)
+            : (_homePageHeroSettings.peekAdjacentSections ? .13 : .02),
+      );
+      return;
+    }
+  }
+
+  Widget _sectionNavigationButton({required bool up, required bool enabled}) =>
+      Tooltip(
+        message: up ? 'Previous content section' : 'Next content section',
+        child: Material(
+          color: Colors.black.withValues(alpha: .66),
+          shape: const CircleBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: IconButton(
+            onPressed: enabled
+                ? () => unawaited(_moveBetweenHomeSections(up ? -1 : 1))
+                : null,
+            icon: InterfacePackIcon(
+              semantic: up ? 'previous' : 'next',
+              mode: 'classic',
+              size: 32,
+            ),
+            color: Colors.white,
+            disabledColor: Colors.white24,
+            iconSize: 32,
+            constraints: const BoxConstraints.tightFor(width: 48, height: 48),
+          ),
+        ),
+      );
 
   @override
 
@@ -5953,6 +6095,7 @@ class _HomeScreenState extends State<HomeScreen>
     PageHeroSettingsStore.revision
         .removeListener(_onHomePageHeroSettingsChanged);
     _heroController.dispose();
+    _homeSectionsController.dispose();
     super.dispose();
   }
 
@@ -5986,7 +6129,12 @@ class _HomeScreenState extends State<HomeScreen>
     final settings = widget.previewSettings ??
         HomeCustomizationStore.settingsFor(
             AppController.instance.currentProfile);
-    final homeBackground = colorFromName(settings.homeBackgroundColor);
+    final homeAppearance = InterfaceAppearanceStore.forMode('classic');
+    final homeHasBackdrop =
+        InterfaceAppearanceStore.hasStoredFile(homeAppearance.backdropPath);
+    final homeBackground = homeAppearance.backgroundColor != 0xFF080B12
+        ? Color(homeAppearance.backgroundColor)
+        : colorFromName(settings.homeBackgroundColor);
 
     final watched = controller.watched
         .where((media) => media.isAccessibleTo(profile))
@@ -6038,9 +6186,27 @@ class _HomeScreenState extends State<HomeScreen>
         settings.isSectionVisible('Hero Banner') &&
         _homePageHeroSettings.enabled &&
         homeHeroItems.isNotEmpty;
+    final navigableSections = settings.sectionOrder
+        .where((section) =>
+            section != 'Hero Banner' && settings.isSectionVisible(section))
+        .toList(growable: false);
+    _homeNavigableSections = navigableSections;
+    if (!showHero && _homePageHeroSettings.expandActiveSection) {
+      _focusFirstRenderableHomeSectionAfterLayout();
+    }
+    if (_focusedHomeSectionIndex >= navigableSections.length) {
+      _focusedHomeSectionIndex =
+          navigableSections.isEmpty ? 0 : navigableSections.length - 1;
+    }
+    final focusedHeroFreeSection = navigableSections.isEmpty
+        ? null
+        : navigableSections[
+            _focusedHomeSectionIndex.clamp(0, navigableSections.length - 1)];
 
     return Scaffold(
-      backgroundColor: homeBackground,
+      backgroundColor: homeBackground.withValues(
+        alpha: homeHasBackdrop ? .72 : 1,
+      ),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -6081,14 +6247,31 @@ class _HomeScreenState extends State<HomeScreen>
                 child: Row(
                   children: [
                     const SizedBox(width: 20),
-                    const Expanded(
-                      child: UniversalText(
-                        'Home',
-                        style: TextStyle(
-                          fontSize: 19,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.1,
-                        ),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          if (InterfaceAppearanceStore.hasStoredFile(
+                            homeAppearance.logoPath,
+                          )) ...[
+                            SizedBox(
+                              width: 82,
+                              height: 30,
+                              child: InterfaceAppearanceAsset(
+                                path: homeAppearance.logoPath,
+                                fit: BoxFit.contain,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                          ],
+                          const UniversalText(
+                            'Home',
+                            style: TextStyle(
+                              fontSize: 19,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.1,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     PageCustomizeButton(pageId: 'home'),
@@ -6203,61 +6386,126 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                   ),
                 Expanded(
-                  child: RefreshIndicator(
-                    color: Colors.white,
-                    backgroundColor: const Color(0xFF171717),
-                    onRefresh: _refresh,
-                    child: CustomScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      slivers: [
-                        if (library.isEmpty && homeRecommendations.isEmpty)
-                          const SliverFillRemaining(
-                            hasScrollBody: false,
-                            child: Center(
-                              child: Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 28),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    UniversalText(
-                                      'Your library is empty',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontSize: 25,
-                                        fontWeight: FontWeight.w800,
+                  child: Focus(
+                    autofocus: !showHero,
+                    onKeyEvent: (node, event) {
+                      if (showHero || event is! KeyDownEvent) {
+                        return KeyEventResult.ignored;
+                      }
+                      if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                        unawaited(_moveBetweenHomeSections(-1));
+                        return KeyEventResult.handled;
+                      }
+                      if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                        unawaited(_moveBetweenHomeSections(1));
+                        return KeyEventResult.handled;
+                      }
+                      return KeyEventResult.ignored;
+                    },
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        RefreshIndicator(
+                          color: Colors.white,
+                          backgroundColor: const Color(0xFF171717),
+                          onRefresh: _refresh,
+                          child: CustomScrollView(
+                            controller: _homeSectionsController,
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            slivers: [
+                              if (library.isEmpty &&
+                                  homeRecommendations.isEmpty)
+                                const SliverFillRemaining(
+                                  hasScrollBody: false,
+                                  child: Center(
+                                    child: Padding(
+                                      padding:
+                                          EdgeInsets.symmetric(horizontal: 28),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          UniversalText(
+                                            'Your library is empty',
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              fontSize: 25,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                          SizedBox(height: 8),
+                                          UniversalText(
+                                            'Please add using the 3 dots in the navbar.',
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              color: Colors.white54,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    SizedBox(height: 8),
-                                    UniversalText(
-                                      'Please add using the 3 dots in the navbar.',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: Colors.white54,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ],
+                                  ),
                                 ),
+                              for (final section in settings.sectionOrder)
+                                if (section != 'Hero Banner')
+                                  ..._anchorHomeSectionSlivers(
+                                    _buildHomeSectionSlivers(
+                                      context,
+                                      section,
+                                      settings,
+                                      watched,
+                                      continueWatching,
+                                      movies,
+                                      tvShows,
+                                      library,
+                                      homeRecommendations,
+                                      homeHeroItems: homeHeroItems,
+                                      heroController: _heroController,
+                                      profile: profile,
+                                      expanded: !showHero &&
+                                          _homePageHeroSettings
+                                              .expandActiveSection &&
+                                          section == focusedHeroFreeSection,
+                                      expandedArtworkScale:
+                                          _homePageHeroSettings
+                                              .expandedArtworkScale,
+                                    ),
+                                    key: _homeSectionAnchorKeys.putIfAbsent(
+                                        section, () => GlobalKey()),
+                                    expanded: !showHero &&
+                                        _homePageHeroSettings
+                                            .expandActiveSection &&
+                                        section == focusedHeroFreeSection,
+                                  ),
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 100)),
+                            ],
+                          ),
+                        ),
+                        if (!showHero &&
+                            _homePageHeroSettings.sectionNavigationArrows &&
+                            navigableSections.length > 1)
+                          Positioned(
+                            right: 12,
+                            top: 0,
+                            bottom: 0,
+                            child: Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _sectionNavigationButton(
+                                    up: true,
+                                    enabled: _canMoveHomeSection(-1),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _sectionNavigationButton(
+                                    up: false,
+                                    enabled: _canMoveHomeSection(1),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
-                        for (final section in settings.sectionOrder)
-                          if (section != 'Hero Banner')
-                            ..._buildHomeSectionSlivers(
-                              context,
-                              section,
-                              settings,
-                              watched,
-                              continueWatching,
-                              movies,
-                              tvShows,
-                              library,
-                              homeRecommendations,
-                              homeHeroItems: homeHeroItems,
-                              heroController: _heroController,
-                              profile: profile,
-                            ),
-                        const SliverToBoxAdapter(child: SizedBox(height: 100)),
                       ],
                     ),
                   ),
@@ -6363,6 +6611,22 @@ void _handleHomeAlbumHover(
   }
 }
 
+List<Widget> _anchorHomeSectionSlivers(
+  List<Widget> slivers, {
+  required GlobalKey key,
+  required bool expanded,
+}) {
+  if (slivers.isEmpty) return const <Widget>[];
+  return <Widget>[
+    SliverPadding(
+      key: key,
+      padding: EdgeInsets.symmetric(vertical: expanded ? 10 : 2),
+      sliver: slivers.first,
+    ),
+    ...slivers.skip(1),
+  ];
+}
+
 List<Widget> _buildHomeSectionSlivers(
   BuildContext context,
   String section,
@@ -6376,6 +6640,8 @@ List<Widget> _buildHomeSectionSlivers(
   required List<MediaItem> homeHeroItems,
   required AnimationController heroController,
   required Profile? profile,
+  bool expanded = false,
+  double expandedArtworkScale = 1.18,
 }) {
   if (!settings.isSectionVisible(section)) return const <Widget>[];
 
@@ -6440,9 +6706,17 @@ List<Widget> _buildHomeSectionSlivers(
             ]
           : const <Widget>[];
     case 'Movies by Country':
-      return _countryShelfSlivers(items: movies, sectionLabel: 'Movies');
+      return _countryShelfSlivers(
+          items: movies,
+          sectionLabel: 'Movies',
+          expanded: expanded,
+          expandedArtworkScale: expandedArtworkScale);
     case 'Shows by Country':
-      return _countryShelfSlivers(items: tvShows, sectionLabel: 'Shows');
+      return _countryShelfSlivers(
+          items: tvShows,
+          sectionLabel: 'Shows',
+          expanded: expanded,
+          expandedArtworkScale: expandedArtworkScale);
     case 'Global Top 10':
       return const <Widget>[
         SliverToBoxAdapter(
@@ -6491,22 +6765,28 @@ List<Widget> _buildHomeSectionSlivers(
       ];
     case 'Continue Watching':
       return _homeMediaRail(
-          section, continueWatching, 'Pick up where you left off');
+          section, continueWatching, 'Pick up where you left off',
+          expanded: expanded, expandedArtworkScale: expandedArtworkScale);
     case 'Recently Watched':
-      return _homeMediaRail(section, watched, 'What you watched recently');
+      return _homeMediaRail(section, watched, 'What you watched recently',
+          expanded: expanded, expandedArtworkScale: expandedArtworkScale);
     case 'Movies':
-      return _homeMediaRail(section, movies, 'From your collection');
+      return _homeMediaRail(section, movies, 'From your collection',
+          expanded: expanded, expandedArtworkScale: expandedArtworkScale);
     case 'TV Shows':
-      return _homeMediaRail(section, tvShows, 'Your series collection');
+      return _homeMediaRail(section, tvShows, 'Your series collection',
+          expanded: expanded, expandedArtworkScale: expandedArtworkScale);
     case 'New Additions':
       final items = List<MediaItem>.from(library)
         ..sort((a, b) => b.addedAt.compareTo(a.addedAt));
-      return _homeMediaRail(section, items, 'Recently added to your library');
+      return _homeMediaRail(section, items, 'Recently added to your library',
+          expanded: expanded, expandedArtworkScale: expandedArtworkScale);
     case 'All Library':
-      return _homeMediaRail(section, library, 'Everything in your library');
+      return _homeMediaRail(section, library, 'Everything in your library',
+          expanded: expanded, expandedArtworkScale: expandedArtworkScale);
     case 'Library Recommendations':
-      return _homeMediaRail(
-          section, recommendations, 'Picked for your profile');
+      return _homeMediaRail(section, recommendations, 'Picked for your profile',
+          expanded: expanded, expandedArtworkScale: expandedArtworkScale);
     case 'Themed Episodes':
       return const <Widget>[
         SliverToBoxAdapter(child: HomeThemedEpisodesSection())
@@ -6541,7 +6821,11 @@ List<Widget> _buildHomeSectionSlivers(
       ];
     case 'Music & Film':
       return settings.showMusic
-          ? <Widget>[SliverToBoxAdapter(child: _HomeContinueListeningSection())]
+          ? <Widget>[
+              SliverToBoxAdapter(child: _HomeContinueListeningSection()),
+              const SliverToBoxAdapter(
+                  child: HomeReasonedMusicRecommendations()),
+            ]
           : const <Widget>[];
     case 'Seasonal Collections':
       return <Widget>[SliverToBoxAdapter(child: _HomeSeasonalCollections())];
@@ -6553,8 +6837,10 @@ List<Widget> _buildHomeSectionSlivers(
 List<Widget> _homeMediaRail(
   String title,
   List<MediaItem> items,
-  String subtitle,
-) {
+  String subtitle, {
+  bool expanded = false,
+  double expandedArtworkScale = 1.18,
+}) {
   if (items.isEmpty) return const <Widget>[];
   return <Widget>[
     SliverToBoxAdapter(
@@ -6569,6 +6855,8 @@ List<Widget> _homeMediaRail(
         media: items,
         showOwnership: title == 'Library Recommendations',
         enableHomePreview: true,
+        expanded: expanded,
+        expandedArtworkScale: expandedArtworkScale,
       ),
     ),
   ];
@@ -6577,6 +6865,8 @@ List<Widget> _homeMediaRail(
 List<Widget> _countryShelfSlivers({
   required List<MediaItem> items,
   required String sectionLabel,
+  bool expanded = false,
+  double expandedArtworkScale = 1.18,
 }) {
   final grouped = <String, List<MediaItem>>{};
   for (final media in items) {
@@ -6606,7 +6896,12 @@ List<Widget> _countryShelfSlivers({
       ),
     ));
     result.add(SliverToBoxAdapter(
-      child: MediaHorizontalList(media: titles, enableHomePreview: true),
+      child: MediaHorizontalList(
+        media: titles,
+        enableHomePreview: true,
+        expanded: expanded,
+        expandedArtworkScale: expandedArtworkScale,
+      ),
     ));
   }
   return result;
@@ -7354,18 +7649,24 @@ class MediaHorizontalList extends StatelessWidget {
   final List<MediaItem> media;
   final bool showOwnership;
   final bool enableHomePreview;
+  final bool expanded;
+  final double expandedArtworkScale;
 
   const MediaHorizontalList({
     super.key,
     required this.media,
     this.showOwnership = false,
     this.enableHomePreview = false,
+    this.expanded = false,
+    this.expandedArtworkScale = 1.18,
   });
 
   @override
   Widget build(BuildContext context) {
+    final scale =
+        expanded ? expandedArtworkScale.clamp(1, 1.5).toDouble() : 1.0;
     return HomeArrowRail(
-      height: 245,
+      height: 245 * scale,
       itemCount: media.length,
       separatorExtent: 12,
       padding: const EdgeInsets.symmetric(horizontal: 48),
@@ -7373,6 +7674,8 @@ class MediaHorizontalList extends StatelessWidget {
         media: media[index],
         showOwnership: showOwnership,
         enableHomePreview: enableHomePreview,
+        expanded: expanded,
+        expandedArtworkScale: scale,
       ),
     );
   }
@@ -7386,12 +7689,16 @@ class MediaCard extends StatefulWidget {
   final MediaItem media;
   final bool showOwnership;
   final bool enableHomePreview;
+  final bool expanded;
+  final double expandedArtworkScale;
 
   const MediaCard({
     super.key,
     required this.media,
     this.showOwnership = false,
     this.enableHomePreview = false,
+    this.expanded = false,
+    this.expandedArtworkScale = 1.18,
   });
 
   @override
@@ -7429,7 +7736,9 @@ class _MediaCardState extends State<MediaCard> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
-        width: _hovering && widget.enableHomePreview ? 180 : 145,
+        width: _hovering && widget.enableHomePreview
+            ? (widget.expanded ? 180 * widget.expandedArtworkScale : 180)
+            : (widget.expanded ? 145 * widget.expandedArtworkScale : 145),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           boxShadow: _hovering && widget.enableHomePreview
@@ -9626,15 +9935,15 @@ class _MainProfileAvatar extends StatelessWidget {
 
     if (avatar.isNotEmpty) {
       final uri = Uri.tryParse(avatar);
-      final file = uri?.scheme == 'file' ? File.fromUri(uri!) : File(avatar);
-      if (file.existsSync()) {
+      final localPath = uri?.scheme == 'file' ? uri!.toFilePath() : avatar;
+      if (InterfaceAppearanceStore.hasStoredFile(localPath)) {
         return ClipOval(
-          child: Image.file(
-            file,
+          child: InterfaceAppearanceAsset(
+            path: localPath,
             width: size,
             height: size,
             fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => _fallback(),
+            placeholder: _fallback(),
           ),
         );
       }

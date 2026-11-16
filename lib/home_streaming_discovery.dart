@@ -32,6 +32,9 @@ import 'localization.dart';
 import 'player.dart';
 import 'physical_media_library.dart';
 import 'recommendation_ownership.dart';
+import 'media_recommendation_kinds.dart';
+import 'music_catalog_screen.dart'
+    show MusicAlbumPageScreen, SpotifyAlbumDetailsScreen;
 import 'core/services/cinematic_title_metadata_service.dart';
 import 'media_artwork_auto_resolver.dart';
 import 'energy_saver.dart';
@@ -107,6 +110,98 @@ MediaCollection? _makeVirtualThemeCollection({
     isShared: false,
     mediaIds: matches.map((media) => media.id).toList(growable: false),
   );
+}
+
+String _musicLookupKey(String value) => value
+    .trim()
+    .toLowerCase()
+    .replaceAll(RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"), '');
+
+bool _isLocalPlayableMusicTrack(MusicTrack track) =>
+    !_isMusicDemoTrackForHome(track) && track.audioUrl?.trim().isNotEmpty == true;
+
+bool _isMusicDemoTrackForHome(MusicTrack track) =>
+    track.id.startsWith('demo-catalog-track-') ||
+    track.id.startsWith('demo-preview-album-track-');
+
+List<Map<String, dynamic>> _localRowsForAlbum(String title, String artist) {
+  final wantedTitle = _musicLookupKey(title);
+  final wantedArtist = _musicLookupKey(artist);
+  return <Map<String, dynamic>>[
+    for (final track in MusicLibraryStore.instance.tracks)
+      if (!_isMusicDemoTrackForHome(track) &&
+          !track.catalogOnly &&
+          track.audioUrl?.trim().isNotEmpty == true &&
+          _musicLookupKey(track.album) == wantedTitle &&
+          (wantedArtist.isEmpty ||
+              _musicLookupKey(track.artist) == wantedArtist ||
+              _musicLookupKey(track.artist).contains(wantedArtist) ||
+              wantedArtist.contains(_musicLookupKey(track.artist))))
+        <String, dynamic>{
+          'id': track.id,
+          'title': track.title,
+          'artist': track.artist,
+          'album': track.album,
+          'audioUrl': track.audioUrl ?? '',
+          'artworkUrl': track.artworkUrl ?? '',
+          'durationMs': track.duration.inMilliseconds,
+        },
+  ];
+}
+
+void _playRecommendedLocalTrack(Map<String, dynamic> row) {
+  final id = row['id']?.toString() ?? '';
+  if (id.isEmpty) return;
+  for (final track in MusicLibraryStore.instance.tracks) {
+    if (track.id == id &&
+        !_isMusicDemoTrackForHome(track) &&
+        !track.catalogOnly &&
+        track.audioUrl?.trim().isNotEmpty == true) {
+      unawaited(MusicPlaybackController.instance.play(track));
+      return;
+    }
+  }
+}
+
+void _openRecommendedMedia(BuildContext context, MediaItem media) {
+  final controller = AppController.instance;
+  final kind = RecommendationMediaKinds.classify(media);
+  final ownedRecord = RecommendationOwnershipMatcher.findOwnedMediaForMedia(
+    media: media,
+    controller: controller,
+  );
+  final localTracks = kind == RecommendationMediaKind.musicAlbum
+      ? _localRowsForAlbum(
+          media.title,
+          media.music.isEmpty ? '' : media.music.first,
+        )
+      : const <Map<String, dynamic>>[];
+  final spotifyPrefix = 'spotify:album:';
+  Navigator.of(context).push(MaterialPageRoute<void>(
+    settings: RouteSettings(name: '/app/media/${media.id}'),
+    builder: (_) {
+      if (kind != RecommendationMediaKind.musicAlbum) {
+        return MediaDetailsScreen(media: media);
+      }
+      if (media.id.startsWith(spotifyPrefix)) {
+        return SpotifyAlbumDetailsScreen(
+          albumTitle: media.title,
+          spotifyId: media.id.substring(spotifyPrefix.length),
+          isOwned: ownedRecord != null || localTracks.isNotEmpty,
+          localMedia: ownedRecord,
+          localArtistName: media.music.join(', '),
+          localTracks: localTracks,
+          onPlayLocalTrack: _playRecommendedLocalTrack,
+        );
+      }
+      return MusicAlbumPageScreen(
+        media: ownedRecord ?? media,
+        isOwned: ownedRecord != null,
+        localTracks: localTracks,
+        onPlayLocalTrack: _playRecommendedLocalTrack,
+      );
+    },
+  ));
 }
 
 /// Streaming-style navigation row for the Home screen's primary destinations.
@@ -2608,7 +2703,9 @@ class HomeBecauseYouWatchedPeopleShelves extends StatelessWidget {
     ]) {
       if (item.id.isNotEmpty &&
           item.isAccessibleTo(controller.currentProfile) &&
-          !isExcludedEntertainmentType(item.type)) {
+          !isExcludedEntertainmentType(item.type) &&
+          RecommendationMediaKinds.classify(item) !=
+              RecommendationMediaKind.other) {
         catalog.putIfAbsent(item.id, () => item);
       }
     }
@@ -2638,7 +2735,8 @@ class HomeBecauseYouWatchedPeopleShelves extends StatelessWidget {
                 <String>{
                   ...candidate.actors,
                   ...candidate.directors,
-                  ...candidate.writers
+                  ...candidate.writers,
+                  ...candidate.music
                 }.any((credit) => _norm(credit) == normalizedPerson))
             .toList();
         if (matches.isEmpty) continue;
@@ -2656,28 +2754,51 @@ class HomeBecauseYouWatchedPeopleShelves extends StatelessWidget {
         _DiscoverySectionHeader(
             title: 'Because you saw ${shelf.person} in ${shelf.seed.title}',
             subtitle:
-                'More titles with this actor, actress, director, or screenwriter; status shows ownership and watch history'),
-        HomeArrowRail(
-            height: 210,
-            itemCount: shelf.items.length,
-            separatorExtent: 12,
-            padding: const EdgeInsets.symmetric(horizontal: 48),
-            itemBuilder: (context, index) {
-              final media = shelf.items[index];
-              return _DiscoveryMediaCard(
+                'More films, shows, and music albums connected to this credited person; ownership and watch status are shown separately'),
+        for (final kind in RecommendationMediaKinds.displayOrder)
+          if ((RecommendationMediaKinds.group(shelf.items)[kind] ??
+                  const <MediaItem>[])
+              .isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+              child: Text(
+                RecommendationMediaKinds.pluralLabel(kind),
+                style: const TextStyle(
+                  color: Color(0xFFB9AEFF),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            HomeArrowRail(
+              height: 210,
+              itemCount: RecommendationMediaKinds.group(shelf.items)[kind]!.length,
+              separatorExtent: 12,
+              padding: const EdgeInsets.symmetric(horizontal: 48),
+              itemBuilder: (context, index) {
+                final media = RecommendationMediaKinds.group(shelf.items)[kind]![index];
+                final ownedRecord = RecommendationOwnershipMatcher.findOwnedMediaForMedia(
+                  media: media,
+                  controller: controller,
+                );
+                final isOwned = ownedRecord != null;
+                final isWatched = isOwned &&
+                    kind != RecommendationMediaKind.musicAlbum &&
+                    controller.watched.any((item) => item.id == ownedRecord.id);
+                return _DiscoveryMediaCard(
                   title: media.title,
                   subtitle:
-                      '${media.displayYearLabel ?? ''} ${media.type}'.trim(),
+                      '${RecommendationMediaKinds.label(kind)}${media.displayYearLabel == null ? '' : ' • ${media.displayYearLabel}'}',
                   imageUrl: media.imageUrl,
                   media: media,
-                  isOwned: controller.isOwned(media.id),
-                  isWatched:
-                      controller.watched.any((item) => item.id == media.id),
-                  onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                          settings: const RouteSettings(name: '/app/details'),
-                          builder: (_) => MediaDetailsScreen(media: media))));
-            }),
+                  isOwned: isOwned,
+                  isWatched: isWatched,
+                  showWatchState: kind != RecommendationMediaKind.musicAlbum,
+                  onTap: () => _openRecommendedMedia(context, media),
+                );
+              },
+            ),
+          ],
       ],
     ]);
   }
@@ -2857,18 +2978,17 @@ class HomeReasonedRecommendationShelves extends StatelessWidget {
               final isWatched = ownedRecord != null &&
                   (controller.isWatched(ownedRecord.id) ||
                       controller.getPlaybackProgress(ownedRecord.id) >= 0.95);
+              final kind = RecommendationMediaKinds.classify(media);
               return _DiscoveryMediaCard(
                 title: media.title,
                 subtitle:
-                    '${media.displayYearLabel ?? ''} ${media.type}'.trim(),
+                    '${RecommendationMediaKinds.label(kind)}${media.displayYearLabel == null ? '' : ' • ${media.displayYearLabel}'}',
                 imageUrl: media.imageUrl,
                 media: media,
                 isOwned: isOwned,
                 isWatched: isWatched,
-                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                  settings: const RouteSettings(name: '/app/details'),
-                  builder: (_) => MediaDetailsScreen(media: media),
-                )),
+                showWatchState: kind != RecommendationMediaKind.musicAlbum,
+                onTap: () => _openRecommendedMedia(context, media),
               );
             },
           ),
@@ -2919,7 +3039,7 @@ class HomeReasonedRecommendationShelves extends StatelessWidget {
     if (watchedSeed != null) {
       children.add(_mediaShelf(
         context,
-        'Because you watched “${watchedSeed.title}”',
+        'Because you saw “${watchedSeed.title}”',
         'Recommended from your viewing history and related catalog metadata',
         _related(watchedSeed),
       ));
@@ -3037,6 +3157,426 @@ class HomeReasonedRecommendationShelves extends StatelessWidget {
   }
 }
 
+class _HomeMusicAlbumRecommendation {
+  const _HomeMusicAlbumRecommendation({
+    required this.spotifyId,
+    required this.title,
+    required this.artist,
+    this.imageUrl,
+    this.releaseDate,
+  });
+
+  final String spotifyId;
+  final String title;
+  final String artist;
+  final String? imageUrl;
+  final String? releaseDate;
+}
+
+/// Home recommendations from the album and artist a profile actually listened
+/// to. Online catalog results remain explicitly marked as not owned unless a
+/// matching library album or playable local album tracks exist.
+class HomeReasonedMusicRecommendations extends StatefulWidget {
+  const HomeReasonedMusicRecommendations({super.key});
+
+  @override
+  State<HomeReasonedMusicRecommendations> createState() =>
+      _HomeReasonedMusicRecommendationsState();
+}
+
+class _HomeReasonedMusicRecommendationsState
+    extends State<HomeReasonedMusicRecommendations> {
+  MusicTrack? _seed;
+  List<_HomeMusicAlbumRecommendation> _sameArtistAlbums = const [];
+  List<_HomeMusicAlbumRecommendation> _relatedArtistAlbums = const [];
+  bool _loading = false;
+  int _request = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    MusicLibraryStore.instance.addListener(_refreshSeed);
+    MusicPlaybackController.instance.addListener(_refreshSeed);
+    AppController.instance.addListener(_refreshSeed);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshSeed());
+  }
+
+  @override
+  void dispose() {
+    MusicLibraryStore.instance.removeListener(_refreshSeed);
+    MusicPlaybackController.instance.removeListener(_refreshSeed);
+    AppController.instance.removeListener(_refreshSeed);
+    super.dispose();
+  }
+
+  MusicTrack? _chooseSeed() {
+    final profile = AppController.instance.currentProfile;
+    bool allowed(MusicTrack track) =>
+        track.album.trim().isNotEmpty &&
+        track.artist.trim().isNotEmpty &&
+        _isLocalPlayableMusicTrack(track) &&
+        (!profileBlocksExplicitMusic(profile) || !track.explicit) &&
+        (!profileBlocksMatureMusic(profile) || !track.matureTheme);
+    final current = MusicPlaybackController.instance.currentTrack;
+    if (current != null && allowed(current)) return current;
+    final store = MusicLibraryStore.instance;
+    final listened = store.tracks
+        .where((track) =>
+            (store.listenCounts[track.id] ?? 0) > 0 && allowed(track))
+        .toList()
+      ..sort((a, b) => (store.listenCounts[b.id] ?? 0)
+          .compareTo(store.listenCounts[a.id] ?? 0));
+    return listened.isEmpty ? null : listened.first;
+  }
+
+  void _refreshSeed() {
+    final selected = _chooseSeed();
+    if (selected?.id == _seed?.id) {
+      if (mounted) setState(() {});
+      return;
+    }
+    final request = ++_request;
+    if (!mounted) return;
+    setState(() {
+      _seed = selected;
+      _sameArtistAlbums = const [];
+      _relatedArtistAlbums = const [];
+      _loading = selected != null;
+    });
+    if (selected != null) unawaited(_load(selected, request));
+  }
+
+  List<Map<String, dynamic>> _rows(dynamic raw) => raw is List
+      ? raw.whereType<Map>().map((row) => Map<String, dynamic>.from(row)).toList()
+      : <Map<String, dynamic>>[];
+
+  Future<String?> _spotifyArtistId(String artist) async {
+    final result = await AppController.instance.backendApi.searchMusicCatalog(
+      artist,
+      type: 'artist',
+      limit: 5,
+    );
+    final spotify = result['spotify'] is Map
+        ? Map<String, dynamic>.from(result['spotify'] as Map)
+        : <String, dynamic>{};
+    final artists = _rows(spotify['artists']);
+    for (final candidate in artists) {
+      if (_musicLookupKey(candidate['name']?.toString() ?? '') ==
+          _musicLookupKey(artist)) {
+        return candidate['id']?.toString();
+      }
+    }
+    return artists.length == 1 ? artists.first['id']?.toString() : null;
+  }
+
+  List<_HomeMusicAlbumRecommendation> _albumRows(
+      dynamic raw, String artist, {Set<String> excludeTitles = const {}}) {
+    final seen = <String>{};
+    final excluded = excludeTitles.map(_musicLookupKey).toSet();
+    final output = <_HomeMusicAlbumRecommendation>[];
+    for (final row in _rows(raw)) {
+      final id = row['id']?.toString().trim() ?? '';
+      final title = (row['title'] ?? row['name'])?.toString().trim() ?? '';
+      if (id.isEmpty || title.isEmpty || excluded.contains(_musicLookupKey(title))) {
+        continue;
+      }
+      final key = _musicLookupKey(title);
+      if (!seen.add(key)) continue;
+      output.add(_HomeMusicAlbumRecommendation(
+        spotifyId: id,
+        title: title,
+        artist: (row['artist'] ?? artist).toString().trim().isEmpty
+            ? artist
+            : (row['artist'] ?? artist).toString().trim(),
+        imageUrl: (row['imageUrl'] ?? row['coverArtUrl'])?.toString(),
+        releaseDate: (row['releaseDate'] ?? row['release_date'])?.toString(),
+      ));
+    }
+    return output;
+  }
+
+  Future<List<_HomeMusicAlbumRecommendation>> _albumsForArtist(
+    String artist, {
+    Set<String> excludeTitles = const {},
+  }) async {
+    final spotifyId = await _spotifyArtistId(artist);
+    if (spotifyId == null || spotifyId.trim().isEmpty) return const [];
+    final page = await AppController.instance.backendApi
+        .getSpotifyArtistAlbums(spotifyId, limit: 10, offset: 0);
+    return _albumRows(page['items'], artist, excludeTitles: excludeTitles);
+  }
+
+  Future<void> _load(MusicTrack seed, int request) async {
+    try {
+      if (!AppController.instance.isBackendAuthenticated) return;
+      final sameArtistFuture = _albumsForArtist(
+        seed.artist,
+        excludeTitles: <String>{seed.album},
+      );
+      final relatedPayload = await AppController.instance.backendApi
+          .getRelatedMusicArtists(seed.artist, limit: 4);
+      if (!mounted || request != _request) return;
+      final relatedArtists = _rows(relatedPayload['items'])
+          .map((row) => (row['name'] ?? row['artist'] ?? '').toString().trim())
+          .where((name) => name.isNotEmpty &&
+              _musicLookupKey(name) != _musicLookupKey(seed.artist))
+          .toList(growable: false);
+      final sameArtist = await sameArtistFuture;
+      final relatedAlbums = <_HomeMusicAlbumRecommendation>[];
+      for (final artist in relatedArtists.take(2)) {
+        try {
+          relatedAlbums.addAll(await _albumsForArtist(artist));
+        } catch (_) {
+          // One unavailable artist must not hide the remaining suggestions.
+        }
+        if (!mounted || request != _request) return;
+      }
+      final seen = <String>{};
+      final deduplicated = relatedAlbums.where((album) {
+        final key = '${_musicLookupKey(album.artist)}:${_musicLookupKey(album.title)}';
+        return seen.add(key);
+      }).take(12).toList(growable: false);
+      if (mounted && request == _request) {
+        setState(() {
+          _sameArtistAlbums = sameArtist.take(12).toList(growable: false);
+          _relatedArtistAlbums = deduplicated;
+        });
+      }
+    } catch (_) {
+      // The section remains available from local data when the provider is offline.
+    } finally {
+      if (mounted && request == _request) setState(() => _loading = false);
+    }
+  }
+
+  MediaItem? _ownedAlbum(_HomeMusicAlbumRecommendation album) {
+    final controller = AppController.instance;
+    final wantedTitle = _musicLookupKey(album.title);
+    final wantedArtist = _musicLookupKey(album.artist);
+    for (final item in controller.library) {
+      if (!controller.isOwned(item.id) ||
+          RecommendationMediaKinds.classify(item) !=
+              RecommendationMediaKind.musicAlbum ||
+          _musicLookupKey(item.title) != wantedTitle ||
+          !item.isAccessibleTo(controller.currentProfile)) {
+        continue;
+      }
+      final artists = item.music.map(_musicLookupKey).toSet();
+      if (artists.isEmpty || artists.contains(wantedArtist)) return item;
+    }
+    return null;
+  }
+
+  void _openAlbum(BuildContext context, _HomeMusicAlbumRecommendation album) {
+    final localMedia = _ownedAlbum(album);
+    final localTracks = _localRowsForAlbum(album.title, album.artist);
+    final owned = localMedia != null || localTracks.isNotEmpty;
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      settings: RouteSettings(name: '/app/music/album/${album.spotifyId}'),
+      builder: (_) => localMedia != null
+          ? MusicAlbumPageScreen(
+              media: localMedia,
+              isOwned: true,
+              localTracks: localTracks,
+              onPlayLocalTrack: _playRecommendedLocalTrack,
+            )
+          : SpotifyAlbumDetailsScreen(
+              albumTitle: album.title,
+              spotifyId: album.spotifyId,
+              isOwned: owned,
+              localArtistName: album.artist,
+              localTracks: localTracks,
+              onPlayLocalTrack: _playRecommendedLocalTrack,
+            ),
+    ));
+  }
+
+  Widget _albumCard(_HomeMusicAlbumRecommendation album) {
+    final localMedia = _ownedAlbum(album);
+    final localTracks = _localRowsForAlbum(album.title, album.artist);
+    final owned = localMedia != null || localTracks.isNotEmpty;
+    final date = DateTime.tryParse(album.releaseDate ?? '');
+    return SizedBox(
+      width: 148,
+      child: Material(
+        color: _discoveryPanel,
+        borderRadius: BorderRadius.circular(14),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => _openAlbum(context, album),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(
+              child: Stack(fit: StackFit.expand, children: [
+                if ((album.imageUrl ?? '').startsWith('http'))
+                  CachedNetworkImage(
+                    imageUrl: album.imageUrl!,
+                    fit: BoxFit.contain,
+                    placeholder: (_, __) => const ColoredBox(
+                      color: Color(0xFF24242B),
+                      child: Center(child: Icon(Icons.album_outlined)),
+                    ),
+                    errorWidget: (_, __, ___) => const ColoredBox(
+                      color: Color(0xFF24242B),
+                      child: Center(child: Icon(Icons.album_outlined)),
+                    ),
+                  )
+                else
+                  const ColoredBox(
+                    color: Color(0xFF24242B),
+                    child: Center(child: Icon(Icons.album_outlined, size: 38)),
+                  ),
+                Positioned(
+                  left: 6,
+                  top: 6,
+                  child: RecommendationOwnershipBadge(
+                    isOwned: owned,
+                    showWatchState: false,
+                    compact: true,
+                  ),
+                ),
+                if (localTracks.isNotEmpty &&
+                    localTracks.any((row) =>
+                        (MusicLibraryStore.instance.listenCounts[
+                                row['id']?.toString() ?? ''] ??
+                            0) >
+                        0))
+                  const Positioned(
+                    right: 6,
+                    top: 6,
+                    child: _HomeListenedBadge(),
+                  ),
+              ]),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(8, 7, 8, 0),
+              child: Text('MUSIC ALBUM',
+                  style: TextStyle(
+                    color: Color(0xFFB9AEFF),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: .4,
+                  )),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 2, 8, 2),
+              child: Text(album.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 7),
+              child: Text(
+                '${album.artist}${date == null ? '' : ' • ${date.year}'}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white54, fontSize: 10),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final seed = _seed;
+    if (seed == null) return const SizedBox.shrink();
+    final localArtistAlbums = AppController.instance.library
+        .where((item) =>
+            AppController.instance.isOwned(item.id) &&
+            RecommendationMediaKinds.classify(item) ==
+                RecommendationMediaKind.musicAlbum &&
+            item.isAccessibleTo(AppController.instance.currentProfile) &&
+            item.music.any((name) =>
+                _musicLookupKey(name) == _musicLookupKey(seed.artist)) &&
+            _musicLookupKey(item.title) != _musicLookupKey(seed.album))
+        .toList(growable: false);
+    final sameArtistItems = <_HomeMusicAlbumRecommendation>[
+      ..._sameArtistAlbums,
+      for (final item in localArtistAlbums)
+        _HomeMusicAlbumRecommendation(
+          spotifyId: item.id,
+          title: item.title,
+          artist: seed.artist,
+          imageUrl: item.imageUrl,
+          releaseDate: item.releaseDate?.toIso8601String(),
+        ),
+    ];
+    final uniqueSameArtist = <String, _HomeMusicAlbumRecommendation>{};
+    for (final album in sameArtistItems) {
+      uniqueSameArtist.putIfAbsent(_musicLookupKey(album.title), () => album);
+    }
+    final related = _relatedArtistAlbums;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _DiscoverySectionHeader(
+        title: 'Because you listened to “${seed.album}”',
+        subtitle: 'More albums by ${seed.artist}; ownership is shown on each album',
+      ),
+      if (_loading && uniqueSameArtist.isEmpty)
+        const Padding(
+          padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
+          child: LinearProgressIndicator(minHeight: 2),
+        )
+      else if (uniqueSameArtist.isEmpty)
+        const Padding(
+          padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
+          child: Text('No other albums by this artist were found yet.',
+              style: TextStyle(color: Colors.white54, fontSize: 12)),
+        )
+      else
+        HomeArrowRail(
+          height: 198,
+          itemCount: uniqueSameArtist.length,
+          separatorExtent: 12,
+          padding: const EdgeInsets.symmetric(horizontal: 48),
+          itemBuilder: (context, index) =>
+              _albumCard(uniqueSameArtist.values.elementAt(index)),
+        ),
+      const SizedBox(height: 12),
+      _DiscoverySectionHeader(
+        title: 'Because you like ${seed.artist}',
+        subtitle: 'Albums from related artists based on music catalog relationships',
+      ),
+      if (_loading && related.isEmpty)
+        const Padding(
+          padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
+          child: LinearProgressIndicator(minHeight: 2),
+        )
+      else if (related.isEmpty)
+        const Padding(
+          padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
+          child: Text('Related artist albums will appear when the music catalog is connected.',
+              style: TextStyle(color: Colors.white54, fontSize: 12)),
+        )
+      else
+        HomeArrowRail(
+          height: 198,
+          itemCount: related.length,
+          separatorExtent: 12,
+          padding: const EdgeInsets.symmetric(horizontal: 48),
+          itemBuilder: (context, index) => _albumCard(related[index]),
+        ),
+    ]);
+  }
+}
+
+class _HomeListenedBadge extends StatelessWidget {
+  const _HomeListenedBadge();
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        decoration: BoxDecoration(
+          color: const Color(0xE817171D),
+          border: Border.all(color: const Color(0xFF65D98A)),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: const Text('LISTENED',
+            style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900)),
+      );
+}
+
 class _HomeExternalTitleRecommendationShelves extends StatefulWidget {
   const _HomeExternalTitleRecommendationShelves({
     required this.watchedSeed,
@@ -3147,7 +3687,7 @@ class _HomeExternalTitleRecommendationShelvesState
     }
     final title = reason == 'liked'
         ? 'Because you liked “${seed.title}”'
-        : 'Because you watched “${seed.title}”';
+        : 'Because you saw “${seed.title}”';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -3303,6 +3843,29 @@ class _HomeExternalPeopleRecommendationShelvesState
     }
   }
 
+  Widget _personMediaRail(
+      String label, List<CinematicTitleRecommendation> items) {
+    if (items.isEmpty) return const SizedBox.shrink();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+        child: Text(label,
+            style: const TextStyle(
+                color: Color(0xFFB9AEFF),
+                fontSize: 11,
+                fontWeight: FontWeight.w900)),
+      ),
+      HomeArrowRail(
+        height: 260,
+        itemCount: items.length,
+        separatorExtent: 12,
+        padding: const EdgeInsets.symmetric(horizontal: 48),
+        itemBuilder: (context, index) =>
+            _HomeTmdbRecommendationCard(recommendation: items[index]),
+      ),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final source = _source;
@@ -3321,16 +3884,15 @@ class _HomeExternalPeopleRecommendationShelvesState
           _DiscoverySectionHeader(
             title: 'Because you saw ${shelf.person} in “${source.title}”',
             subtitle:
-                'More movies and shows featuring ${shelf.person}; badges show ownership and watch history',
+                'Film and TV recommendations featuring ${shelf.person}; each card shows ownership and watch history',
           ),
-          HomeArrowRail(
-            height: 260,
-            itemCount: shelf.items.length,
-            separatorExtent: 12,
-            padding: const EdgeInsets.symmetric(horizontal: 48),
-            itemBuilder: (context, index) => _HomeTmdbRecommendationCard(
-              recommendation: shelf.items[index],
-            ),
+          _personMediaRail(
+            'Films',
+            shelf.items.where((item) => !item.isTv).toList(growable: false),
+          ),
+          _personMediaRail(
+            'TV Shows',
+            shelf.items.where((item) => item.isTv).toList(growable: false),
           ),
         ],
       ],
@@ -5265,6 +5827,7 @@ class _DiscoveryMediaCard extends StatefulWidget {
   final bool posterOnly;
   final bool? isOwned;
   final bool isWatched;
+  final bool showWatchState;
 
   const _DiscoveryMediaCard({
     required this.title,
@@ -5276,6 +5839,7 @@ class _DiscoveryMediaCard extends StatefulWidget {
     this.posterOnly = false,
     this.isOwned,
     this.isWatched = false,
+    this.showWatchState = true,
   });
 
   @override
@@ -5387,10 +5951,12 @@ class _DiscoveryMediaCardState extends State<_DiscoveryMediaCard> {
                             child: RecommendationOwnershipBadge(
                               isOwned: widget.isOwned!,
                               isWatched: widget.isWatched,
+                              showWatchState: widget.showWatchState,
                               compact: true,
                             ),
                           ),
-                        if (widget.isWatched || widget.isOwned == true)
+                        if (widget.showWatchState &&
+                            (widget.isWatched || widget.isOwned == true))
                           Positioned(
                             left: 7,
                             bottom: 7,

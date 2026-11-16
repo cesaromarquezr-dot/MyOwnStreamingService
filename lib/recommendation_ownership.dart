@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'app_core.dart';
 import 'core/services/cinematic_title_metadata_service.dart';
+import 'media_recommendation_kinds.dart';
 
 /// Resolves recommended titles against the active profile's real library.
 ///
@@ -88,6 +89,36 @@ class RecommendationOwnershipMatcher {
     required AppController controller,
   }) {
     if (controller.isOwned(media.id)) return media;
+    if (RecommendationMediaKinds.classify(media) ==
+        RecommendationMediaKind.musicAlbum) {
+      final wantedTitle = normalizeTitle(media.title);
+      final wantedArtists = media.music
+          .map(normalizeTitle)
+          .where((value) => value.isNotEmpty)
+          .toSet();
+      for (final candidate in _ownedLibrary(controller)) {
+        if (RecommendationMediaKinds.classify(candidate) !=
+                RecommendationMediaKind.musicAlbum ||
+            normalizeTitle(candidate.title) != wantedTitle) {
+          continue;
+        }
+        final candidateArtists = candidate.music
+            .map(normalizeTitle)
+            .where((value) => value.isNotEmpty)
+            .toSet();
+        // Album title alone is not a safe identity when different artists
+        // have released same-named albums. Match the credited artist whenever
+        // either record has artist metadata.
+        if (wantedArtists.isNotEmpty &&
+            candidateArtists.isNotEmpty &&
+            wantedArtists.intersection(candidateArtists).isEmpty) {
+          continue;
+        }
+        if (wantedArtists.isNotEmpty && candidateArtists.isEmpty) continue;
+        return candidate;
+      }
+      return null;
+    }
     return _findOwnedMatch(
       title: media.title,
       isTv: media.isSeries,
@@ -168,12 +199,16 @@ class RecommendationOwnershipBadge extends StatelessWidget {
     this.isWatched = false,
     this.watchedLabel = 'Watched',
     this.compact = false,
+    this.showWatchState = true,
   });
 
   final bool isOwned;
   final bool isWatched;
   final String watchedLabel;
   final bool compact;
+  /// Set false for recommendations such as albums when this card has no
+  /// trustworthy listened/unlistened signal; the badge then says Owned only.
+  final bool showWatchState;
 
   @override
   Widget build(BuildContext context) {
@@ -184,12 +219,14 @@ class RecommendationOwnershipBadge extends StatelessWidget {
             : const Color(0xFF65B9FF);
     final label = !isOwned
         ? 'Not owned'
-        : isWatched
-            ? 'Owned · $watchedLabel'
-            : 'Owned · Unwatched';
+        : !showWatchState
+            ? 'Owned'
+            : isWatched
+                ? 'Owned · $watchedLabel'
+                : 'Owned · Unwatched';
     final icon = !isOwned
         ? Icons.remove_shopping_cart_outlined
-        : isWatched
+        : showWatchState && isWatched
             ? Icons.check_circle_rounded
             : Icons.video_library_outlined;
     return Container(

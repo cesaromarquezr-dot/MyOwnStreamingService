@@ -1,6 +1,10 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../app_core.dart';
+import '../connected_command_center.dart' hide MediaHealthScreen;
+import '../library_privacy.dart';
+import '../entertainment_studio.dart';
+import 'integration_studio_screen.dart';
 import '../library_protection_center.dart';
 import '../media_health_screen.dart';
 import '../presence/account_profile_presence_service.dart';
@@ -12,6 +16,7 @@ import '../widgets/account_profile_presence_strip.dart';
 import 'living_room_controls_screen.dart';
 import 'offline_sync_center_screen.dart';
 import 'personal_discovery_lists_screen.dart';
+import 'background_task_center_screen.dart';
 import 'smart_media_import_center_screen.dart';
 
 /// Cross-feature dashboard for the current profile/account.
@@ -61,6 +66,37 @@ class EntertainmentCommandCenterScreen extends StatelessWidget {
                 'Surprise Me, Group Watch, X-Ray, previews, curated channels, trending lists and connected discovery.',
             onTap: () => _open(context, const StreamingServicesHubScreen())),
         _CommandAction(
+            icon: Icons.search_rounded,
+            title: 'Universal Search & Commands',
+            subtitle:
+                'Search across your media library and open shared discovery commands.',
+            onTap: () => _open(context, const UniversalSearchHubScreen())),
+        _CommandAction(
+            icon: Icons.hub_rounded,
+            title: 'Connected Command Center',
+            subtitle:
+                'Access device controls, movie-night tools, playback preferences and account commands.',
+            onTap: () => _open(context, const ConnectedCommandCenterScreen())),
+        _CommandAction(
+            icon: Icons.extension_rounded,
+            title: 'Plugin & Integration Studio',
+            subtitle:
+                'Review configured provider status and open supported integration surfaces.',
+            onTap: () => _open(context, const IntegrationStudioScreen())),
+        _CommandAction(
+            icon: Icons.visibility_outlined,
+            title: 'Recommendation Transparency',
+            subtitle:
+                'Inspect recommendation signals and provide feedback on suggestions.',
+            onTap: () =>
+                _open(context, const RecommendationTransparencyScreen())),
+        _CommandAction(
+            icon: Icons.privacy_tip_outlined,
+            title: 'Privacy & Ownership',
+            subtitle:
+                'Manage profile privacy preferences, data export and account ownership controls.',
+            onTap: () => _open(context, const LibraryPrivacyScreen())),
+        _CommandAction(
             icon: Icons.library_add_rounded,
             title: 'Smart Media Import Center',
             subtitle:
@@ -78,6 +114,12 @@ class EntertainmentCommandCenterScreen extends StatelessWidget {
             subtitle:
                 'Pending progress updates, cached metadata and authorized offline files.',
             onTap: () => _open(context, const OfflineSyncCenterScreen())),
+        _CommandAction(
+            icon: Icons.pending_actions_rounded,
+            title: 'Background Tasks & Activity',
+            subtitle:
+                'See disc jobs, backups, queued synchronization updates and recent profile activity.',
+            onTap: () => _open(context, const BackgroundTaskCenterScreen())),
         _CommandAction(
             icon: Icons.health_and_safety_outlined,
             title: 'Media Library Health',

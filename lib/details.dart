@@ -13,6 +13,7 @@ import 'app_core.dart';
 import 'rating_system.dart';
 import 'backend_api.dart';
 import 'music_catalog_screen.dart';
+import 'music.dart' show MusicLibraryStore, MusicPlaybackController;
 import 'cinematic_title.dart';
 import 'artwork_gallery_screen.dart';
 import 'artwork_selection_store.dart';
@@ -472,7 +473,68 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
             onOpenMedia: (item) => Navigator.of(context).push(
               MaterialPageRoute<void>(
                 settings: RouteSettings(name: '/app/media/${item.id}'),
-                builder: (_) => MediaDetailsScreen(media: item),
+                builder: (_) {
+                  if (!isMusicAlbumType(item.type)) {
+                    return MediaDetailsScreen(media: item);
+                  }
+                  final ownedRecord =
+                      RecommendationOwnershipMatcher.findOwnedMediaForMedia(
+                    media: item,
+                    controller: AppController.instance,
+                  );
+                  void playLocalTrack(Map<String, dynamic> row) {
+                    final id = row['id']?.toString() ?? '';
+                    for (final track in MusicLibraryStore.instance.tracks) {
+                      if (track.id == id &&
+                          !track.catalogOnly &&
+                          track.audioUrl?.trim().isNotEmpty == true) {
+                        unawaited(MusicPlaybackController.instance.play(track));
+                        break;
+                      }
+                    }
+                  }
+
+                  final wantedAlbum = item.title.trim().toLowerCase();
+                  final wantedArtist = item.music.isEmpty
+                      ? ''
+                      : item.music.first.trim().toLowerCase();
+                  final localTracks = <Map<String, dynamic>>[
+                    for (final track in MusicLibraryStore.instance.tracks)
+                      if (!track.catalogOnly &&
+                          track.audioUrl?.trim().isNotEmpty == true &&
+                          track.album.trim().toLowerCase() == wantedAlbum &&
+                          (wantedArtist.isEmpty ||
+                              track.artist.trim().toLowerCase() ==
+                                  wantedArtist))
+                        <String, dynamic>{
+                          'id': track.id,
+                          'title': track.title,
+                          'artist': track.artist,
+                          'album': track.album,
+                          'audioUrl': track.audioUrl ?? '',
+                          'artworkUrl': track.artworkUrl ?? '',
+                          'durationMs': track.duration.inMilliseconds,
+                        },
+                  ];
+                  const spotifyPrefix = 'spotify:album:';
+                  if (item.id.startsWith(spotifyPrefix)) {
+                    return SpotifyAlbumDetailsScreen(
+                      albumTitle: item.title,
+                      spotifyId: item.id.substring(spotifyPrefix.length),
+                      isOwned: ownedRecord != null || localTracks.isNotEmpty,
+                      localMedia: ownedRecord,
+                      localArtistName: item.music.join(', '),
+                      localTracks: localTracks,
+                      onPlayLocalTrack: playLocalTrack,
+                    );
+                  }
+                  return MusicAlbumPageScreen(
+                    media: ownedRecord ?? item,
+                    isOwned: ownedRecord != null || localTracks.isNotEmpty,
+                    localTracks: localTracks,
+                    onPlayLocalTrack: playLocalTrack,
+                  );
+                },
               ),
             ),
           ),

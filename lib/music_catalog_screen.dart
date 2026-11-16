@@ -1548,12 +1548,14 @@ class MusicAlbumPageScreen extends StatelessWidget {
     this.isOwned,
     this.localTracks = const <Map<String, dynamic>>[],
     this.resolveSpotifyMetadata = true,
+    this.onPlayLocalTrack,
   });
 
   final MediaItem media;
   final bool? isOwned;
   final List<Map<String, dynamic>> localTracks;
   final bool resolveSpotifyMetadata;
+  final ValueChanged<Map<String, dynamic>>? onPlayLocalTrack;
 
   @override
   Widget build(BuildContext context) {
@@ -1566,6 +1568,7 @@ class MusicAlbumPageScreen extends StatelessWidget {
       localTracks: localTracks,
       isOwned: owned,
       resolveSpotifyMetadata: resolveSpotifyMetadata,
+      onPlayLocalTrack: onPlayLocalTrack,
     );
   }
 }

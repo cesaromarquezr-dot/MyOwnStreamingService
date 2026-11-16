@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import '../app_core.dart';
+import '../interface_appearance.dart';
 import '../data/kiosk_repository.dart';
 import '../models/kiosk_models.dart';
 import '../stores/kiosk_store.dart';
@@ -45,7 +46,13 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
   Widget build(BuildContext context) {
     final items = _repository.catalog();
     return Scaffold(
-        appBar: AppBar(title: const Text('Virtual Kiosk')),
+        appBar: AppBar(
+          title: Row(mainAxisSize: MainAxisSize.min, children: [
+            const InterfaceBrandingLogo(mode: 'redbox', width: 42, height: 30),
+            const SizedBox(width: 8),
+            const Text('Virtual Kiosk'),
+          ]),
+        ),
         body: ListView(padding: const EdgeInsets.all(18), children: [
           const AccountProfilePresenceStrip(),
           Card(
