@@ -28,6 +28,31 @@ class PotentialDuplicateGroup {
       .length > 1;
 }
 
+
+/// A review-only report for a TV season whose indexed episode list is known to
+/// be incomplete. Missing trailing episodes are reported only when the season
+/// metadata supplies an authoritative expected episode count; otherwise only
+/// gaps inside the observed numbering range are reported.
+class IncompleteSeasonFinding {
+  final String mediaId;
+  final String seriesTitle;
+  final int seasonNumber;
+  final int? expectedEpisodeCount;
+  final int actualEpisodeCount;
+  final List<int> missingEpisodeNumbers;
+
+  const IncompleteSeasonFinding({
+    required this.mediaId,
+    required this.seriesTitle,
+    required this.seasonNumber,
+    required this.expectedEpisodeCount,
+    required this.actualEpisodeCount,
+    required this.missingEpisodeNumbers,
+  });
+
+  bool get hasExpectedCount => expectedEpisodeCount != null;
+}
+
 class LibraryAuditFinding {
   final String id;
   final String mediaId;
@@ -113,6 +138,81 @@ class LibraryProtectionService {
       return a.normalizedTitle.compareTo(b.normalizedTitle);
     });
     return List<PotentialDuplicateGroup>.unmodifiable(groups);
+  }
+
+  /// Finds incomplete season episode lists without assuming that a partial
+  /// provider response is the complete season. Trailing omissions are only
+  /// inferred when the season includes an expected episode-count field.
+  static List<IncompleteSeasonFinding> findIncompleteSeasons(
+    Iterable<MediaItem> mediaItems,
+  ) {
+    final findings = <IncompleteSeasonFinding>[];
+    for (final item in mediaItems) {
+      if (!item.isSeries) continue;
+      for (final season in item.seasons) {
+        final seasonNumber = _readPositiveInt(
+              season['seasonNumber'] ??
+                  season['season_number'] ??
+                  season['number'],
+            ) ??
+            0;
+        final rawEpisodes = season['episodes'];
+        final episodeRows = rawEpisodes is List
+            ? rawEpisodes.whereType<Map>().toList(growable: false)
+            : const <Map>[];
+        final episodeNumbers = <int>{};
+        for (final row in episodeRows) {
+          final number = _readPositiveInt(
+            row['episodeNumber'] ??
+                row['episode_number'] ??
+                row['number'],
+          );
+          if (number != null) episodeNumbers.add(number);
+        }
+        final expected = _readPositiveInt(
+          season['episodeCount'] ??
+              season['episode_count'] ??
+              season['numberOfEpisodes'] ??
+              season['number_of_episodes'] ??
+              season['totalEpisodes'] ??
+              season['total_episodes'],
+        );
+        final missing = <int>[];
+        if (expected != null) {
+          for (var number = 1; number <= expected; number++) {
+            if (!episodeNumbers.contains(number)) missing.add(number);
+          }
+        } else if (episodeNumbers.length > 1) {
+          final ordered = episodeNumbers.toList()..sort();
+          for (var number = ordered.first + 1; number < ordered.last; number++) {
+            if (!episodeNumbers.contains(number)) missing.add(number);
+          }
+        }
+        final isIncomplete = expected != null
+            ? episodeNumbers.length < expected
+            : missing.isNotEmpty;
+        if (!isIncomplete) continue;
+        findings.add(IncompleteSeasonFinding(
+          mediaId: item.id,
+          seriesTitle: item.title,
+          seasonNumber: seasonNumber,
+          expectedEpisodeCount: expected,
+          actualEpisodeCount: episodeNumbers.length,
+          missingEpisodeNumbers: List<int>.unmodifiable(missing),
+        ));
+      }
+    }
+    findings.sort((a, b) {
+      final titleCompare = a.seriesTitle.toLowerCase().compareTo(b.seriesTitle.toLowerCase());
+      if (titleCompare != 0) return titleCompare;
+      return a.seasonNumber.compareTo(b.seasonNumber);
+    });
+    return List<IncompleteSeasonFinding>.unmodifiable(findings);
+  }
+
+  static int? _readPositiveInt(dynamic value) {
+    final number = value is num ? value.toInt() : int.tryParse(value?.toString() ?? '');
+    return number != null && number > 0 ? number : null;
   }
 
   static List<LibraryAuditFinding> audit(Iterable<MediaItem> mediaItems) {

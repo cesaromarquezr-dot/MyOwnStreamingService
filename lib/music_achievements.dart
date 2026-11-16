@@ -8,6 +8,7 @@ import 'package:material_ui/material_ui.dart';
 import 'app_core.dart';
 import 'localization.dart';
 import 'music.dart';
+import 'entertainment_passport.dart';
 
 /// Displays the profile's achievements across music, movies, and shows.
 class AchievementsScreen extends StatelessWidget {
@@ -20,6 +21,17 @@ class AchievementsScreen extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(
           title: const UniversalText('Achievements'),
+          actions: [
+            IconButton(
+              tooltip: 'Open Entertainment Passport',
+              icon: const Icon(Icons.card_membership_rounded),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const EntertainmentPassportScreen(),
+                ),
+              ),
+            ),
+          ],
           bottom: const TabBar(
             tabs: [
               Tab(text: 'Music', icon: Icon(Icons.music_note_rounded)),

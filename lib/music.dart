@@ -15,6 +15,7 @@ import 'presence/account_profile_presence_service.dart';
 import 'widgets/account_profile_presence_strip.dart';
 import 'catalog_poster_image.dart' show AlbumArtworkImage;
 import 'music_favorites.dart';
+import 'featured_soundtrack_catalog.dart';
 import 'music_genre_system.dart';
 import 'details.dart';
 import 'localization.dart';
@@ -2339,6 +2340,15 @@ class _MusicScreenState extends State<MusicScreen> {
                       tooltip: 'Discover music',
                     ),
                     IconButton(
+                      onPressed: () => Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const SoundtrackUniverseScreen(),
+                        ),
+                      ),
+                      icon: const Icon(Icons.movie_filter_rounded),
+                      tooltip: 'Soundtrack Explorer',
+                    ),
+                    IconButton(
                       tooltip: 'Personal rating colors',
                       onPressed: () => Navigator.of(context).push<void>(
                         MaterialPageRoute<void>(
@@ -3873,12 +3883,12 @@ class _MusicScreenState extends State<MusicScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const UniversalText('Soundtrack Universe',
+          const UniversalText('Soundtrack Explorer',
               style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
           const UniversalText(
-            'Connect songs to the movies and shows where they belong, '
-            'turning your film and music libraries into one soundtrack universe.',
+            'Explore songs, artists, official soundtrack albums, original scores, '
+            'scene notes and automatically generated music collections connected to films and series.',
             style: TextStyle(color: Colors.white70),
           ),
           const SizedBox(height: 12),
@@ -3890,7 +3900,7 @@ class _MusicScreenState extends State<MusicScreen> {
               ),
             ),
             icon: const Icon(Icons.open_in_new_rounded),
-            label: const UniversalText('OPEN SOUNDTRACK UNIVERSE'),
+            label: const UniversalText('OPEN SOUNDTRACK EXPLORER'),
           ),
         ],
       ),
@@ -5756,46 +5766,995 @@ class _MusicCustomizationState extends State<_MusicCustomization> {
   }
 }
 
-/// Opens soundtrack connections between music and owned film/TV metadata.
-class SoundtrackUniverseScreen extends StatelessWidget {
-  const SoundtrackUniverseScreen({super.key});
+/// Soundtrack discovery across source-backed movie and television music data.
+/// The catalog remains separate from owned/playable tracks until a real local
+/// recording is found, so catalog metadata never implies streaming rights.
+class SoundtrackUniverseScreen extends StatefulWidget {
+  const SoundtrackUniverseScreen({super.key, this.initialMediaTitle});
+
+  final String? initialMediaTitle;
+
+  @override
+  State<SoundtrackUniverseScreen> createState() =>
+      _SoundtrackUniverseScreenState();
+}
+
+class _SoundtrackUniverseScreenState extends State<SoundtrackUniverseScreen> {
+  late final TextEditingController _searchController;
+  String _kindFilter = 'all';
+  String _query = '';
+  int _selectedTab = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _query = widget.initialMediaTitle?.trim() ?? '';
+    _searchController = TextEditingController(text: _query);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  String _normal(String value) => FeaturedSoundtrackEntry.normalize(value);
+
+  List<FeaturedSoundtrackEntry> get _filteredEntries {
+    final query = _query.trim();
+    return FeaturedSoundtrackCatalog.entries.where((entry) {
+      if (query.isNotEmpty && !entry.matchesQuery(query)) return false;
+      switch (_kindFilter) {
+        case 'featured':
+          return entry.kind == FeaturedSoundtrackKind.featuredSong;
+        case 'album':
+          return entry.kind == FeaturedSoundtrackKind.officialSoundtrackAlbum;
+        case 'score':
+          return entry.kind == FeaturedSoundtrackKind.originalScore;
+        case 'covers':
+          return entry.isCoverOrAlternateVersion;
+        default:
+          return true;
+      }
+    }).toList(growable: false);
+  }
+
+  Map<String, List<String>> _franchisesByMediaTitle() {
+    final output = <String, Set<String>>{};
+    for (final media in AppController.instance.library) {
+      if (!media.isAccessibleTo(AppController.instance.currentProfile)) {
+        continue;
+      }
+      final franchises = <String>{
+        if ((media.franchiseName ?? '').trim().isNotEmpty)
+          media.franchiseName!.trim(),
+        ...media.franchiseNames
+            .map((name) => name.trim())
+            .where((name) => name.isNotEmpty),
+      };
+      if (franchises.isEmpty) continue;
+      for (final title in <String>{
+        media.title,
+        if ((media.originalTitle ?? '').trim().isNotEmpty)
+          media.originalTitle!.trim(),
+        if ((media.canonicalTitle ?? '').trim().isNotEmpty)
+          media.canonicalTitle!.trim(),
+      }) {
+        output.putIfAbsent(title, () => <String>{}).addAll(franchises);
+      }
+    }
+    return output
+        .map((key, value) => MapEntry(key, value.toList(growable: false)));
+  }
+
+  List<GeneratedSoundtrackCollection> get _generatedCollections =>
+      FeaturedSoundtrackCatalog.generatedCollections(
+        franchisesByMediaTitle: _franchisesByMediaTitle(),
+      ).where((collection) {
+        if (_query.isEmpty) return true;
+        final query = _normal(_query);
+        return _normal(collection.title).contains(query) ||
+            _normal(collection.subtitle).contains(query) ||
+            collection.entries.any((entry) => entry.matchesQuery(_query));
+      }).toList(growable: false);
+
+  Map<String, List<FeaturedSoundtrackEntry>> get _artistGroups {
+    final grouped = <String, List<FeaturedSoundtrackEntry>>{};
+    for (final entry in _filteredEntries) {
+      for (final artistName in entry.allCreditedArtists) {
+        grouped
+            .putIfAbsent(artistName, () => <FeaturedSoundtrackEntry>[])
+            .add(entry);
+      }
+    }
+    final result = grouped.entries.toList()
+      ..sort((a, b) => a.key.toLowerCase().compareTo(b.key.toLowerCase()));
+    return Map<String, List<FeaturedSoundtrackEntry>>.fromEntries(result);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final rows = <MapEntry<MediaItem, String>>[];
-    for (final media in AppController.instance.library) {
-      for (final song in media.music) {
-        if (song.trim().isNotEmpty) rows.add(MapEntry(media, song));
-      }
-    }
-    return Scaffold(
-      appBar: AppBar(title: const UniversalText('Soundtrack Universe')),
-      body: rows.isEmpty
-          ? const Center(
-              child: UniversalText(
-                  'No soundtrack metadata has been imported yet.'),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(18),
-              itemCount: rows.length,
-              itemBuilder: (_, index) {
-                final row = rows[index];
-                return Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.music_note_rounded),
-                    title: Text(row.value,
-                        style: const TextStyle(fontWeight: FontWeight.w800)),
-                    subtitle: UniversalText('From ${row.key.title}'),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => MediaDetailsScreen(media: row.key),
-                      ),
+    final entries = _filteredEntries;
+    final allCount = FeaturedSoundtrackCatalog.entries.length;
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        backgroundColor: const Color(0xFF09090F),
+        appBar: AppBar(
+          backgroundColor: const Color(0xFF09090F),
+          title: const Text('Soundtrack Explorer',
+              style: TextStyle(fontWeight: FontWeight.w900)),
+          bottom: TabBar(
+            onTap: (index) => setState(() => _selectedTab = index),
+            tabs: const [
+              Tab(icon: Icon(Icons.library_music_rounded), text: 'Songs'),
+              Tab(icon: Icon(Icons.person_rounded), text: 'Artists'),
+              Tab(
+                  icon: Icon(Icons.collections_bookmark_rounded),
+                  text: 'Collections'),
+            ],
+          ),
+        ),
+        body: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (value) => setState(() => _query = value),
+                textInputAction: TextInputAction.search,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: 'Search songs, artists, albums, films or series',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Clear search',
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _query = '');
+                          },
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: .06),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(15),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+            if (_selectedTab == 0)
+              SizedBox(
+                height: 46,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  children: [
+                    _filterChip('All', 'all'),
+                    _filterChip('Featured in film', 'featured'),
+                    _filterChip('Official soundtrack', 'album'),
+                    _filterChip('Original score', 'score'),
+                    _filterChip('Covers & alternate', 'covers'),
+                  ],
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 4, 18, 9),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '$allCount indexed soundtrack relationships · ${entries.length} shown',
+                      style:
+                          const TextStyle(color: Colors.white54, fontSize: 12),
                     ),
                   ),
-                );
-              },
+                  const Tooltip(
+                    message:
+                        'Catalog entries are not playable files unless a matching local track is present.',
+                    child: Icon(Icons.info_outline_rounded,
+                        size: 17, color: Colors.white38),
+                  ),
+                ],
+              ),
             ),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  _buildSongList(entries),
+                  _buildArtistList(),
+                  _buildCollectionList(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _filterChip(String label, String value) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+        child: ChoiceChip(
+          label: Text(label),
+          selected: _kindFilter == value,
+          onSelected: (_) => setState(() => _kindFilter = value),
+        ),
+      );
+
+  String _kindLabel(FeaturedSoundtrackEntry entry) {
+    if (entry.isCoverOrAlternateVersion) return 'Cover / alternate version';
+    switch (entry.kind) {
+      case FeaturedSoundtrackKind.officialSoundtrackAlbum:
+        return 'Official soundtrack album';
+      case FeaturedSoundtrackKind.originalScore:
+        return 'Original score';
+      case FeaturedSoundtrackKind.featuredSong:
+        return entry.relationshipLabel;
+    }
+  }
+
+  Widget _buildSongList(List<FeaturedSoundtrackEntry> entries) {
+    if (entries.isEmpty) {
+      final message = _kindFilter == 'score'
+          ? 'No original-score relationships have been indexed yet. Add source-backed composer and score metadata to populate this category.'
+          : 'No soundtrack matches found. Try another song, artist, album, movie or series.';
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Text(message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white60, height: 1.5)),
+        ),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(14, 6, 14, 24),
+      itemCount: entries.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final entry = entries[index];
+        return _soundtrackEntryCard(context, entry);
+      },
+    );
+  }
+
+  Widget _soundtrackEntryCard(
+      BuildContext context, FeaturedSoundtrackEntry entry) {
+    return Card(
+      color: const Color(0xFF191923),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => SoundtrackSongDetailsScreen(entry: entry),
+        )),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF34234A),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.music_note_rounded,
+                    color: Color(0xFFE0C4FF), size: 27),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(entry.title,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w900, fontSize: 15)),
+                    const SizedBox(height: 2),
+                    Text(entry.artist,
+                        style: const TextStyle(
+                            color: Colors.white70, fontSize: 13)),
+                    if (entry.album.trim().isNotEmpty)
+                      Text(entry.album,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 11)),
+                    const SizedBox(height: 5),
+                    Wrap(
+                      spacing: 5,
+                      runSpacing: 4,
+                      children: [
+                        _metadataPill(_kindLabel(entry)),
+                        for (final title in entry.mediaTitles.take(3))
+                          _metadataPill(title),
+                      ],
+                    ),
+                    if ((entry.placementNote ?? '').trim().isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(entry.placementNote!,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                color: Colors.white54, fontSize: 11)),
+                      ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: Colors.white54),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _metadataPill(String text) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .07),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white70, fontSize: 10)),
+      );
+
+  Widget _buildArtistList() {
+    final artists = _artistGroups.entries.toList();
+    if (artists.isEmpty) {
+      return const Center(
+        child: Text('No artist matches found.',
+            style: TextStyle(color: Colors.white60)),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 24),
+      itemCount: artists.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 7),
+      itemBuilder: (context, index) {
+        final artist = artists[index];
+        final titles =
+            artist.value.expand((entry) => entry.mediaTitles).toSet();
+        return Card(
+          color: const Color(0xFF191923),
+          child: ListTile(
+            leading: const CircleAvatar(child: Icon(Icons.person_rounded)),
+            title: Text(artist.key,
+                style: const TextStyle(fontWeight: FontWeight.w800)),
+            subtitle: Text(
+                '${artist.value.length} soundtrack entries · ${titles.length} films or series',
+                style: const TextStyle(color: Colors.white60)),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => SoundtrackArtistExplorerScreen(
+                artistName: artist.key,
+                entries: artist.value,
+              ),
+            )),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCollectionList() {
+    final collections = _generatedCollections;
+    if (collections.isEmpty) {
+      return const Center(
+        child: Text('No generated collections match your search.',
+            style: TextStyle(color: Colors.white60)),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 24),
+      itemCount: collections.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 7),
+      itemBuilder: (context, index) {
+        final collection = collections[index];
+        final icon = switch (collection.collectionType) {
+          'artist' => Icons.person_rounded,
+          'album' => Icons.album_rounded,
+          'franchise' => Icons.movie_filter_rounded,
+          _ => Icons.movie_rounded,
+        };
+        return Card(
+          color: const Color(0xFF191923),
+          child: ListTile(
+            leading: CircleAvatar(child: Icon(icon)),
+            title: Text(collection.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w800)),
+            subtitle: Text(collection.subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white60)),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) =>
+                  SoundtrackCollectionDetailsScreen(collection: collection),
+            )),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class SoundtrackSongDetailsScreen extends StatelessWidget {
+  const SoundtrackSongDetailsScreen({super.key, required this.entry});
+
+  final FeaturedSoundtrackEntry entry;
+
+  String _normal(String value) => FeaturedSoundtrackEntry.normalize(value);
+
+  Future<void> _openExternal(BuildContext context, String rawUrl) async {
+    final uri = Uri.tryParse(rawUrl.trim());
+    if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https')) return;
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('The external music link could not be opened.')),
+        );
+      }
+    }
+  }
+
+  MusicTrack? _localTrack() {
+    final title = _normal(entry.title);
+    final artist = _normal(entry.artist);
+    for (final track in MusicLibraryStore.instance.tracks) {
+      final creditedArtists = entry.allCreditedArtists.map(_normal).toSet();
+      final localCredits = <String>{
+        _normal(track.artist),
+        ...track.featuredArtists.map(_normal)
+      };
+      if (_normal(track.title) == title &&
+          (creditedArtists.contains(_normal(track.artist)) ||
+              track.featuredArtists
+                  .map(_normal)
+                  .any(creditedArtists.contains) ||
+              localCredits.contains(artist))) {
+        return track;
+      }
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final relatedAppearances = FeaturedSoundtrackCatalog.forSong(
+      title: entry.title,
+      artist: entry.artist,
+    );
+    final artistTrackMap = <String, FeaturedSoundtrackEntry>{};
+    for (final artistName in entry.allCreditedArtists) {
+      for (final candidate in FeaturedSoundtrackCatalog.forArtist(artistName)) {
+        if (candidate.key != entry.key) {
+          artistTrackMap[candidate.key] = candidate;
+        }
+      }
+    }
+    final artistTracks = artistTrackMap.values.toList(growable: false);
+    final albumTracks = entry.album.trim().isEmpty
+        ? const <FeaturedSoundtrackEntry>[]
+        : FeaturedSoundtrackCatalog.entries
+            .where((candidate) =>
+                candidate.album.trim().toLowerCase() ==
+                    entry.album.trim().toLowerCase() &&
+                candidate.key != entry.key)
+            .toList(growable: false);
+    final localTrack = _localTrack();
+    final spotifyUrl =
+        'https://open.spotify.com/search/${Uri.encodeComponent('${entry.title} ${entry.artist}')}';
+    final youtubeUrl =
+        'https://www.youtube.com/results?search_query=${Uri.encodeComponent('${entry.title} ${entry.artist} official audio')}';
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF09090F),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF09090F),
+        title: const Text('Music Details'),
+        actions: [
+          IconButton(
+            tooltip: 'Open artist profile',
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => MusicArtistProfileScreen(
+                  artistName: entry.allCreditedArtists.first),
+            )),
+            icon: const Icon(Icons.person_outline_rounded),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(18, 12, 18, 30),
+        children: [
+          Container(
+            height: 190,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF3A2257), Color(0xFF142F4B)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: const Center(
+              child: Icon(Icons.music_note_rounded,
+                  size: 88, color: Colors.white70),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Text(entry.title,
+              style:
+                  const TextStyle(fontSize: 27, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 4),
+          Text(entry.artist,
+              style: const TextStyle(color: Color(0xFFD6B5FF), fontSize: 17)),
+          if (entry.allCreditedArtists.length > 1)
+            Padding(
+              padding: const EdgeInsets.only(top: 7),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final artistName in entry.allCreditedArtists)
+                    ActionChip(
+                      avatar:
+                          const Icon(Icons.person_outline_rounded, size: 15),
+                      label: Text('Open $artistName'),
+                      onPressed: () =>
+                          Navigator.of(context).push(MaterialPageRoute<void>(
+                        builder: (_) =>
+                            MusicArtistProfileScreen(artistName: artistName),
+                      )),
+                    ),
+                ],
+              ),
+            )
+          else
+            TextButton.icon(
+              onPressed: () =>
+                  Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) =>
+                    MusicArtistProfileScreen(artistName: entry.artist),
+              )),
+              icon: const Icon(Icons.person_outline_rounded, size: 16),
+              label: const Text('Open artist profile'),
+            ),
+          if (entry.album.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('Album: ${entry.album}',
+                  style: const TextStyle(color: Colors.white60)),
+            ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 7,
+            runSpacing: 7,
+            children: [
+              _detailPill(entry.isCoverOrAlternateVersion
+                  ? 'Cover / alternate version'
+                  : switch (entry.kind) {
+                      FeaturedSoundtrackKind.featuredSong => 'Featured song',
+                      FeaturedSoundtrackKind.officialSoundtrackAlbum =>
+                        'Official soundtrack album',
+                      FeaturedSoundtrackKind.originalScore => 'Original score',
+                    }),
+              _detailPill(entry.relationshipLabel),
+              if (localTrack != null) _detailPill('Available in your library'),
+              if (localTrack == null) _detailPill('Catalog information only'),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (localTrack?.audioUrl?.trim().isNotEmpty == true)
+            FilledButton.icon(
+              onPressed: () async {
+                await MusicPlaybackController.instance.play(localTrack!);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                        content:
+                            Text('Playing ${entry.title} from your library.')),
+                  );
+                }
+              },
+              icon: const Icon(Icons.play_arrow_rounded),
+              label: const Text('Play from your library'),
+            )
+          else
+            const Text(
+              'This soundtrack entry is a catalog relationship, not a local audio file. Use an external music service or import a matching recording to play it here.',
+              style: TextStyle(color: Colors.white54, height: 1.45),
+            ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => _openExternal(context, spotifyUrl),
+                icon: const Icon(Icons.headphones_rounded),
+                label: const Text('Find on Spotify'),
+              ),
+              if (entry.album.trim().isNotEmpty)
+                OutlinedButton.icon(
+                  onPressed: () => _openExternal(
+                    context,
+                    'https://open.spotify.com/search/${Uri.encodeComponent(entry.album)}',
+                  ),
+                  icon: const Icon(Icons.album_rounded),
+                  label: const Text('Find album'),
+                ),
+              OutlinedButton.icon(
+                onPressed: () => _openExternal(context, youtubeUrl),
+                icon: const Icon(Icons.play_circle_outline_rounded),
+                label: const Text('Find on YouTube'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () =>
+                    Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => MusicArtistProfileScreen(
+                      artistName: entry.allCreditedArtists.first),
+                )),
+                icon: const Icon(Icons.person_rounded),
+                label: const Text('Artist profile'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 22),
+          _detailSection(
+            'Featured in',
+            subtitle: 'Film and series relationships recorded for this song.',
+            child: Column(
+              children: [
+                for (final appearance in relatedAppearances)
+                  _mediaAppearanceTile(context, appearance),
+              ],
+            ),
+          ),
+          if ((entry.placementNote ?? '').trim().isNotEmpty)
+            _detailSection(
+              'Scene and placement context',
+              subtitle: 'Context supplied by the soundtrack source.',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(entry.placementNote!,
+                      style: const TextStyle(height: 1.45)),
+                  if (entry.sceneStart != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 7),
+                      child: Text(
+                        'Approximate scene time: ${_formatTime(entry.sceneStart!)}${entry.sceneEnd == null ? '' : '–${_formatTime(entry.sceneEnd!)}'}',
+                        style: const TextStyle(
+                            color: Colors.white60, fontSize: 12),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          if (artistTracks.isNotEmpty)
+            _detailSection(
+              'More soundtrack songs by ${entry.artist}',
+              child: Column(
+                children: [
+                  for (final related in artistTracks.take(12))
+                    _relatedSongTile(context, related),
+                ],
+              ),
+            ),
+          if (albumTracks.isNotEmpty)
+            _detailSection(
+              'Other indexed songs from ${entry.album}',
+              subtitle:
+                  'This is an indexed subset, not a claim that the complete album tracklist is available.',
+              child: Column(
+                children: [
+                  for (final related in albumTracks.take(12))
+                    _relatedSongTile(context, related),
+                ],
+              ),
+            ),
+          _detailSection(
+            'Source',
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.fact_check_outlined),
+              title: Text(entry.sourceName),
+              subtitle: const Text(
+                  'Open the soundtrack reference used for this relationship.'),
+              trailing: const Icon(Icons.open_in_new_rounded),
+              onTap: () => _openExternal(context, entry.sourceUrl),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailPill(String text) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .08),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(text,
+            style: const TextStyle(fontSize: 11, color: Colors.white70)),
+      );
+
+  Widget _detailSection(String title,
+          {String? subtitle, required Widget child}) =>
+      Padding(
+        padding: const EdgeInsets.only(top: 22),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title,
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+            if ((subtitle ?? '').trim().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 3, bottom: 8),
+                child: Text(subtitle!,
+                    style:
+                        const TextStyle(color: Colors.white54, fontSize: 12)),
+              )
+            else
+              const SizedBox(height: 8),
+            child,
+          ],
+        ),
+      );
+
+  Widget _mediaAppearanceTile(
+      BuildContext context, FeaturedSoundtrackEntry appearance) {
+    final profile = AppController.instance.currentProfile;
+    final localMedia = AppController.instance.library
+        .where((media) =>
+            media.isAccessibleTo(profile) &&
+            (appearance.matchesMediaTitle(media.title) ||
+                appearance.matchesMediaTitle(media.originalTitle ?? '') ||
+                appearance.matchesMediaTitle(media.canonicalTitle ?? '')))
+        .toList(growable: false);
+    final media = localMedia.isEmpty ? null : localMedia.first;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: const Icon(Icons.movie_outlined),
+      title: Text(appearance.mediaTitles.join(', ')),
+      subtitle: Text(appearance.relationshipLabel),
+      trailing: media == null ? null : const Icon(Icons.chevron_right_rounded),
+      onTap: media == null
+          ? null
+          : () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => MediaDetailsScreen(media: media),
+              )),
+    );
+  }
+
+  Widget _relatedSongTile(
+          BuildContext context, FeaturedSoundtrackEntry related) =>
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.music_note_rounded),
+        title: Text(related.title),
+        subtitle: Text('${related.artist} · ${related.mediaTitles.join(', ')}'),
+        trailing: const Icon(Icons.chevron_right_rounded),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => SoundtrackSongDetailsScreen(entry: related),
+        )),
+      );
+
+  String _formatTime(Duration value) {
+    final minutes = value.inMinutes;
+    final seconds = value.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+}
+
+class SoundtrackArtistExplorerScreen extends StatelessWidget {
+  const SoundtrackArtistExplorerScreen({
+    super.key,
+    required this.artistName,
+    required this.entries,
+  });
+
+  final String artistName;
+  final List<FeaturedSoundtrackEntry> entries;
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaTitles = entries
+        .expand((entry) => entry.mediaTitles)
+        .toSet()
+        .toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return Scaffold(
+      backgroundColor: const Color(0xFF09090F),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF09090F),
+        title: Text(artistName),
+        actions: [
+          IconButton(
+            tooltip: 'Open full music artist profile',
+            icon: const Icon(Icons.person_search_rounded),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => MusicArtistProfileScreen(artistName: artistName),
+            )),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('$artistName in movies and series',
+              style:
+                  const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 5),
+          Text(
+              '${entries.length} indexed soundtrack relationships across ${mediaTitles.length} titles.',
+              style: const TextStyle(color: Colors.white60)),
+          const SizedBox(height: 16),
+          for (final title in mediaTitles)
+            Card(
+              color: const Color(0xFF191923),
+              child: ListTile(
+                leading: const Icon(Icons.movie_outlined),
+                title: Text(title),
+                subtitle: Text(
+                    '${entries.where((entry) => entry.matchesMediaTitle(title)).length} connected song entries'),
+              ),
+            ),
+          const SizedBox(height: 10),
+          for (final entry in entries)
+            Card(
+              color: const Color(0xFF191923),
+              child: ListTile(
+                leading: const Icon(Icons.music_note_rounded),
+                title: Text(entry.title),
+                subtitle: Text(
+                    '${entry.album.isEmpty ? 'Album not indexed' : entry.album} · ${entry.mediaTitles.join(', ')}'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => SoundtrackSongDetailsScreen(entry: entry),
+                )),
+              ),
+            ),
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => MusicArtistProfileScreen(artistName: artistName),
+            )),
+            icon: const Icon(Icons.open_in_new_rounded),
+            label: const Text('Open full artist profile'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class SoundtrackCollectionDetailsScreen extends StatelessWidget {
+  const SoundtrackCollectionDetailsScreen({
+    super.key,
+    required this.collection,
+  });
+
+  final GeneratedSoundtrackCollection collection;
+
+  String _normal(String value) => FeaturedSoundtrackEntry.normalize(value);
+
+  List<MusicTrack> _localPlayableTracks() {
+    final tracks = MusicLibraryStore.instance.tracks;
+    final matches = <MusicTrack>{};
+    for (final entry in collection.entries) {
+      for (final track in tracks) {
+        final credited = entry.allCreditedArtists.map(_normal).toSet();
+        final localCredits = <String>{
+          _normal(track.artist),
+          ...track.featuredArtists.map(_normal)
+        };
+        if (_normal(track.title) == _normal(entry.title) &&
+            (credited.contains(_normal(track.artist)) ||
+                track.featuredArtists.map(_normal).any(credited.contains) ||
+                localCredits.contains(_normal(entry.artist))) &&
+            (track.audioUrl?.trim().isNotEmpty ?? false)) {
+          matches.add(track);
+        }
+      }
+    }
+    return matches.toList(growable: false);
+  }
+
+  void _saveAsPlaylist(BuildContext context, List<MusicTrack> localTracks) {
+    if (localTracks.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                'No matching playable local tracks were found. Catalog entries are not added as playable files.')),
+      );
+      return;
+    }
+    final store = MusicLibraryStore.instance;
+    final name = collection.title.length > 80
+        ? collection.title.substring(0, 80)
+        : collection.title;
+    final ids = localTracks.map((track) => track.id).toSet();
+    final existing = store.playlists[name];
+    if (existing == null) {
+      store.createPlaylist(name, trackIds: ids);
+    } else {
+      for (final id in ids) {
+        if (!existing.contains(id)) store.toggleTrackInPlaylist(name, id);
+      }
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content:
+              Text('Saved ${ids.length} locally playable songs to "$name".')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final localTracks = _localPlayableTracks();
+    return Scaffold(
+      backgroundColor: const Color(0xFF09090F),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF09090F),
+        title: const Text('Soundtrack Collection'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
+        children: [
+          Text(collection.title,
+              style:
+                  const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 5),
+          Text(collection.subtitle,
+              style: const TextStyle(color: Colors.white60)),
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            onPressed: () => _saveAsPlaylist(context, localTracks),
+            icon: const Icon(Icons.playlist_add_rounded),
+            label: Text(localTracks.isEmpty
+                ? 'No matching local tracks to save'
+                : 'Save ${localTracks.length} local tracks as playlist'),
+          ),
+          const Padding(
+            padding: EdgeInsets.only(top: 7),
+            child: Text(
+              'Collections are generated from soundtrack relationships. Only matching local playable files can be saved into a personal playlist.',
+              style:
+                  TextStyle(color: Colors.white38, fontSize: 11, height: 1.4),
+            ),
+          ),
+          const SizedBox(height: 18),
+          for (final entry in collection.entries)
+            Card(
+              color: const Color(0xFF191923),
+              child: ListTile(
+                leading: const Icon(Icons.music_note_rounded),
+                title: Text(entry.title),
+                subtitle:
+                    Text('${entry.artist} · ${entry.mediaTitles.join(', ')}'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => SoundtrackSongDetailsScreen(entry: entry),
+                )),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

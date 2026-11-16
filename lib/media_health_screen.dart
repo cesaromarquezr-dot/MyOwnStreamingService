@@ -74,6 +74,104 @@ class _MediaHealthScreenState extends State<MediaHealthScreen> {
   List<PotentialDuplicateGroup> get _duplicates =>
       LibraryProtectionService.findPotentialDuplicates(_media);
 
+  List<IncompleteSeasonFinding> get _incompleteSeasons =>
+      LibraryProtectionService.findIncompleteSeasons(_media);
+
+  List<_CollectionSuggestion> get _collectionSuggestions {
+    final groups = <String, _CollectionSuggestion>{};
+    void add(String name, String kind, MediaItem item) {
+      final clean = name.trim();
+      if (clean.isEmpty) return;
+      final title = switch (kind) {
+        'Genre' => '$clean Collection',
+        'Studio / company' => '$clean Studio Collection',
+        _ => '$clean Franchise Collection',
+      };
+      final key = title.toLowerCase();
+      final existing = groups.putIfAbsent(
+        key,
+        () => _CollectionSuggestion(
+          name: title,
+          kind: kind,
+          description:
+              'A suggested collection grouped from verified $kind metadata in your library.',
+          items: <MediaItem>{},
+        ),
+      );
+      existing.items.add(item);
+    }
+
+    for (final item in _media) {
+      for (final value in <String>{
+        if ((item.franchiseName ?? '').trim().isNotEmpty)
+          item.franchiseName!.trim(),
+        ...item.franchiseNames
+            .map((value) => value.trim())
+            .where((value) => value.isNotEmpty),
+        ...item.cinematicUniverseNames
+            .map((value) => value.trim())
+            .where((value) => value.isNotEmpty),
+      }) {
+        add(value, 'Franchise / universe', item);
+      }
+      for (final value in <String>{
+        ...item.studios
+            .map((value) => value.trim())
+            .where((value) => value.isNotEmpty),
+        ...item.companies
+            .map((value) => value.trim())
+            .where((value) => value.isNotEmpty),
+      }) {
+        add(value, 'Studio / company', item);
+      }
+      for (final value in item.genres
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty)) {
+        add(value, 'Genre', item);
+      }
+    }
+
+    final existingNames = _app.collections
+        .map((collection) => collection.name.trim().toLowerCase())
+        .toSet();
+    final suggestions = groups.values
+        .where((suggestion) =>
+            suggestion.items.length >= 3 &&
+            !existingNames.contains(suggestion.name.toLowerCase()))
+        .toList();
+    suggestions.sort((a, b) => b.items.length.compareTo(a.items.length));
+    return suggestions.take(8).toList(growable: false);
+  }
+
+  List<List<MusicTrack>> get _duplicateMusicGroups {
+    String normalize(String value) => value
+        .toLowerCase()
+        .replaceAll(RegExp(r'\([^)]*\)|\[[^]]*\]'), ' ')
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .trim()
+        .replaceAll(RegExp(r'\s+'), ' ');
+
+    final grouped = <String, List<MusicTrack>>{};
+    for (final track in _ownedTracks) {
+      final title = normalize(track.title);
+      final artist = normalize(track.artist);
+      if (title.isEmpty || artist.isEmpty) continue;
+      grouped.putIfAbsent('$artist|$title', () => <MusicTrack>[]).add(track);
+    }
+    final result = grouped.values
+        .where((tracks) => tracks.length > 1)
+        .map((tracks) => List<MusicTrack>.unmodifiable(tracks))
+        .toList();
+    result.sort((a, b) {
+      final byArtist =
+          a.first.artist.toLowerCase().compareTo(b.first.artist.toLowerCase());
+      return byArtist != 0
+          ? byArtist
+          : a.first.title.toLowerCase().compareTo(b.first.title.toLowerCase());
+    });
+    return result;
+  }
+
   void _openMedia(String mediaId) {
     MediaItem? media;
     for (final item in _media) {
@@ -134,11 +232,15 @@ class _MediaHealthScreenState extends State<MediaHealthScreen> {
     final tracks = _ownedTracks;
     final findings = _findings;
     final duplicates = _duplicates;
+    final incompleteSeasons = _incompleteSeasons;
+    final duplicateMusicGroups = _duplicateMusicGroups;
+    final collectionSuggestions = _collectionSuggestions;
     final issueCount = _missingArtwork +
         _missingDescriptions +
         _missingPlaybackSources +
         _missingAlbumArtwork +
-        _missingAudioFiles;
+        _missingAudioFiles +
+        incompleteSeasons.length;
 
     return Scaffold(
       appBar: AppBar(
@@ -220,6 +322,11 @@ class _MediaHealthScreenState extends State<MediaHealthScreen> {
               '$_missingAudioFiles',
               Icons.music_off_rounded,
               'Catalog-only discovery entries are excluded.'),
+          _metric(
+              'Incomplete indexed TV seasons',
+              '${incompleteSeasons.length}',
+              Icons.live_tv_outlined,
+              'Only authoritative episode counts or gaps in observed numbering are used.'),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -251,6 +358,108 @@ class _MediaHealthScreenState extends State<MediaHealthScreen> {
                   ),
                 )),
           const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                  child: Text('TV season completeness',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w900))),
+              Text('${incompleteSeasons.length} seasons'),
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (incompleteSeasons.isEmpty)
+            const Text(
+                'No missing episode numbers were found in the currently indexed season metadata.')
+          else
+            ...incompleteSeasons.take(20).map((finding) {
+              final missing = finding.missingEpisodeNumbers;
+              final missingLabel = missing.isEmpty
+                  ? 'Episode list is shorter than the expected count.'
+                  : 'Missing ${missing.take(12).map((number) => 'E${number.toString().padLeft(2, '0')}').join(', ')}${missing.length > 12 ? ', …' : ''}';
+              final expected = finding.expectedEpisodeCount == null
+                  ? 'numbering gap in indexed data'
+                  : '${finding.actualEpisodeCount}/${finding.expectedEpisodeCount} indexed episodes';
+              return Card(
+                child: ListTile(
+                  leading: const Icon(Icons.playlist_remove_rounded),
+                  title: Text(
+                      '${finding.seriesTitle} · Season ${finding.seasonNumber}'),
+                  subtitle: Text('$expected · $missingLabel'),
+                  onTap: () => _openMedia(finding.mediaId),
+                ),
+              );
+            }),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                  child: Text('Potential duplicate music tracks',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w900))),
+              Text('${duplicateMusicGroups.length} groups'),
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (duplicateMusicGroups.isEmpty)
+            const Text(
+                'No repeated artist/title pairs were found in the owned music catalog.')
+          else
+            ...duplicateMusicGroups.take(12).map((group) => Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.library_music_outlined),
+                    title: Text('${group.first.title} · ${group.first.artist}',
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    subtitle: Text(
+                        '${group.length} tracks · ${group.map((track) => track.album).where((album) => album.trim().isNotEmpty).toSet().join(' / ')}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                )),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                  child: Text('Suggested collections',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w900))),
+              Text('${collectionSuggestions.length} ideas'),
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (collectionSuggestions.isEmpty)
+            const Text(
+                'No new collection suggestions are available. Suggestions require at least three library items sharing verified genre, studio, company, franchise or universe metadata.')
+          else
+            ...collectionSuggestions.map((suggestion) => Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.collections_bookmark_outlined),
+                    title: Text(suggestion.name),
+                    subtitle: Text(
+                        '${suggestion.items.length} titles · ${suggestion.kind}'),
+                    trailing: IconButton(
+                      tooltip: 'Create ${suggestion.name}',
+                      icon: const Icon(Icons.add_circle_outline_rounded),
+                      onPressed: () {
+                        final collection = _app.createCollection(
+                          name: suggestion.name,
+                          description: suggestion.description,
+                          mediaIds: suggestion.items.map((item) => item.id),
+                        );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Created ${collection.name}')),
+                        );
+                      },
+                    ),
+                  ),
+                )),
+          const SizedBox(height: 18),
           Text('Repair queue',
               style: Theme.of(context)
                   .textTheme
@@ -274,11 +483,25 @@ class _MediaHealthScreenState extends State<MediaHealthScreen> {
           ),
           const SizedBox(height: 10),
           const Text(
-            'Limitations: these checks inspect indexed metadata and URL shape, not remote server availability. An empty direct URL is not proof that an item cannot play. Potential duplicates are review suggestions only; editions are never merged or deleted automatically. The backup center stores local settings checkpoints and exports a sanitized metadata snapshot; it does not back up movie/music files or replace a server database backup.',
+            'Limitations: these checks inspect indexed metadata and URL shape, not remote server availability. An empty direct URL is not proof that an item cannot play. Potential title/music duplicates and missing episodes are review suggestions only; editions are never merged or deleted automatically. Trailing episode gaps are not inferred unless a season declares its expected episode count. The backup center stores local settings checkpoints and exports a sanitized metadata snapshot; it does not back up movie/music files or replace a server database backup.',
             style: TextStyle(fontSize: 12, height: 1.4),
           ),
         ],
       ),
     );
   }
+}
+
+class _CollectionSuggestion {
+  final String name;
+  final String kind;
+  final String description;
+  final Set<MediaItem> items;
+
+  _CollectionSuggestion({
+    required this.name,
+    required this.kind,
+    required this.description,
+    required this.items,
+  });
 }

@@ -15,6 +15,15 @@ import 'localization.dart';
 import 'media_text_localizer.dart';
 import 'media_artwork_auto_resolver.dart';
 import 'energy_saver.dart';
+import 'entertainment_passport.dart';
+import 'media_health_screen.dart';
+import 'screens/virtual_store_screen.dart';
+import 'screens/theater_home_screen.dart';
+import 'screens/kiosk_home_screen.dart';
+import 'screens/group_watch_library_picker_screen.dart';
+import 'smart_search.dart';
+import 'feature_center.dart';
+import 'dialogue_search.dart';
 
 class MediaUniverseScreen extends StatefulWidget {
   const MediaUniverseScreen({super.key});
@@ -60,16 +69,30 @@ class _MediaUniverseScreenState extends State<MediaUniverseScreen> {
                   () => _open(context, const SurpriseMeScreen())),
               _tile('Devices & Sessions', Icons.devices_rounded,
                   () => _open(context, const MediaSessionsScreen())),
-              _tile('Library Health', Icons.health_and_safety_outlined,
-                  () => _open(context, const SmartMediaLibrarianScreen())),
+              _tile('Library Health & Repair', Icons.health_and_safety_outlined,
+                  () => _open(context, const MediaHealthScreen())),
               _tile('Entertainment Studio', Icons.auto_awesome_rounded,
                   () => _open(context, const EntertainmentStudioScreen())),
               _tile('Knowledge Graph', Icons.hub_rounded,
                   () => _open(context, const MediaConnectionGraphScreen())),
               _tile('Artwork Library', Icons.photo_library_outlined,
                   () => _open(context, const MediaArtworkScreen())),
-              _tile('My Media Passport', Icons.badge_outlined,
-                  () => _open(context, const MediaPassportScreen())),
+              _tile('Entertainment Passport', Icons.badge_outlined,
+                  () => _open(context, const EntertainmentPassportScreen())),
+              _tile('Smart Search', Icons.search_rounded,
+                  () => _open(context, const SmartSearchScreen())),
+              _tile('Identify a Movie or Show', Icons.movie_filter_outlined,
+                  () => _open(context, const DialogueSearchScreen())),
+              _tile('Group Watch', Icons.groups_rounded,
+                  () => _open(context, const GroupWatchLibraryPickerScreen())),
+              _tile('Virtual Store', Icons.storefront_outlined,
+                  () => _open(context, const VirtualStoreScreen())),
+              _tile('Virtual Kiosk', Icons.local_movies_outlined,
+                  () => _open(context, const KioskHomeScreen())),
+              _tile('Virtual Theater', Icons.theaters_outlined,
+                  () => _open(context, const TheaterHomeScreen())),
+              _tile('Wrapped & Recaps', Icons.auto_awesome_rounded,
+                  () => _open(context, const FeatureCenterScreen())),
             ],
           ),
           const SizedBox(height: 24),
@@ -137,119 +160,544 @@ class _MediaUniverseCard extends StatelessWidget {
 
 class SurpriseMeScreen extends StatefulWidget {
   const SurpriseMeScreen({super.key});
+
   @override
   State<SurpriseMeScreen> createState() => _SurpriseMeScreenState();
 }
 
-class _SurpriseMeScreenState extends State<SurpriseMeScreen> {
+class _SurpriseMeScreenState extends State<SurpriseMeScreen>
+    with SingleTickerProviderStateMixin {
   final Random random = Random();
+  late final AnimationController _spinController;
+  Timer? _reelTimer;
+  Animation<double>? _wheelRotation;
+
   MediaItem? selected;
+  MediaItem? _pendingSelection;
   String mode = 'Random Everything';
-  void pick() {
+  String animationStyle = 'Slot Machine';
+  bool _isSpinning = false;
+  List<MediaItem?> _reels = List<MediaItem?>.filled(3, null);
+  List<MediaItem> _wheelEntries = <MediaItem>[];
+  int _wheelWinnerIndex = 0;
+  double _wheelTurns = 6;
+
+  @override
+  void initState() {
+    super.initState();
+    _spinController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2800),
+    )..addStatusListener(_handleSpinStatus);
+  }
+
+  @override
+  void dispose() {
+    _reelTimer?.cancel();
+    _spinController
+      ..removeStatusListener(_handleSpinStatus)
+      ..dispose();
+    super.dispose();
+  }
+
+  List<MediaItem> _eligibleItems() {
     final app = AppController.instance;
     final profile = app.currentProfile;
     final library = app.library
         .where((media) => media.isAccessibleTo(profile))
         .toList(growable: false);
-    if (library.isEmpty) return;
-    final candidates = mode == 'Random Everything'
-        ? library
-        : library.where((m) => _matches(m, mode)).toList();
-    if (candidates.isEmpty) {
-      setState(() => selected = library[random.nextInt(library.length)]);
-      return;
-    }
-    setState(() => selected = candidates[random.nextInt(candidates.length)]);
+    if (mode == 'Random Everything') return library;
+    final matching = library.where((item) => _matches(item, mode)).toList();
+    return matching;
   }
 
-  bool _matches(MediaItem m, String value) {
+  void pick() {
+    if (_isSpinning) return;
+    final candidates = _eligibleItems();
+    if (candidates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No accessible items found for "$mode".')),
+      );
+      return;
+    }
+
+    final winner = candidates[random.nextInt(candidates.length)];
+    _pendingSelection = winner;
+    setState(() {
+      selected = null;
+      _isSpinning = true;
+      _reels = List<MediaItem?>.generate(
+        3,
+        (_) => candidates[random.nextInt(candidates.length)],
+      );
+      _wheelEntries = _makeWheelEntries(candidates, winner);
+      _wheelWinnerIndex = _wheelEntries.indexWhere((item) => item.id == winner.id);
+    });
+
+    _spinController.reset();
+    if (animationStyle == 'Roulette') {
+      _prepareWheelAnimation();
+    } else {
+      _startSlotReels(candidates);
+      _wheelRotation = null;
+    }
+    _spinController.forward();
+  }
+
+  List<MediaItem> _makeWheelEntries(
+    List<MediaItem> candidates,
+    MediaItem winner,
+  ) {
+    final shuffled = List<MediaItem>.from(candidates)..shuffle(random);
+    final entries = shuffled.take(8).toList(growable: true);
+    if (!entries.any((item) => item.id == winner.id)) {
+      if (entries.isEmpty) {
+        entries.add(winner);
+      } else {
+        entries[random.nextInt(entries.length)] = winner;
+      }
+    }
+    return entries;
+  }
+
+  void _prepareWheelAnimation() {
+    final count = _wheelEntries.length.clamp(1, 8);
+    final sweep = (2 * pi) / count;
+    final centerAngle = -pi / 2 + ((_wheelWinnerIndex + .5) * sweep);
+    var targetAngle = (-pi / 2 - centerAngle) % (2 * pi);
+    if (targetAngle < 0) targetAngle += 2 * pi;
+    _wheelTurns = 6 + (targetAngle / (2 * pi));
+    _wheelRotation = Tween<double>(begin: 0, end: _wheelTurns).animate(
+      CurvedAnimation(parent: _spinController, curve: Curves.easeOutQuart),
+    );
+  }
+
+  void _startSlotReels(List<MediaItem> candidates) {
+    _reelTimer?.cancel();
+    const reelStopProgress = <double>[.58, .76, .92];
+    _reelTimer = Timer.periodic(const Duration(milliseconds: 85), (_) {
+      if (!mounted || !_isSpinning || candidates.isEmpty) return;
+      final progress = _spinController.value;
+      setState(() {
+        _reels = List<MediaItem?>.generate(3, (index) {
+          // Each reel slows and stops in sequence, like a physical slot machine.
+          if (progress >= reelStopProgress[index]) return _reels[index];
+          return candidates[random.nextInt(candidates.length)];
+        });
+      });
+    });
+  }
+
+  void _handleSpinStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed || !mounted) return;
+    _reelTimer?.cancel();
+    final winner = _pendingSelection;
+    setState(() {
+      _isSpinning = false;
+      selected = winner;
+      _reels = List<MediaItem?>.filled(3, winner);
+    });
+  }
+
+  bool _matches(MediaItem media, String value) {
+    final type = media.type.toLowerCase();
     if (value == 'Movies') {
-      return m.type.toLowerCase().contains('movie') ||
-          m.type.toLowerCase().contains('film');
+      return type.contains('movie') || type.contains('film');
     }
     if (value == 'TV Episodes') {
-      return m.type.toLowerCase().contains('episode') || m.seasons.isNotEmpty;
+      return type.contains('episode') || type.contains('series') ||
+          media.seasons.isNotEmpty;
     }
     if (value == 'Music') {
-      return ['song', 'album', 'music', 'track']
-          .any(m.type.toLowerCase().contains);
+      return ['song', 'album', 'music', 'track', 'concert']
+          .any(type.contains);
+    }
+    if (value == 'Specials & Events') {
+      return ['special', 'event', 'concert', 'bonus', 'extra', 'performance']
+          .any(type.contains) ||
+          media.isBonusContent;
     }
     if (value == 'Physical') {
-      return m.discType != null || m.discCollectionId != null;
+      return media.discType != null || media.discCollectionId != null;
     }
     return true;
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const UniversalText('Surprise Me')),
-        body: ListView(padding: const EdgeInsets.all(20), children: [
-          const UniversalText('True Random',
-              style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900)),
+  Widget build(BuildContext context) {
+    final wheelItems = _wheelEntries.isEmpty
+        ? _eligibleItems().take(8).toList(growable: false)
+        : _wheelEntries;
+    return Scaffold(
+      appBar: AppBar(title: const UniversalText('Surprise Me')),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          const UniversalText(
+            'True Random',
+            style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 8),
           const UniversalText(
-              'Random Everything intentionally crosses movies, episodes, songs, albums, music videos and extras.'),
+            'Let the slot machine or roulette choose something from your accessible library. Movies, episodes, specials, music and physical editions can all be included.',
+          ),
           const SizedBox(height: 20),
           DropdownButtonFormField<String>(
-              initialValue: mode,
-              items: const [
-                DropdownMenuItem(
-                    value: 'Random Everything',
-                    child: UniversalText('Random Everything')),
-                DropdownMenuItem(
-                    value: 'Movies', child: UniversalText('Movies')),
-                DropdownMenuItem(
-                    value: 'TV Episodes', child: UniversalText('TV Episodes')),
-                DropdownMenuItem(value: 'Music', child: UniversalText('Music')),
-                DropdownMenuItem(
-                    value: 'Physical',
-                    child: UniversalText('Something I Own Physically')),
-              ],
-              onChanged: (v) => setState(() => mode = v ?? mode),
-              decoration: const InputDecoration(labelText: 'Mode')),
-          const SizedBox(height: 20),
+            initialValue: mode,
+            items: const [
+              DropdownMenuItem(
+                value: 'Random Everything',
+                child: UniversalText('Random Everything'),
+              ),
+              DropdownMenuItem(
+                value: 'Movies',
+                child: UniversalText('Movies'),
+              ),
+              DropdownMenuItem(
+                value: 'TV Episodes',
+                child: UniversalText('TV Shows & Episodes'),
+              ),
+              DropdownMenuItem(
+                value: 'Specials & Events',
+                child: UniversalText('Specials & Events'),
+              ),
+              DropdownMenuItem(
+                value: 'Music',
+                child: UniversalText('Music & Concerts'),
+              ),
+              DropdownMenuItem(
+                value: 'Physical',
+                child: UniversalText('Something I Own Physically'),
+              ),
+            ],
+            onChanged: _isSpinning ? null : (value) => setState(() => mode = value ?? mode),
+            decoration: const InputDecoration(labelText: 'Choose what can be selected'),
+          ),
+          const SizedBox(height: 14),
+          DropdownButtonFormField<String>(
+            initialValue: animationStyle,
+            items: const [
+              DropdownMenuItem(
+                value: 'Slot Machine',
+                child: UniversalText('Slot Machine Animation'),
+              ),
+              DropdownMenuItem(
+                value: 'Roulette',
+                child: UniversalText('Roulette Wheel Animation'),
+              ),
+            ],
+            onChanged: _isSpinning
+                ? null
+                : (value) => setState(() => animationStyle = value ?? animationStyle),
+            decoration: const InputDecoration(labelText: 'Surprise animation'),
+          ),
+          const SizedBox(height: 18),
+          if (animationStyle == 'Roulette')
+            _buildRoulette(wheelItems)
+          else
+            _buildSlotMachine(),
+          const SizedBox(height: 18),
           FilledButton.icon(
-              onPressed: pick,
-              icon: const Icon(Icons.shuffle_rounded),
-              label: const UniversalText('SURPRISE ME')),
-          const SizedBox(height: 24),
-          if (selected != null)
+            onPressed: _isSpinning ? null : pick,
+            icon: Icon(_isSpinning ? Icons.hourglass_top_rounded : Icons.casino_rounded),
+            label: UniversalText(_isSpinning ? 'SPINNING…' : 'SURPRISE ME'),
+          ),
+          if (selected != null && !_isSpinning) ...[
+            const SizedBox(height: 22),
             Card(
-                child: Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Column(children: [
-                      _Artwork(imageUrl: selected!.imageUrl, size: 180),
-                      const SizedBox(height: 14),
-                      Text(selected!.title,
-                          style: const TextStyle(
-                              fontSize: 24, fontWeight: FontWeight.w900),
-                          textAlign: TextAlign.center),
-                      Text(selected!.type,
-                          style: const TextStyle(color: Colors.white60)),
-                      const SizedBox(height: 12),
-                      const UniversalText(
-                          'This selection was chosen from the eligible library items. No taste ranking was used.'),
-                      const SizedBox(height: 12),
-                      Wrap(
-                          alignment: WrapAlignment.center,
-                          spacing: 10,
-                          runSpacing: 8,
-                          children: [
-                            FilledButton.icon(
-                                onPressed: () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                        builder: (_) => MediaDetailsScreen(
-                                            media: selected!))),
-                                icon: const Icon(Icons.play_arrow_rounded),
-                                label: const UniversalText('PLAY')),
-                            OutlinedButton(
-                                onPressed: pick,
-                                child: const UniversalText('SHUFFLE AGAIN')),
-                          ]),
-                    ])))
-        ]),
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  children: [
+                    _Artwork(imageUrl: selected!.imageUrl, size: 180),
+                    const SizedBox(height: 14),
+                    Text(
+                      selected!.title,
+                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+                      textAlign: TextAlign.center,
+                    ),
+                    Text(selected!.type, style: const TextStyle(color: Colors.white60)),
+                    const SizedBox(height: 12),
+                    const UniversalText(
+                      'Your pick was selected randomly from the eligible items in your library.',
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 10,
+                      runSpacing: 8,
+                      children: [
+                        FilledButton.icon(
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => MediaDetailsScreen(media: selected!),
+                            ),
+                          ),
+                          icon: const Icon(Icons.play_arrow_rounded),
+                          label: const UniversalText('VIEW / PLAY'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: pick,
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: const UniversalText('SPIN AGAIN'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSlotMachine() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF19131F),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.amber.withValues(alpha: .45), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.amber.withValues(alpha: _isSpinning ? .18 : .07),
+            blurRadius: _isSpinning ? 28 : 12,
+            spreadRadius: _isSpinning ? 2 : 0,
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.stars_rounded, color: Colors.amber),
+              SizedBox(width: 8),
+              Text('THE ENTERTAINMENT JACKPOT',
+                  style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.1)),
+              SizedBox(width: 8),
+              Icon(Icons.stars_rounded, color: Colors.amber),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: List<Widget>.generate(3, (index) {
+              final item = _reels[index];
+              return Expanded(
+                child: Container(
+                  margin: EdgeInsets.only(left: index == 0 ? 0 : 6),
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF08080B),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.amber.withValues(alpha: .35)),
+                  ),
+                  child: Column(
+                    children: [
+                      SizedBox(
+                        height: 112,
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 100),
+                          transitionBuilder: (child, animation) => SlideTransition(
+                            position: Tween<Offset>(
+                              begin: const Offset(0, -1),
+                              end: Offset.zero,
+                            ).animate(animation),
+                            child: FadeTransition(opacity: animation, child: child),
+                          ),
+                          child: item == null
+                              ? _slotPlaceholder()
+                              : KeyedSubtree(
+                                  key: ValueKey('${item.id}-$index'),
+                                  child: _Artwork(
+                                    imageUrl: item.imageUrl,
+                                    size: 112,
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        item?.title ?? '???',
+                        key: ValueKey('slot-title-${item?.id}-$index'),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            _isSpinning ? 'SPINNING FOR YOUR NEXT PICK…' : 'MATCH THREE FOR YOUR NEXT WATCH',
+            style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.w900, letterSpacing: 1),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _slotPlaceholder() => Container(
+        key: const ValueKey('slot-placeholder'),
+        width: double.infinity,
+        color: const Color(0xFF28202E),
+        alignment: Alignment.center,
+        child: const Icon(Icons.movie_filter_rounded, size: 42, color: Colors.amber),
       );
+
+  Widget _buildRoulette(List<MediaItem> entries) {
+    final rotation = _wheelRotation;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 16, 14, 18),
+      decoration: BoxDecoration(
+        color: const Color(0xFF111923),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.lightBlueAccent.withValues(alpha: .35)),
+      ),
+      child: Column(
+        children: [
+          const Text('ENTERTAINMENT ROULETTE',
+              style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: 300,
+            height: 300,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                if (entries.isNotEmpty)
+                  AnimatedBuilder(
+                    animation: _spinController,
+                    builder: (context, child) => Transform.rotate(
+                      angle: (rotation?.value ?? 0) * 2 * pi,
+                      child: child,
+                    ),
+                    child: CustomPaint(
+                      size: const Size.square(300),
+                      painter: _SurpriseWheelPainter(
+                        labels: entries.map((item) => item.title).toList(),
+                      ),
+                    ),
+                  )
+                else
+                  const Icon(Icons.casino_rounded, size: 150, color: Colors.white30),
+                Positioned(
+                  top: -4,
+                  child: Icon(Icons.arrow_drop_down_rounded,
+                      size: 54, color: Colors.amber.shade300),
+                ),
+                Container(
+                  width: 58,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFF121A25),
+                    border: Border.all(color: Colors.amber, width: 3),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.stars_rounded, color: Colors.amber, size: 28),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _isSpinning ? 'THE WHEEL IS DECIDING…' : 'SPIN TO REVEAL A TITLE',
+            style: const TextStyle(color: Colors.lightBlueAccent, fontWeight: FontWeight.w900),
+          ),
+          if (entries.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              '${entries.length} eligible titles on the wheel',
+              style: const TextStyle(color: Colors.white60, fontSize: 12),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SurpriseWheelPainter extends CustomPainter {
+  const _SurpriseWheelPainter({required this.labels});
+
+  final List<String> labels;
+
+  static const List<Color> _colors = <Color>[
+    Color(0xFF7E57C2),
+    Color(0xFF1565C0),
+    Color(0xFF00897B),
+    Color(0xFFEF6C00),
+    Color(0xFFC62828),
+    Color(0xFF6D4C41),
+    Color(0xFF3949AB),
+    Color(0xFFAD1457),
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (labels.isEmpty) return;
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.shortestSide / 2 - 5;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    final sweep = (2 * pi) / labels.length;
+    final fill = Paint()..style = PaintingStyle.fill;
+    final divider = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..color = Colors.white.withValues(alpha: .8);
+
+    for (var index = 0; index < labels.length; index++) {
+      final start = -pi / 2 + index * sweep;
+      fill.color = _colors[index % _colors.length];
+      canvas.drawArc(rect, start, sweep, true, fill);
+      canvas.drawArc(rect, start, sweep, true, divider);
+
+      final label = labels[index].length > 18
+          ? '${labels[index].substring(0, 16)}…'
+          : labels[index];
+      final text = TextPainter(
+        text: TextSpan(
+          text: label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 9,
+            fontWeight: FontWeight.w800,
+            shadows: <Shadow>[Shadow(color: Colors.black87, blurRadius: 3)],
+          ),
+        ),
+        textAlign: TextAlign.center,
+        textDirection: TextDirection.ltr,
+        maxLines: 2,
+      )..layout(maxWidth: radius * .46);
+      final angle = start + sweep / 2;
+      final labelRadius = radius * .66;
+      final position = Offset(
+        center.dx + cos(angle) * labelRadius - text.width / 2,
+        center.dy + sin(angle) * labelRadius - text.height / 2,
+      );
+      text.paint(canvas, position);
+    }
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 5
+        ..color = Colors.amber,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _SurpriseWheelPainter oldDelegate) =>
+      oldDelegate.labels != labels;
 }
 
 class MediaSessionsScreen extends StatelessWidget {
