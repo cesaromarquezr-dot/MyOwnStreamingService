@@ -1,10 +1,14 @@
 import 'package:material_ui/material_ui.dart';
 
 import 'app_core.dart';
-import 'localization.dart';
+import 'music.dart';
+import 'people_relationship_graph.dart';
 
-/// Finds a verifiable shortest connection through cast/crew credits already
-/// indexed in the active library. Every graph edge names the shared work.
+/// Finds a verifiable shortest path through the active profile's explicit
+/// film/TV cast-and-crew credits and music artist/featured-artist credits.
+///
+/// Catalog-only recordings can help explain a music collaboration, but they
+/// are kept as catalog context and never become owned library media here.
 class ActorConnectionScreen extends StatefulWidget {
   const ActorConnectionScreen({super.key, this.initialPerson});
   final String? initialPerson;
@@ -13,73 +17,52 @@ class ActorConnectionScreen extends StatefulWidget {
   State<ActorConnectionScreen> createState() => _ActorConnectionScreenState();
 }
 
-class _ConnectionEdge {
-  const _ConnectionEdge(this.person, this.workTitle, this.workYear);
-  final String person;
-  final String workTitle;
-  final int? workYear;
-}
-
-class _ConnectionStep {
-  const _ConnectionStep(this.person, {this.viaTitle, this.viaYear});
-  final String person;
-  final String? viaTitle;
-  final int? viaYear;
-}
-
 class _ActorConnectionScreenState extends State<ActorConnectionScreen> {
   late final TextEditingController _fromController;
   final TextEditingController _toController = TextEditingController();
-  List<_ConnectionStep> _path = const [];
+  List<PersonRelationshipStep> _path = const <PersonRelationshipStep>[];
   bool _searched = false;
   String? _error;
 
-  List<MediaItem> get _works => AppController.instance.library;
-  String _key(String name) =>
-      name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  List<MediaItem> get _visibleMedia => AppController.instance.library
+      .where((item) => item.isAccessibleTo(AppController.instance.currentProfile))
+      .toList(growable: false);
 
-  List<String> _peopleIn(MediaItem item) {
-    final seen = <String>{};
-    final people = <String>[];
-    for (final raw in <String>[
-      ...item.actors,
-      ...item.directors,
-      ...item.writers,
-      ...item.music
-    ]) {
-      final name = raw.trim();
-      if (name.isNotEmpty && seen.add(_key(name))) people.add(name);
+  PeopleRelationshipGraph _buildGraph() {
+    final works = <PersonCreditWork>[];
+    for (final item in _visibleMedia) {
+      works.add(PersonCreditWork(
+        title: item.title,
+        year: item.releaseYear,
+        kind: item.type,
+        people: <String>[
+          ...item.actors,
+          ...item.directors,
+          ...item.writers,
+          ...item.music,
+        ],
+      ));
     }
-    return people;
-  }
 
-  Map<String, List<_ConnectionEdge>> _graph() {
-    final graph = <String, List<_ConnectionEdge>>{};
-    for (final work in _works) {
-      final people = _peopleIn(work);
-      for (final person in people) {
-        final edges =
-            graph.putIfAbsent(_key(person), () => <_ConnectionEdge>[]);
-        for (final other in people) {
-          if (_key(other) == _key(person)) continue;
-          edges.add(_ConnectionEdge(other, work.title, work.releaseYear));
-        }
-      }
+    final musicStore = MusicLibraryStore.instance;
+    final tracksById = <String, MusicTrack>{};
+    for (final track in musicStore.tracks) {
+      if (!track.catalogOnly) tracksById[track.id] = track;
     }
-    for (final edges in graph.values) {
-      edges.sort((a, b) =>
-          a.workTitle.toLowerCase().compareTo(b.workTitle.toLowerCase()));
+    for (final track in musicStore.catalogTracks.values) {
+      tracksById.putIfAbsent(track.id, () => track);
     }
-    return graph;
-  }
-
-  String _displayName(String key) {
-    for (final work in _works) {
-      for (final person in _peopleIn(work)) {
-        if (_key(person) == key) return person;
-      }
+    for (final track in tracksById.values) {
+      final title = track.album.trim().isEmpty
+          ? track.title
+          : '${track.title} — ${track.album}';
+      works.add(PersonCreditWork(
+        title: title,
+        kind: track.catalogOnly ? 'Music catalog recording' : 'Song',
+        people: <String>[track.artist, ...track.featuredArtists],
+      ));
     }
-    return key;
+    return PeopleRelationshipGraph.fromWorks(works);
   }
 
   void _findPath() {
@@ -88,78 +71,30 @@ class _ActorConnectionScreenState extends State<ActorConnectionScreen> {
     if (from.isEmpty || to.isEmpty) {
       setState(() {
         _searched = true;
-        _path = const [];
+        _path = const <PersonRelationshipStep>[];
         _error = 'Enter both names to find a connection.';
       });
       return;
     }
-    final graph = _graph();
-    final source = _key(from);
-    final target = _key(to);
-    if (!graph.containsKey(source) || !graph.containsKey(target)) {
+
+    final graph = _buildGraph();
+    if (!graph.containsPerson(from) || !graph.containsPerson(to)) {
       setState(() {
         _searched = true;
-        _path = const [];
+        _path = const <PersonRelationshipStep>[];
         _error =
-            'One or both people are missing from credits in your indexed library.';
-      });
-      return;
-    }
-    if (source == target) {
-      setState(() {
-        _searched = true;
-        _path = [_ConnectionStep(_displayName(source))];
-        _error = null;
+            'One or both people are missing from the active profile’s indexed credits. Add verified cast, crew, artist or featured-artist credits first.';
       });
       return;
     }
 
-    final visited = <String>{source};
-    final queue = <String>[source];
-    final previous = <String, ({String parent, _ConnectionEdge edge})>{};
-    while (queue.isNotEmpty && !visited.contains(target)) {
-      final current = queue.removeAt(0);
-      for (final edge in graph[current] ?? const <_ConnectionEdge>[]) {
-        final next = _key(edge.person);
-        if (!visited.add(next)) continue;
-        previous[next] = (parent: current, edge: edge);
-        queue.add(next);
-        if (next == target) break;
-      }
-    }
-    if (!visited.contains(target)) {
-      setState(() {
-        _searched = true;
-        _path = const [];
-        _error =
-            'No connection was found in the media currently indexed on this server.';
-      });
-      return;
-    }
-
-    final reverseNames = <String>[target];
-    final reverseEdges = <_ConnectionEdge>[];
-    var cursor = target;
-    while (cursor != source) {
-      final entry = previous[cursor]!;
-      reverseEdges.add(entry.edge);
-      cursor = entry.parent;
-      reverseNames.add(cursor);
-    }
-    final names = reverseNames.reversed.toList();
-    final edges = reverseEdges.reversed.toList();
-    final path = <_ConnectionStep>[
-      for (var i = 0; i < names.length; i++)
-        _ConnectionStep(
-          _displayName(names[i]),
-          viaTitle: i == 0 ? null : edges[i - 1].workTitle,
-          viaYear: i == 0 ? null : edges[i - 1].workYear,
-        ),
-    ];
+    final path = graph.shortestPath(from, to);
     setState(() {
       _searched = true;
-      _path = path;
-      _error = null;
+      _path = path ?? const <PersonRelationshipStep>[];
+      _error = path == null
+          ? 'No connection was found in the active profile’s indexed media and music credits.'
+          : null;
     });
   }
 
@@ -178,14 +113,15 @@ class _ActorConnectionScreenState extends State<ActorConnectionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final allPeople = _works.expand(_peopleIn).toSet().toList()
-      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final graph = _buildGraph();
+    final allPeople = graph.people;
     return Scaffold(
-      appBar: AppBar(title: const UniversalText('People Connections')),
+      appBar: AppBar(title: const Text('People Connections')),
       body: ListView(padding: const EdgeInsets.all(18), children: [
-        const UniversalText(
-            'Find a cross-media path between actors, directors, writers, singers, bands, and credited music contributors. Connections can pass through movies, TV shows, soundtrack credits, songs, featured artists, groups, and collaborations when those relationships are present in your indexed metadata.',
-            style: TextStyle(color: Colors.white70, height: 1.35)),
+        const Text(
+          'Find a shortest, explainable path between actors, directors, writers, composers, singers and bands. Every connection is backed by a shared indexed title or an explicit music collaboration; the connecting work is shown at each step.',
+          style: TextStyle(color: Colors.white70, height: 1.35),
+        ),
         const SizedBox(height: 16),
         TextField(
           controller: _fromController,
@@ -194,7 +130,7 @@ class _ActorConnectionScreenState extends State<ActorConnectionScreen> {
             hintText: 'e.g. Florence Pugh',
             prefixIcon: const Icon(Icons.person_search_rounded),
             helperText: allPeople.isEmpty
-                ? 'Import cast, soundtrack, artist, and collaboration credits to build the graph.'
+                ? 'Import cast, soundtrack, artist and collaboration credits to build the graph.'
                 : 'Indexed people: ${allPeople.length}',
           ),
         ),
@@ -206,70 +142,115 @@ class _ActorConnectionScreenState extends State<ActorConnectionScreen> {
             hintText: 'e.g. Bruno Mars',
             prefixIcon: Icon(Icons.person_outline_rounded),
           ),
+          onSubmitted: (_) => _findPath(),
         ),
+        if (allPeople.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: allPeople.take(12).map((person) {
+              return ActionChip(
+                label: Text(person),
+                onPressed: () => setState(() {
+                  if (_fromController.text.trim().isEmpty) {
+                    _fromController.text = person;
+                  } else {
+                    _toController.text = person;
+                  }
+                }),
+              );
+            }).toList(growable: false),
+          ),
+        ],
         const SizedBox(height: 14),
         FilledButton.icon(
-            onPressed: _findPath,
-            icon: const Icon(Icons.account_tree_rounded),
-            label: const UniversalText('Find cross-media connection')),
+          onPressed: _findPath,
+          icon: const Icon(Icons.account_tree_rounded),
+          label: const Text('Find cross-media connection'),
+        ),
         if (_searched && _error != null) ...[
           const SizedBox(height: 16),
           Card(
-              child: Padding(
-                  padding: const EdgeInsets.all(14), child: Text(_error!))),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Text(_error!),
+            ),
+          ),
         ],
         if (_path.isNotEmpty) ...[
           const SizedBox(height: 18),
           Card(
-              child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                            '${_path.length - 1} connection${_path.length == 2 ? '' : 's'}',
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w900, fontSize: 18)),
-                        const SizedBox(height: 12),
-                        for (var i = 0; i < _path.length; i++) ...[
-                          Row(children: [
-                            CircleAvatar(radius: 16, child: Text('${i + 1}')),
-                            const SizedBox(width: 10),
-                            Expanded(
-                                child: Text(_path[i].person,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w800)))
-                          ]),
-                          if (i < _path.length - 1)
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                  left: 25, top: 6, bottom: 6),
-                              child: Row(children: [
-                                Container(
-                                    width: 2,
-                                    height: 22,
-                                    color:
-                                        Theme.of(context).colorScheme.primary),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                    child: Text(
-                                        'via ${_path[i + 1].viaTitle ?? 'shared work'}${_path[i + 1].viaYear == null ? '' : ' (${_path[i + 1].viaYear})'}',
-                                        style: TextStyle(
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .primary,
-                                            fontSize: 12)))
-                              ]),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${_path.length - 1} connection${_path.length == 2 ? '' : 's'}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 18,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  for (var i = 0; i < _path.length; i++) ...[
+                    Row(children: [
+                      CircleAvatar(radius: 16, child: Text('${i + 1}')),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _path[i].person,
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                    ]),
+                    if (i < _path.length - 1)
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          left: 25,
+                          top: 6,
+                          bottom: 6,
+                        ),
+                        child: Row(children: [
+                          Container(
+                            width: 2,
+                            height: 28,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'via ${_path[i + 1].viaWorkTitle ?? 'shared work'}'
+                              '${_path[i + 1].viaWorkYear == null ? '' : ' (${_path[i + 1].viaWorkYear})'}'
+                              '${_path[i + 1].viaWorkKind?.trim().isNotEmpty == true ? ' · ${_path[i + 1].viaWorkKind}' : ''}',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.primary,
+                                fontSize: 12,
+                              ),
                             ),
-                        ],
-                      ]))),
+                          ),
+                        ]),
+                      ),
+                  ],
+                ],
+              ),
+            ),
+          ),
         ],
+        const SizedBox(height: 12),
+        const Text(
+          'Source note: relationships are generated from explicit credits in the selected profile’s accessible media and music catalog. Catalog-only music can explain a collaboration, but it is not counted as owned or playable library media.',
+          style: TextStyle(color: Colors.white38, fontSize: 11, height: 1.4),
+        ),
         if (allPeople.isEmpty)
           const Padding(
-              padding: EdgeInsets.only(top: 12),
-              child: UniversalText(
-                  'Import cast, soundtrack, artist, group-membership, and collaboration metadata to build richer cross-media paths.',
-                  style: TextStyle(color: Colors.white54))),
+            padding: EdgeInsets.only(top: 12),
+            child: Text(
+              'Import cast, soundtrack, artist, group-membership and collaboration metadata to build richer cross-media paths.',
+              style: TextStyle(color: Colors.white54),
+            ),
+          ),
       ]),
     );
   }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 
 import 'app_core.dart';
+import 'actor_connections.dart';
 import 'backend_api.dart';
 import 'core/services/cinematic_person_metadata_service.dart';
 import 'details.dart';
@@ -567,6 +568,39 @@ class _PerformerUniverseScreenState extends State<PerformerUniverseScreen> {
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 30),
         children: [
           _profileHeader(profile, image),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    settings: const RouteSettings(
+                      name: '/app/people/relationships',
+                    ),
+                    builder: (_) =>
+                        ActorConnectionScreen(initialPerson: _performerName),
+                  ),
+                ),
+                icon: const Icon(Icons.account_tree_rounded),
+                label: const Text('Explore people connections'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    settings: const RouteSettings(
+                      name: '/app/music/artist-universe',
+                    ),
+                    builder: (_) =>
+                        MusicArtistProfileScreen(artistName: _performerName),
+                  ),
+                ),
+                icon: const Icon(Icons.mic_external_on_rounded),
+                label: const Text('Open artist universe'),
+              ),
+            ],
+          ),
           if (_loading)
             const Padding(
               padding: EdgeInsets.only(top: 14),

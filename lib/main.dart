@@ -91,6 +91,7 @@ import 'dialogue_search.dart';
 import 'screens/my_media_hub_screen.dart';
 import 'discovery_center.dart';
 import 'performer_universe.dart';
+import 'entertainment_universe_hub.dart';
 import 'personal_media_intelligence_center.dart';
 import 'interface_experience_studio.dart';
 import 'interface_experience.dart';
@@ -393,6 +394,8 @@ class _MyStreamingServiceState extends State<MyStreamingService> {
       navigatorKey: _appNavigatorKey,
       navigatorObservers: <NavigatorObserver>[_appPageRouteObserver],
       routes: <String, WidgetBuilder>{
+        '/app/entertainment-universe': (context) =>
+            const EntertainmentUniverseHubScreen(),
         '/app/page/performer-universe': (context) {
           final argument = ModalRoute.of(context)?.settings.arguments;
           final performerName = argument is String ? argument.trim() : '';
@@ -10858,6 +10861,15 @@ class HomeMediaIntelligenceToolsShelf extends StatelessWidget {
         color: const Color(0xFFFF8787),
         page: const MyTvScreen(),
         route: '/app/my-tv-schedule'
+      ),
+      (
+        title: 'Entertainment Universe',
+        subtitle:
+            'Artists, actors, people links, music ID, physical media and more',
+        icon: Icons.auto_awesome_mosaic_rounded,
+        color: const Color(0xFFBBA8FF),
+        page: const EntertainmentUniverseHubScreen(),
+        route: '/app/entertainment-universe'
       ),
       (
         title: 'Personal Discovery Graph',

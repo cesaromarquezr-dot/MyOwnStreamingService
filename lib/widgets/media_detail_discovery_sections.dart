@@ -236,11 +236,11 @@ class _MediaDetailDiscoverySectionsState
       for (final row in rawAlbums.whereType<Map>()) {
         final album = Map<String, dynamic>.from(row);
         final id = album['id']?.toString().trim() ?? '';
-        final title =
-            (album['title'] ?? album['name'])?.toString().trim() ?? '';
-        final imageUrl =
-            (album['imageUrl'] ?? album['coverArtUrl'])?.toString().trim() ??
-                '';
+        final title = (album['title'] ?? album['name'])?.toString().trim() ?? '';
+        final imageUrl = (album['imageUrl'] ?? album['coverArtUrl'])
+                ?.toString()
+                .trim() ??
+            '';
         if (id.isEmpty || title.isEmpty) continue;
         final key = _normal(title);
         if (key.isEmpty || !seen.add(key)) continue;
@@ -276,15 +276,12 @@ class _MediaDetailDiscoverySectionsState
     final shelves = <_PersonShelf>[];
     for (final artist in names) {
       final local = _localItemsForPerson(artist)
-          .where((item) =>
-              RecommendationMediaKinds.classify(item) ==
+          .where((item) => RecommendationMediaKinds.classify(item) ==
               RecommendationMediaKind.musicAlbum)
           .toList(growable: false);
       final remote = await _musicAlbumsForArtist(artist);
       final items = _unique(<MediaItem>[...local, ...remote]);
-      if (items.isNotEmpty) {
-        shelves.add(_PersonShelf(name: artist, items: items));
-      }
+      if (items.isNotEmpty) shelves.add(_PersonShelf(name: artist, items: items));
     }
     return shelves;
   }
@@ -496,8 +493,7 @@ class _MediaDetailDiscoverySectionsState
       children: items.map((item) {
         final image = item.imageUrl?.trim() ?? '';
         final kind = RecommendationMediaKinds.classify(item);
-        final ownedRecord =
-            RecommendationOwnershipMatcher.findOwnedMediaForMedia(
+        final ownedRecord = RecommendationOwnershipMatcher.findOwnedMediaForMedia(
           media: item,
           controller: controller,
         );
@@ -565,9 +561,7 @@ class _MediaDetailDiscoverySectionsState
                 Text(
                   item.releaseYear?.toString() ??
                       (kind == RecommendationMediaKind.musicAlbum
-                          ? (item.music.isEmpty
-                              ? 'Album'
-                              : item.music.join(', '))
+                          ? (item.music.isEmpty ? 'Album' : item.music.join(', '))
                           : item.type.toUpperCase()),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,

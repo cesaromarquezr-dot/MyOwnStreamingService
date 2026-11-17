@@ -88,8 +88,7 @@ class EntertainmentCommandCenterScreen extends StatelessWidget {
             title: 'Recommendation Transparency',
             subtitle:
                 'Inspect recommendation signals and provide feedback on suggestions.',
-            onTap: () =>
-                _open(context, const RecommendationTransparencyScreen())),
+            onTap: () => _open(context, const RecommendationTransparencyScreen())),
         _CommandAction(
             icon: Icons.privacy_tip_outlined,
             title: 'Privacy & Ownership',
