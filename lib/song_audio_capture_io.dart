@@ -8,12 +8,14 @@ String? _recordPath;
 
 Future<void> start() async {
   if (!await _recorder.hasPermission()) {
-    throw StateError('Microphone permission is required to identify a song.');
+    throw StateError('Microphone permission is required for audio capture.');
   }
   final temp = await getTemporaryDirectory();
-  _recordPath = '${temp.path}${Platform.pathSeparator}moss-song-id-${DateTime.now().millisecondsSinceEpoch}.m4a';
+  _recordPath =
+      '${temp.path}${Platform.pathSeparator}moss-song-id-${DateTime.now().millisecondsSinceEpoch}.m4a';
   await _recorder.start(
-    const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 96000, sampleRate: 44100),
+    const RecordConfig(
+        encoder: AudioEncoder.aacLc, bitRate: 96000, sampleRate: 44100),
     path: _recordPath!,
   );
 }
@@ -25,16 +27,25 @@ Future<SongAudioSample> stop() async {
   final file = File(path);
   if (!await file.exists()) throw StateError('No microphone sample was saved.');
   try {
-    return SongAudioSample(bytes: await file.readAsBytes(), mimeType: 'audio/mp4');
+    return SongAudioSample(
+        bytes: await file.readAsBytes(), mimeType: 'audio/mp4');
   } finally {
-    try { await file.delete(); } catch (_) {}
+    try {
+      await file.delete();
+    } catch (_) {}
   }
 }
 
 Future<void> dispose() async {
-  try { await _recorder.stop(); } catch (_) {}
+  try {
+    await _recorder.stop();
+  } catch (_) {}
   await _recorder.dispose();
   final path = _recordPath;
   _recordPath = null;
-  if (path != null) { try { await File(path).delete(); } catch (_) {} }
+  if (path != null) {
+    try {
+      await File(path).delete();
+    } catch (_) {}
+  }
 }

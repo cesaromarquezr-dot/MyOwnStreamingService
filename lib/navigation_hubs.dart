@@ -14,6 +14,10 @@ import 'movies.dart';
 import 'music.dart';
 import 'series.dart';
 import 'localization.dart';
+import 'library_organization_studio.dart';
+import 'all_owned_media.dart';
+import 'server_control_center.dart';
+import 'virtual_libraries.dart';
 
 class LibraryHubScreen extends StatelessWidget {
   const LibraryHubScreen({super.key});
@@ -68,6 +72,12 @@ class LibraryHubScreen extends StatelessWidget {
             Icons.collections_bookmark_rounded,
             () => _push(context, const CollectionsPanel()),
           ),
+          'organization': _HubEntry(
+            'Library Organization',
+            'Genre libraries, tags, artwork and profile access',
+            Icons.tune_rounded,
+            () => _push(context, const LibraryOrganizationStudioScreen()),
+          ),
           'favorites': _HubEntry(
             'Favorites',
             'Liked media and music',
@@ -87,7 +97,36 @@ class LibraryHubScreen extends StatelessWidget {
           ),
         };
 
-        final children = <Widget>[];
+        final children = <Widget>[
+          _hubCard(
+            context,
+            _HubEntry(
+              'All Owned Media',
+              'Every movie, TV show and album owned by this profile, in one sortable library',
+              Icons.video_library_rounded,
+              () => _push(context, const AllOwnedMediaScreen()),
+            ),
+            size: 'Large',
+          ),
+          _hubCard(
+            context,
+            _HubEntry(
+              'Virtual Libraries',
+              'Netflix-style genre, director, cast, studio, language and mood shelves',
+              Icons.category_rounded,
+              () => _push(context, const VirtualLibrariesScreen()),
+            ),
+          ),
+          _hubCard(
+            context,
+            _HubEntry(
+              'Server Control Center',
+              'Home-server sync, profile library overview and maintenance shortcuts',
+              Icons.dns_rounded,
+              () => _push(context, const ServerControlCenterScreen()),
+            ),
+          ),
+        ];
         final visibleEntrySections = settings.visibleSections
             .where((section) => entries.containsKey(section))
             .toList(growable: false);
@@ -373,6 +412,9 @@ void _push(BuildContext context, Widget page) {
     CollectionsPanel() => 'collections',
     FavoritesScreen() => 'favorites',
     ComingSoonScreen() => 'coming-soon',
+    AllOwnedMediaScreen() => 'all-owned-media',
+    ServerControlCenterScreen() => 'server-control-center',
+    VirtualLibrariesScreen() => 'virtual-libraries',
     _ => null,
   };
   Navigator.push(

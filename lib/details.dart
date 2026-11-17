@@ -4,10 +4,12 @@
 
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:io';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
+import 'cinematic_theme_assets.dart';
 
 import 'app_core.dart';
 import 'rating_system.dart';
@@ -105,6 +107,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   String? _selectedDetailsTrailerUrl;
   bool _randomizeAvailableTrailers = false;
   bool _loadingProviderMetadata = false;
+  CinematicThemeAssets _cinematicThemeAssets = const CinematicThemeAssets();
   String? _providerMetadataError;
   final Map<int, List<Map<String, dynamic>>> _providerEpisodesBySeason =
       <int, List<Map<String, dynamic>>>{};
@@ -172,6 +175,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
+    unawaited(_loadCinematicThemeAssets());
     unawaited(_loadPreferredEdition());
     unawaited(_loadDefaultLanguageTracks());
     unawaited(EnergySaverController.instance
@@ -190,6 +194,23 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         _supportsCinematicProviderMetadata) {
       unawaited(_loadProviderTitleMetadata());
     }
+  }
+
+  Future<void> _loadCinematicThemeAssets() async {
+    final profileId = AppController.instance.currentProfile?.id;
+    if (profileId == null) return;
+    final assets = await CinematicThemeAssets.load(profileId: profileId, mediaId: media.id);
+    if (mounted) setState(() => _cinematicThemeAssets = assets);
+  }
+
+  bool get _isTvThemeTarget => _isLegacyTvType(media.type);
+
+  Future<void> _openCinematicThemeEditor() async {
+    final profileId = AppController.instance.currentProfile?.id;
+    if (profileId == null) return;
+    await showDialog<void>(context: context, builder: (_) => CinematicThemeAssetEditor(
+      profileId: profileId, mediaId: media.id, title: media.title, isTv: _isTvThemeTarget));
+    await _loadCinematicThemeAssets();
   }
 
   Future<void> _loadProviderTitleMetadata() async {
@@ -351,7 +372,11 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          if (_detailsBackdropUrl != null)
+          if (!_isTvThemeTarget && _cinematicThemeAssets.themeVideoPath != null && File(_cinematicThemeAssets.themeVideoPath!).existsSync())
+            Positioned.fill(child: IgnorePointer(child: CinematicThemeVideoBackdrop(path: _cinematicThemeAssets.themeVideoPath!))),
+          if (_isTvThemeTarget && _cinematicThemeAssets.themeSongPath != null && File(_cinematicThemeAssets.themeSongPath!).existsSync())
+            Positioned(left: 0, top: 0, child: SizedBox(width: 1, height: 1, child: CinematicThemeSongAudio(path: _cinematicThemeAssets.themeSongPath!))),
+          if (_detailsBackdropUrl != null && (_isTvThemeTarget || _cinematicThemeAssets.themeVideoPath == null))
             Positioned.fill(
               child: IgnorePointer(
                 child: Image.network(
@@ -388,6 +413,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                   // The global navigation already supplies Home. The details body
                   // renders the media title, so no duplicate title/back row here.
                   actions: [
+                    if (_isTvThemeTarget || _supportsCinematicProviderMetadata && !_isMusicTrack)
+                      IconButton(tooltip: 'Cinematic theme assets', icon: const Icon(Icons.movie_filter_outlined), onPressed: _openCinematicThemeEditor),
                     if (_supportsCinematicProviderMetadata)
                       IconButton(
                         tooltip: 'Choose poster and backdrop',

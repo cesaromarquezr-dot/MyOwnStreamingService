@@ -35,6 +35,7 @@ import 'how_it_works.dart';
 import 'music.dart';
 import 'home_server.dart';
 import 'home_widgets.dart';
+import 'home_browse_experience.dart';
 import 'home_streaming_discovery.dart';
 import 'weekly_top10.dart';
 import 'home_cinematic_recommendations.dart';
@@ -1890,6 +1891,19 @@ const List<String> _defaultHomeSectionOrder = <String>[
   'Channels',
   'Storage Progress',
   'Continue Watching',
+  'Action Movies',
+  'Comedies',
+  'Dramas',
+  'Thrillers',
+  'Sci-Fi & Fantasy',
+  'Horror',
+  'Family & Animation',
+  'Crime & Mystery',
+  'Romance',
+  'Documentaries',
+  'Adventure',
+  'Reality & Competition',
+  'Music & Concerts',
   'Themed Episodes',
   'You Might Also Like',
   'Collections',
@@ -1905,6 +1919,35 @@ const List<String> _defaultHomeSectionOrder = <String>[
   'Seasonal Collections',
   'Media Intelligence Tools',
 ];
+
+const Set<String> _focusBrowseCompatibleSections = <String>{
+  'Movies by Country',
+  'Shows by Country',
+  'Recommendations & Mood',
+  'Continue Watching',
+  'You Might Also Like',
+  'Because You Watched',
+  'People & Cast Recommendations',
+  'Library Recommendations',
+  'Recently Watched',
+  'Movies',
+  'TV Shows',
+  'New Additions',
+  'All Library',
+  'Action Movies',
+  'Comedies',
+  'Dramas',
+  'Thrillers',
+  'Sci-Fi & Fantasy',
+  'Horror',
+  'Family & Animation',
+  'Crime & Mystery',
+  'Romance',
+  'Documentaries',
+  'Adventure',
+  'Reality & Competition',
+  'Music & Concerts',
+};
 
 const Map<String, String> _legacyHomeSectionAliases = <String, String>{
   'International Movies': 'Movies by Country',
@@ -3298,6 +3341,68 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         ),
         const SizedBox(height: 10),
         _dropdown(
+          label: 'Details page layout',
+          value: detailsDraft.layoutPreset,
+          values: const [
+            'Classic',
+            'Cinematic Backdrop',
+            'Disney+ Inspired',
+            'Netflix Inspired',
+            'Prime Video Inspired',
+            'Hulu Inspired',
+            'Peacock Inspired',
+            'Paramount+ Inspired',
+            'Max Inspired',
+            'YouTube Inspired',
+          ],
+          onChanged: (value) => setState(() {
+            detailsDraft.layoutPreset = value;
+            switch (value) {
+              case 'Cinematic Backdrop':
+                detailsDraft.backdropDim = .38;
+                detailsDraft.backdropBlur = 0;
+                break;
+              case 'Disney+ Inspired':
+              case 'Prime Video Inspired':
+              case 'Paramount+ Inspired':
+                detailsDraft.backdropDim = .50;
+                detailsDraft.backdropBlur = 1;
+                break;
+              case 'Netflix Inspired':
+              case 'Hulu Inspired':
+              case 'Peacock Inspired':
+              case 'Max Inspired':
+              case 'YouTube Inspired':
+                detailsDraft.backdropDim = .58;
+                detailsDraft.backdropBlur = 0;
+                break;
+              default:
+                detailsDraft.backdropDim = .76;
+                detailsDraft.backdropBlur = 0;
+            }
+          }),
+        ),
+        const SizedBox(height: 8),
+        const UniversalText(
+          'Choose a layout structure. The service names are visual inspiration only; your library, metadata, playback and recommendations remain part of MyOwnStreamingService.',
+          style: TextStyle(color: Colors.white54, fontSize: 11, height: 1.35),
+        ),
+        const SizedBox(height: 12),
+        Text('Backdrop dimming: ${(detailsDraft.backdropDim * 100).round()}%'),
+        Slider(
+          value: detailsDraft.backdropDim.clamp(0.0, 1.0),
+          onChanged: (value) => setState(() => detailsDraft.backdropDim = value),
+        ),
+        Text('Backdrop blur: ${detailsDraft.backdropBlur.toStringAsFixed(0)}'),
+        Slider(
+          min: 0,
+          max: 24,
+          divisions: 12,
+          value: detailsDraft.backdropBlur.clamp(0.0, 24.0),
+          onChanged: (value) => setState(() => detailsDraft.backdropBlur = value),
+        ),
+        const SizedBox(height: 12),
+        _dropdown(
           label: 'Poster style',
           value: detailsDraft.posterStyle,
           values: const ['Standard', 'Full Screen', 'Compact', 'Side'],
@@ -4265,6 +4370,85 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   }
 
   Widget _buildDetailsCustomizationPreview() {
+    if (detailsDraft.layoutPreset != 'Classic') {
+      final accent = switch (detailsDraft.layoutPreset) {
+        'Disney+ Inspired' => const Color(0xFF1689FF),
+        'Netflix Inspired' => const Color(0xFFE50914),
+        'YouTube Inspired' => const Color(0xFFE50914),
+        'Prime Video Inspired' => const Color(0xFF36A9E8),
+        'Paramount+ Inspired' => const Color(0xFF36A9E8),
+        'Hulu Inspired' => const Color(0xFF1CE783),
+        'Peacock Inspired' => const Color(0xFFB38BFF),
+        'Max Inspired' => const Color(0xFF8B76FF),
+        _ => const Color(0xFF16C7E8),
+      };
+      return Material(
+        color: const Color(0xFF080B12),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [accent.withValues(alpha: .23), const Color(0xFF090909)],
+            ),
+          ),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(detailsDraft.layoutPreset.toUpperCase(),
+                  style: TextStyle(color: accent, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+              const SizedBox(height: 18),
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                if (detailsDraft.showInformation)
+                  const SizedBox(width: 72, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('DIRECTED BY', style: TextStyle(color: Colors.white54, fontSize: 8)),
+                    SizedBox(height: 5),
+                    Text('Director name', style: TextStyle(fontSize: 9)),
+                    SizedBox(height: 18),
+                    Text('RUNTIME', style: TextStyle(color: Colors.white54, fontSize: 8)),
+                    Text('1h 45m', style: TextStyle(fontSize: 10)),
+                  ])),
+                const SizedBox(width: 12),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  if (detailsDraft.showTitle)
+                    const Text('Featured title', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900)),
+                  if (detailsDraft.showMetadata) ...[
+                    const SizedBox(height: 5),
+                    Wrap(spacing: 6, runSpacing: 5, children: [
+                      for (final value in ['★ 8.2', '92%', '2026', 'PG-13', '4K', 'DOLBY'])
+                        Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3), decoration: BoxDecoration(color: Colors.white.withValues(alpha: .12), borderRadius: BorderRadius.circular(4)), child: Text(value, style: const TextStyle(fontSize: 8))),
+                    ]),
+                  ],
+                  if (detailsDraft.showDescription) ...[
+                    const SizedBox(height: 12),
+                    const Text('A short synopsis is centered beside the director and runtime details.', style: TextStyle(color: Colors.white70, fontSize: 10, height: 1.4)),
+                  ],
+                ])),
+              ]),
+              const SizedBox(height: 14),
+              Wrap(spacing: 6, runSpacing: 6, children: [
+                for (final action in ['▶ PLAY', '+ QUEUE', 'TRAILERS', '✓ WATCHED', '♥ FAVORITE'])
+                  Container(padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7), decoration: BoxDecoration(color: accent.withValues(alpha: .20), borderRadius: BorderRadius.circular(7), border: Border.all(color: accent.withValues(alpha: .35))), child: Text(action, style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w800))),
+              ]),
+              if (detailsDraft.sectionOrder.contains('Cast & Crew')) ...[
+                const SizedBox(height: 20),
+                const Text('CAST & CREW', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 8),
+                Row(children: List.generate(4, (index) => Container(margin: const EdgeInsets.only(right: 8), width: 44, height: 55, decoration: BoxDecoration(color: Colors.white.withValues(alpha: .12), borderRadius: BorderRadius.circular(7)), child: const Icon(Icons.person_outline, color: Colors.white38, size: 20)))),
+              ],
+              if (detailsDraft.showRecommendations) ...[
+                const SizedBox(height: 18),
+                const Text('RECOMMENDATIONS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 8),
+                Row(children: List.generate(4, (index) => Expanded(child: Container(height: 64, margin: const EdgeInsets.only(right: 6), decoration: BoxDecoration(color: Colors.white.withValues(alpha: .10), borderRadius: BorderRadius.circular(6)), child: const Icon(Icons.movie_outlined, color: Colors.white38))))),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+
     final sections = <Widget>[];
 
     for (final section in detailsDraft.sectionOrder) {
@@ -5937,6 +6121,7 @@ class _HomeScreenState extends State<HomeScreen>
   List<String> _homeNavigableSections = <String>[];
   int _focusedHomeSectionIndex = 0;
   PageHeroSettings _homePageHeroSettings = const PageHeroSettings();
+  String? _activeHomeGenre;
 
   bool _canMoveHomeSection(int direction) {
     if (direction == 0) return false;
@@ -6126,9 +6311,21 @@ class _HomeScreenState extends State<HomeScreen>
       );
     }
 
-    final library = controller.library
+    final allAccessibleLibrary = controller.library
         .where((media) => media.isAccessibleTo(profile))
         .toList(growable: false);
+    final homeGenreFacets = HomeBrowseGenreCatalog.facets(allAccessibleLibrary);
+    final activeGenre = homeGenreFacets.any(
+      (facet) => facet.genre.id == _activeHomeGenre,
+    )
+        ? _activeHomeGenre
+        : null;
+    // Focus Browse narrows the entire Home surface consistently, rather than
+    // changing only one rail and leaving unrelated shelves competing for attention.
+    final library = HomeBrowseGenreCatalog.filter(
+      allAccessibleLibrary,
+      activeGenre,
+    );
     final settings = widget.previewSettings ??
         HomeCustomizationStore.settingsFor(
             AppController.instance.currentProfile);
@@ -6139,9 +6336,11 @@ class _HomeScreenState extends State<HomeScreen>
         ? Color(homeAppearance.backgroundColor)
         : colorFromName(settings.homeBackgroundColor);
 
-    final watched = controller.watched
-        .where((media) => media.isAccessibleTo(profile))
-        .toList(growable: false);
+    final watched = controller.watched.where((media) {
+      return media.isAccessibleTo(profile) &&
+          (activeGenre == null ||
+              HomeBrowseGenreCatalog.matches(media, activeGenre));
+    }).toList(growable: false);
     final continueWatching = library.where((media) {
       final progress = controller.getPlaybackProgress(media.id);
       return progress > 0 && progress < .95;
@@ -6191,7 +6390,10 @@ class _HomeScreenState extends State<HomeScreen>
         homeHeroItems.isNotEmpty;
     final navigableSections = settings.sectionOrder
         .where((section) =>
-            section != 'Hero Banner' && settings.isSectionVisible(section))
+            section != 'Hero Banner' &&
+            settings.isSectionVisible(section) &&
+            (activeGenre == null ||
+                _focusBrowseCompatibleSections.contains(section)))
         .toList(growable: false);
     _homeNavigableSections = navigableSections;
     if (!showHero && _homePageHeroSettings.expandActiveSection) {
@@ -6220,9 +6422,11 @@ class _HomeScreenState extends State<HomeScreen>
             // library sections.
             final appBarHeight = widget.showAppBar ? kToolbarHeight : 0.0;
             const browseNavigationHeight = 58.0; // 48px row + 10px padding.
+            const focusBrowseHeight = 64.0;
             const heroGap = 14.0;
             final topChromeHeight = appBarHeight +
                 browseNavigationHeight +
+                focusBrowseHeight +
                 (showHero ? heroGap : 0.0);
             final targetUpperPaneHeight = constraints.maxHeight * 0.58;
             final desiredHeroHeight = targetUpperPaneHeight - topChromeHeight;
@@ -6363,6 +6567,13 @@ class _HomeScreenState extends State<HomeScreen>
               children: [
                 if (widget.showAppBar) homeAppBar,
                 browseNavigation,
+                HomeGenreFocusBar(
+                  facets: homeGenreFacets,
+                  selectedGenreId: activeGenre,
+                  onSelected: (genreId) => setState(
+                    () => _activeHomeGenre = genreId,
+                  ),
+                ),
                 if (showHero) const SizedBox(height: heroGap),
                 if (showHero)
                   SizedBox(
@@ -6450,7 +6661,10 @@ class _HomeScreenState extends State<HomeScreen>
                                   ),
                                 ),
                               for (final section in settings.sectionOrder)
-                                if (section != 'Hero Banner')
+                                if (section != 'Hero Banner' &&
+                                    (activeGenre == null ||
+                                        _focusBrowseCompatibleSections
+                                            .contains(section)))
                                   ..._anchorHomeSectionSlivers(
                                     _buildHomeSectionSlivers(
                                       context,
@@ -6517,6 +6731,94 @@ class _HomeScreenState extends State<HomeScreen>
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+/// A low-friction genre strip that lets the viewer deliberately narrow Home.
+/// It reduces competing shelves while keeping a single tap to return to All.
+class HomeGenreFocusBar extends StatelessWidget {
+  final List<HomeBrowseGenreFacet> facets;
+  final String? selectedGenreId;
+  final ValueChanged<String?> onSelected;
+
+  const HomeGenreFocusBar({
+    super.key,
+    required this.facets,
+    required this.selectedGenreId,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 64,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+      decoration: BoxDecoration(
+        color: const Color(0xAA080808),
+        border: Border(
+          bottom: BorderSide(color: Colors.white.withValues(alpha: .07)),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(right: 10),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'FOCUS BROWSE',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.3,
+                    color: Colors.white60,
+                  ),
+                ),
+                Text(
+                  'Browse',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  ChoiceChip(
+                    label: const Text('All'),
+                    selected: selectedGenreId == null,
+                    onSelected: (_) => onSelected(null),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  for (final facet in facets) ...[
+                    const SizedBox(width: 7),
+                    ChoiceChip(
+                      label: Text('${facet.genre.label} · ${facet.count}'),
+                      selected: selectedGenreId == facet.genre.id,
+                      onSelected: (_) => onSelected(facet.genre.id),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          if (selectedGenreId != null) ...[
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: 'Clear genre focus',
+              visualDensity: VisualDensity.compact,
+              onPressed: () => onSelected(null),
+              icon: const Icon(Icons.close_rounded, size: 19),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -6790,6 +7092,123 @@ List<Widget> _buildHomeSectionSlivers(
     case 'Library Recommendations':
       return _homeMediaRail(section, recommendations, 'Picked for your profile',
           expanded: expanded, expandedArtworkScale: expandedArtworkScale);
+    case 'Action Movies':
+      return _homeGenreShelfSlivers(
+        title: 'Action Movies',
+        subtitle: 'High-energy movies from your library',
+        items: movies,
+        genreId: 'action',
+        expanded: expanded,
+        expandedArtworkScale: expandedArtworkScale,
+      );
+    case 'Comedies':
+      return _homeGenreShelfSlivers(
+        title: 'Comedies',
+        subtitle: 'Movies and shows made to make you laugh',
+        items: <MediaItem>[...movies, ...tvShows],
+        genreId: 'comedy',
+        expanded: expanded,
+        expandedArtworkScale: expandedArtworkScale,
+      );
+    case 'Dramas':
+      return _homeGenreShelfSlivers(
+        title: 'Dramas',
+        subtitle: 'Character-driven stories and emotional journeys',
+        items: <MediaItem>[...movies, ...tvShows],
+        genreId: 'drama',
+        expanded: expanded,
+        expandedArtworkScale: expandedArtworkScale,
+      );
+    case 'Thrillers':
+      return _homeGenreShelfSlivers(
+        title: 'Thrillers',
+        subtitle: 'Suspense, tension and twists',
+        items: <MediaItem>[...movies, ...tvShows],
+        genreId: 'thriller',
+        expanded: expanded,
+        expandedArtworkScale: expandedArtworkScale,
+      );
+    case 'Sci-Fi & Fantasy':
+      return _homeGenreShelfSlivers(
+        title: 'Sci-Fi & Fantasy',
+        subtitle: 'Other worlds, big ideas and extraordinary adventures',
+        items: <MediaItem>[...movies, ...tvShows],
+        genreId: 'scifi-fantasy',
+        expanded: expanded,
+        expandedArtworkScale: expandedArtworkScale,
+      );
+    case 'Horror':
+      return _homeGenreShelfSlivers(
+        title: 'Horror',
+        subtitle: 'Supernatural, psychological and creature features',
+        items: <MediaItem>[...movies, ...tvShows],
+        genreId: 'horror',
+        expanded: expanded,
+        expandedArtworkScale: expandedArtworkScale,
+      );
+    case 'Family & Animation':
+      return _homeGenreShelfSlivers(
+        title: 'Family & Animation',
+        subtitle: 'Animated favorites and all-ages adventures',
+        items: <MediaItem>[...movies, ...tvShows],
+        genreId: 'family-animation',
+        expanded: expanded,
+        expandedArtworkScale: expandedArtworkScale,
+      );
+    case 'Crime & Mystery':
+      return _homeGenreShelfSlivers(
+        title: 'Crime & Mystery',
+        subtitle: 'Investigations, mysteries and true-crime stories',
+        items: <MediaItem>[...movies, ...tvShows],
+        genreId: 'crime-mystery',
+        expanded: expanded,
+        expandedArtworkScale: expandedArtworkScale,
+      );
+    case 'Romance':
+      return _homeGenreShelfSlivers(
+        title: 'Romance',
+        subtitle: 'Love stories and relationships',
+        items: <MediaItem>[...movies, ...tvShows],
+        genreId: 'romance',
+        expanded: expanded,
+        expandedArtworkScale: expandedArtworkScale,
+      );
+    case 'Documentaries':
+      return _homeGenreShelfSlivers(
+        title: 'Documentaries',
+        subtitle: 'Real stories, people and discoveries',
+        items: <MediaItem>[...movies, ...tvShows],
+        genreId: 'documentary',
+        expanded: expanded,
+        expandedArtworkScale: expandedArtworkScale,
+      );
+    case 'Adventure':
+      return _homeGenreShelfSlivers(
+        title: 'Adventure',
+        subtitle: 'Quests, exploration and larger-than-life journeys',
+        items: <MediaItem>[...movies, ...tvShows],
+        genreId: 'adventure',
+        expanded: expanded,
+        expandedArtworkScale: expandedArtworkScale,
+      );
+    case 'Reality & Competition':
+      return _homeGenreShelfSlivers(
+        title: 'Reality & Competition',
+        subtitle: 'Competition, talent and unscripted series',
+        items: <MediaItem>[...movies, ...tvShows],
+        genreId: 'reality-competition',
+        expanded: expanded,
+        expandedArtworkScale: expandedArtworkScale,
+      );
+    case 'Music & Concerts':
+      return _homeGenreShelfSlivers(
+        title: 'Music & Concerts',
+        subtitle: 'Concert films, music documentaries and performances',
+        items: library,
+        genreId: 'music-concerts',
+        expanded: expanded,
+        expandedArtworkScale: expandedArtworkScale,
+      );
     case 'Themed Episodes':
       return const <Widget>[
         SliverToBoxAdapter(child: HomeThemedEpisodesSection())
@@ -6835,6 +7254,34 @@ List<Widget> _buildHomeSectionSlivers(
     default:
       return const <Widget>[];
   }
+}
+
+List<Widget> _homeGenreShelfSlivers({
+  required String title,
+  required String subtitle,
+  required List<MediaItem> items,
+  required String genreId,
+  bool expanded = false,
+  double expandedArtworkScale = 1.18,
+}) {
+  final matches = HomeBrowseGenreCatalog.filter(items, genreId);
+  if (matches.isEmpty) return const <Widget>[];
+  return <Widget>[
+    SliverToBoxAdapter(
+      child: _PremiumSectionHeader(
+        title: title,
+        subtitle: '$subtitle • ${matches.length} ${matches.length == 1 ? 'title' : 'titles'}',
+      ),
+    ),
+    SliverToBoxAdapter(
+      child: MediaHorizontalList(
+        media: matches,
+        enableHomePreview: true,
+        expanded: expanded,
+        expandedArtworkScale: expandedArtworkScale,
+      ),
+    ),
+  ];
 }
 
 List<Widget> _homeMediaRail(
@@ -6919,6 +7366,19 @@ String _homeSectionDescription(String section) => switch (section) {
       'Channels' => 'Shortcuts to curated channels from your library.',
       'Storage Progress' => 'Local/server storage progress bar.',
       'Continue Watching' => 'Resume movies and episodes you started.',
+      'Action Movies' => 'A focused shelf of action movies you own.',
+      'Comedies' => 'Comedy movies and shows from your owned library.',
+      'Dramas' => 'Drama movies and shows from your owned library.',
+      'Thrillers' => 'Suspense and thriller titles from your library.',
+      'Sci-Fi & Fantasy' => 'Science-fiction and fantasy movies and shows.',
+      'Horror' => 'Horror titles from your owned library.',
+      'Family & Animation' => 'Family entertainment and animated titles.',
+      'Crime & Mystery' => 'Crime, detective and mystery titles.',
+      'Romance' => 'Romance movies and shows from your library.',
+      'Documentaries' => 'Documentary films and series.',
+      'Adventure' => 'Adventure movies and shows.',
+      'Reality & Competition' => 'Reality, competition and talent formats.',
+      'Music & Concerts' => 'Music documentaries, concert films and performances.',
       'Themed Episodes' =>
         'Holiday-themed movies, shows, and episodes from your accessible library.',
       'You Might Also Like' => 'Suggestions based on your viewing history.',

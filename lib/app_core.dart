@@ -8501,6 +8501,9 @@ class DetailsCustomization {
   String seasonOrder;
   String seasonSelectorStyle;
   String episodeNaming;
+  String layoutPreset;
+  double backdropDim;
+  double backdropBlur;
 
   List<String> sectionOrder;
 
@@ -8534,6 +8537,9 @@ class DetailsCustomization {
     this.seasonOrder = 'Top to Bottom',
     this.seasonSelectorStyle = 'Buttons',
     this.episodeNaming = 'Actual Title',
+    this.layoutPreset = 'Classic',
+    this.backdropDim = .76,
+    this.backdropBlur = 0,
     List<String>? sectionOrder,
   }) : sectionOrder = sectionOrder ??
             [
@@ -8589,6 +8595,9 @@ class DetailsCustomization {
       seasonOrder: seasonOrder,
       seasonSelectorStyle: seasonSelectorStyle,
       episodeNaming: episodeNaming,
+      layoutPreset: layoutPreset,
+      backdropDim: backdropDim,
+      backdropBlur: backdropBlur,
       sectionOrder: List<String>.from(sectionOrder),
     );
   }
@@ -8689,6 +8698,9 @@ class DetailsCustomizationStore {
         'seasonOrder': v.seasonOrder,
         'seasonSelectorStyle': v.seasonSelectorStyle,
         'episodeNaming': v.episodeNaming,
+        'layoutPreset': v.layoutPreset,
+        'backdropDim': v.backdropDim,
+        'backdropBlur': v.backdropBlur,
         'sectionOrder': v.sectionOrder,
       };
 
@@ -8723,6 +8735,9 @@ class DetailsCustomizationStore {
         seasonOrder: m['seasonOrder']?.toString() ?? 'Top to Bottom',
         seasonSelectorStyle: m['seasonSelectorStyle']?.toString() ?? 'Buttons',
         episodeNaming: m['episodeNaming']?.toString() ?? 'Actual Title',
+        layoutPreset: m['layoutPreset']?.toString() ?? 'Classic',
+        backdropDim: ((m['backdropDim'] as num?)?.toDouble() ?? .76).clamp(0.0, 1.0).toDouble(),
+        backdropBlur: ((m['backdropBlur'] as num?)?.toDouble() ?? 0).clamp(0.0, 24.0).toDouble(),
         sectionOrder: (m['sectionOrder'] is List)
             ? List<String>.from(m['sectionOrder'] as List)
             : null,

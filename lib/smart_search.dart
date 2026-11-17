@@ -21,6 +21,9 @@ import 'hollywood.dart';
 import 'home_streaming_discovery.dart';
 import 'character_discovery.dart';
 import 'smart_search_intelligence.dart';
+import 'hybrid_search.dart';
+import 'supabase/supabase_service.dart';
+import 'song_audio_capture.dart';
 import 'recommendation_ownership.dart';
 import 'core/services/tv_programming_service.dart';
 
@@ -530,6 +533,11 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
   String? selectedDiscoveryEra;
   String? selectedRuntimeBand;
   bool unwatchedOnly = false;
+  bool subtitlesOnly = false;
+  bool audioDescriptionOnly = false;
+  bool adFreeOnly = false;
+  bool _voiceCaptureActive = false;
+  SongAudioCapture? _voiceCapture;
   List<Object?> productResults = <Object?>[];
   List<Map<String, dynamic>> peopleResults = <Map<String, dynamic>>[];
   List<Map<String, dynamic>> characterResults = <Map<String, dynamic>>[];
@@ -611,6 +619,9 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
       ..dispose();
 
     animationController.dispose();
+    final voiceCapture = _voiceCapture;
+    _voiceCapture = null;
+    if (voiceCapture != null) unawaited(voiceCapture.dispose());
 
     super.dispose();
   }
@@ -718,7 +729,20 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     _searchDebounce?.cancel();
     final generation = ++_remoteSearchGeneration;
     setState(() {
-      results = SmartSearch.search(query, library);
+      final legacyMatches = SmartSearch.search(query, library);
+      final hybridLocalMatches = HybridSearchEngine.rankMedia(
+        query,
+        <MediaItem>[...library, ...AppController.instance.recommendations],
+        onlyMatches: true,
+      );
+      final localCandidates = <String, MediaItem>{};
+      for (final media in legacyMatches) {
+        localCandidates.putIfAbsent(media.id, () => media);
+      }
+      for (final media in hybridLocalMatches) {
+        localCandidates.putIfAbsent(media.id, () => media);
+      }
+      results = HybridSearchEngine.rankMedia(query, localCandidates.values);
       musicResults = musicMatches;
       albumResults = localAlbums;
       productResults = products;
@@ -727,11 +751,13 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
       episodeResults = themedEpisodes;
       socialResults = <Map<String, dynamic>>[];
       remoteSearchLoading = normalized.length >= 2 &&
-          AppController.instance.backendApi.isAuthenticated;
+          (AppController.instance.backendApi.isAuthenticated ||
+              SupabaseService.instance.isAuthenticated);
     });
 
     if (normalized.length >= 2 &&
-        AppController.instance.backendApi.isAuthenticated) {
+        (AppController.instance.backendApi.isAuthenticated ||
+            SupabaseService.instance.isAuthenticated)) {
       _searchDebounce = Timer(const Duration(milliseconds: 350), () {
         unawaited(_loadRemoteSearch(normalized, generation));
       });
@@ -741,6 +767,69 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
       ..reset()
       ..forward();
   }
+
+  Future<void> _toggleVoiceSearch() async {
+    if (_voiceCaptureActive) {
+      final capture = _voiceCapture;
+      if (capture == null) return;
+      setState(() => remoteSearchLoading = true);
+      try {
+        final sample = await capture.stop();
+        await capture.dispose();
+        _voiceCapture = null;
+        if (mounted) setState(() => _voiceCaptureActive = false);
+        final transcript = await SupabaseService.instance.transcribeSearchAudio(
+          sample.bytes,
+          mimeType: sample.mimeType,
+        );
+        if (!mounted) return;
+        useSuggestion(transcript);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Voice search: $transcript')),
+        );
+      } catch (error) {
+        await capture.dispose();
+        _voiceCapture = null;
+        if (!mounted) return;
+        setState(() {
+          _voiceCaptureActive = false;
+          remoteSearchLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Voice search unavailable: $error')),
+        );
+      }
+      return;
+    }
+
+    final capture = SongAudioCapture();
+    try {
+      await capture.start();
+      if (!mounted) {
+        await capture.dispose();
+        return;
+      }
+      _voiceCapture = capture;
+      setState(() => _voiceCaptureActive = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Listening… tap the microphone again to search.')),
+      );
+    } catch (error) {
+      await capture.dispose();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Microphone access unavailable: $error')),
+      );
+    }
+  }
+
+  List<String> _stringValues(Object? raw) => raw is List
+      ? raw
+          .map((value) => value.toString().trim())
+          .where((value) => value.isNotEmpty)
+          .toList(growable: false)
+      : <String>[];
 
   String _compactMusicText(String value) =>
       value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
@@ -1128,7 +1217,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
   Future<void> _loadRemoteSearch(String query, int generation) async {
     final app = AppController.instance;
     final profile = app.currentProfile;
-    if (profile == null || !app.backendApi.isAuthenticated) {
+    if (profile == null) {
       if (mounted && generation == _remoteSearchGeneration) {
         setState(() => remoteSearchLoading = false);
       }
@@ -1140,35 +1229,97 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     final remoteCharacters = <Map<String, dynamic>>[];
     final remoteMusic = <MusicTrack>[];
     final remoteAlbums = <Map<String, dynamic>>[];
+    final remoteHybridScores = <String, double>{};
     try {
-      // Search the backend's complete catalog as well as the local library.
-      // This is how catalog-only films and series can appear without being
-      // mislabeled as locally owned or playable.
-      final response =
-          await app.backendApi.searchGlobalMedia(query, limit: 100);
-      final rawResults = response['results'];
-      if (rawResults is List) {
-        for (final raw in rawResults.whereType<Map>()) {
-          final row = Map<String, dynamic>.from(raw);
-          final rawMedia = row['media'];
-          if (rawMedia is! Map) continue;
-          final media = MediaItem.fromJson(Map<String, dynamic>.from(rawMedia));
-          if (media.id.trim().isEmpty || media.title.trim().isEmpty) continue;
-          if (!media.isAccessibleTo(profile) ||
-              !TvProgrammingService.eligibleForProfile(media, profile)) {
-            continue;
-          }
+      final indexedRows = await SupabaseService.instance.hybridSearchMedia(
+        query: query,
+        limit: 80,
+        requireSubtitles: subtitlesOnly,
+        requireAudioDescription: audioDescriptionOnly,
+        requireAdFree: adFreeOnly,
+      );
+      for (final row in indexedRows) {
+        final id = (row['id'] ?? '').toString().trim();
+        final title = (row['title'] ?? '').toString().trim();
+        if (id.isEmpty || title.isEmpty) continue;
+        final hybridScore = (row['hybrid_score'] as num?)?.toDouble();
+        if (hybridScore != null) remoteHybridScores[id] = hybridScore;
+        final mediaType = (row['media_type'] ?? 'movie').toString();
+        final people = row['people'];
+        final actors = people is List
+            ? people
+                .whereType<Map>()
+                .map((person) =>
+                    (person['name'] ?? person['person_name'] ?? '').toString())
+                .where((name) => name.trim().isNotEmpty)
+                .toList()
+            : <String>[];
+        final tags = <String>[
+          ..._stringValues(row['tags']),
+          if (row['ad_supported'] == false) 'verified-ad-free',
+          if (_stringValues(row['accessibility_features'])
+              .contains('audio_description'))
+            'audio-description',
+        ];
+        final media = MediaItem.fromJson(<String, dynamic>{
+          'id': id,
+          'title': title,
+          'originalTitle': row['original_title'],
+          'type': mediaType,
+          'description': row['description'] ?? '',
+          'releaseYear': row['release_year'],
+          'imageUrl': row['artwork_url'],
+          'externalIds': row['external_ids'],
+          'genres': _stringValues(row['genres']),
+          'themes': _stringValues(row['themes']),
+          'tones': _stringValues(row['moods']),
+          'tags': tags,
+          'actors': actors,
+          'subtitles': _stringValues(row['subtitle_languages']),
+          'audioTracks': _stringValues(row['audio_languages']),
+          'addedSource': 'external-catalog-search',
+        });
+        if (media.isAccessibleTo(profile) &&
+            TvProgrammingService.eligibleForProfile(media, profile)) {
           remoteMedia.add(media);
         }
       }
     } catch (_) {
-      // Keep the local and previously loaded discovery candidates available offline.
+      // Optional Supabase search may be unavailable; keep backend/local search.
+    }
+
+    if (app.backendApi.isAuthenticated) {
+      try {
+        // Search the backend's complete catalog as well as the local library.
+        // This is how catalog-only films and series can appear without being
+        // mislabeled as locally owned or playable.
+        final response =
+            await app.backendApi.searchGlobalMedia(query, limit: 100);
+        final rawResults = response['results'];
+        if (rawResults is List) {
+          for (final raw in rawResults.whereType<Map>()) {
+            final row = Map<String, dynamic>.from(raw);
+            final rawMedia = row['media'];
+            if (rawMedia is! Map) continue;
+            final media =
+                MediaItem.fromJson(Map<String, dynamic>.from(rawMedia));
+            if (media.id.trim().isEmpty || media.title.trim().isEmpty) continue;
+            if (!media.isAccessibleTo(profile) ||
+                !TvProgrammingService.eligibleForProfile(media, profile)) {
+              continue;
+            }
+            remoteMedia.add(media);
+          }
+        }
+      } catch (_) {
+        // Keep the local and previously loaded discovery candidates available offline.
+      }
     }
 
     // Search TMDB through the backend's allow-listed proxy so unowned catalog
     // entries and people can appear in Smart Search. These records are metadata
     // only; they do not gain local ownership or a playable source.
-    if (query.trim().length >= 3) {
+    if (query.trim().length >= 3 && app.backendApi.isAuthenticated) {
       try {
         final cacheKey = SmartSearchIntelligence.normalize(query);
         final payload = _tmdbMultiSearchCache[cacheKey] ??
@@ -1714,9 +1865,31 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
       return;
     }
 
-    final mergedMedia = SmartSearch.search(
+    final legacyMatches = SmartSearch.search(
       query,
       <MediaItem>[...app.library, ...remoteMedia],
+    );
+    final hybridLocalMatches = HybridSearchEngine.rankMedia(
+      query,
+      <MediaItem>[...app.library, ...app.recommendations],
+      onlyMatches: true,
+    );
+    final mergedCandidates = <String, MediaItem>{};
+    for (final media in legacyMatches) {
+      mergedCandidates.putIfAbsent(media.id, () => media);
+    }
+    for (final media in hybridLocalMatches) {
+      mergedCandidates.putIfAbsent(media.id, () => media);
+    }
+    // Vector retrieval can match intent without sharing words with the title
+    // or synopsis, so preserve every eligible server-returned candidate.
+    for (final media in remoteMedia) {
+      mergedCandidates.putIfAbsent(media.id, () => media);
+    }
+    final mergedMedia = HybridSearchEngine.rankMedia(
+      query,
+      mergedCandidates.values,
+      remoteScores: remoteHybridScores,
     );
     final mergedCharacters = <String, Map<String, dynamic>>{};
     for (final character in <Map<String, dynamic>>[
@@ -2052,6 +2225,9 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
       episodeResults = <SmartSearchEpisodeHit>[];
       socialResults = <Map<String, dynamic>>[];
       remoteSearchLoading = false;
+      subtitlesOnly = false;
+      audioDescriptionOnly = false;
+      adFreeOnly = false;
     });
     searchFocusNode.requestFocus();
   }
@@ -2121,6 +2297,9 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
                         ),
                         SliverToBoxAdapter(
                           child: _buildSearchBar(theme),
+                        ),
+                        SliverToBoxAdapter(
+                          child: _buildAutocompleteSuggestions(),
                         ),
                         SliverToBoxAdapter(
                           child: _buildDiscoveryFilters(),
@@ -2254,15 +2433,31 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
                   color: Colors.white.withValues(alpha: 0.65),
                   size: 25,
                 ),
-                suffixIcon: controller.text.isNotEmpty
-                    ? IconButton(
+                suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: _voiceCaptureActive
+                          ? 'Stop voice search'
+                          : 'Voice search',
+                      onPressed: _toggleVoiceSearch,
+                      icon: Icon(
+                        _voiceCaptureActive
+                            ? Icons.stop_circle_rounded
+                            : Icons.mic_none_rounded,
+                        color: _voiceCaptureActive
+                            ? const Color(0xFFB8FF32)
+                            : Colors.white70,
+                      ),
+                    ),
+                    if (controller.text.isNotEmpty)
+                      IconButton(
                         onPressed: clearSearch,
-                        icon: const Icon(
-                          Icons.close_rounded,
-                          color: Colors.white70,
-                        ),
-                      )
-                    : null,
+                        icon: const Icon(Icons.close_rounded,
+                            color: Colors.white70),
+                      ),
+                  ],
+                ),
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 18,
@@ -2276,10 +2471,43 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     );
   }
 
-  Widget _buildDiscoveryFilters() {
-    if (results.isEmpty && musicResults.isEmpty) {
+  Widget _buildAutocompleteSuggestions() {
+    final query = SmartSearchIntelligence.normalize(controller.text);
+    if (!searchFocusNode.hasFocus || query.length < 2 || results.isEmpty) {
       return const SizedBox.shrink();
     }
+    final matching = results.where((media) {
+      final title = SmartSearchIntelligence.normalize(media.title);
+      return title.startsWith(query) || title.contains(query);
+    }).toList(growable: false);
+    final suggestions =
+        (matching.isEmpty ? results : matching).take(5).toList(growable: false);
+    if (suggestions.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 8, 22, 2),
+      child: Wrap(
+        spacing: 7,
+        runSpacing: 5,
+        children: [
+          for (final suggestion in suggestions)
+            ActionChip(
+              avatar: const Icon(Icons.north_west_rounded, size: 15),
+              label: Text(suggestion.title,
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              onPressed: () => useSuggestion(suggestion.title),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _updateQuickFilter(VoidCallback update) {
+    setState(update);
+    final query = controller.text.trim();
+    if (query.isNotEmpty) performSearch(query);
+  }
+
+  Widget _buildDiscoveryFilters() {
     final genres = <String>[
       ...results.expand((media) => media.genres),
       ...musicResults.expand((track) => track.allGenreTags),
@@ -2338,6 +2566,27 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
                 label: const Text('Unwatched'),
                 selected: unwatchedOnly,
                 onSelected: (value) => setState(() => unwatchedOnly = value),
+              ),
+              FilterChip(
+                avatar: const Icon(Icons.subtitles_rounded, size: 16),
+                label: const Text('Subtitles'),
+                selected: subtitlesOnly,
+                onSelected: (value) =>
+                    _updateQuickFilter(() => subtitlesOnly = value),
+              ),
+              FilterChip(
+                avatar: const Icon(Icons.record_voice_over_rounded, size: 16),
+                label: const Text('Audio description'),
+                selected: audioDescriptionOnly,
+                onSelected: (value) =>
+                    _updateQuickFilter(() => audioDescriptionOnly = value),
+              ),
+              FilterChip(
+                avatar: const Icon(Icons.block_rounded, size: 16),
+                label: const Text('Ad-free'),
+                selected: adFreeOnly,
+                onSelected: (value) =>
+                    _updateQuickFilter(() => adFreeOnly = value),
               ),
               for (final mood in moods)
                 FilterChip(
@@ -2440,20 +2689,31 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
                   }),
                 ),
               if (unwatchedOnly ||
+                  subtitlesOnly ||
+                  audioDescriptionOnly ||
+                  adFreeOnly ||
                   selectedDiscoveryMood != null ||
                   selectedDiscoveryGenre != null ||
                   selectedDiscoveryLanguage != null ||
                   selectedDiscoveryEra != null ||
                   selectedRuntimeBand != null)
                 TextButton(
-                  onPressed: () => setState(() {
-                    unwatchedOnly = false;
-                    selectedDiscoveryMood = null;
-                    selectedDiscoveryGenre = null;
-                    selectedDiscoveryLanguage = null;
-                    selectedDiscoveryEra = null;
-                    selectedRuntimeBand = null;
-                  }),
+                  onPressed: () {
+                    setState(() {
+                      unwatchedOnly = false;
+                      subtitlesOnly = false;
+                      audioDescriptionOnly = false;
+                      adFreeOnly = false;
+                      selectedDiscoveryMood = null;
+                      selectedDiscoveryGenre = null;
+                      selectedDiscoveryLanguage = null;
+                      selectedDiscoveryEra = null;
+                      selectedRuntimeBand = null;
+                    });
+                    if (controller.text.trim().isNotEmpty) {
+                      performSearch(controller.text);
+                    }
+                  },
                   child: const Text('Clear filters'),
                 ),
             ],
@@ -2495,6 +2755,24 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     };
     final terms = moodTerms[selectedDiscoveryMood];
     return media.where((item) {
+      if (subtitlesOnly && item.subtitles.isEmpty) return false;
+      if (audioDescriptionOnly &&
+          !<String>[...item.tags, ...item.audioTracks].any((value) {
+            final key = value.toLowerCase().replaceAll('_', '-');
+            return key.contains('audio-description') ||
+                key.contains('descriptive-audio');
+          })) {
+        return false;
+      }
+      if (adFreeOnly &&
+          !item.tags.any((tag) => <String>{
+                'ad-free',
+                'verified-ad-free',
+                'no-ads',
+                'ad_free',
+              }.contains(tag.toLowerCase()))) {
+        return false;
+      }
       if (unwatchedOnly && AppController.instance.isWatched(item.id)) {
         return false;
       }
@@ -2693,20 +2971,52 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
         episodeResults.isEmpty &&
         socialResults.isEmpty &&
         !remoteSearchLoading) {
+      final profile = AppController.instance.currentProfile;
+      final fallback = <MediaItem>[
+        ...SmartSearch.recommendations(AppController.instance.library,
+            limit: 6),
+        ...AppController.instance.recommendations,
+      ].where((media) =>
+          !SmartSearch._isExcludedContentType(media.type) &&
+          media.isAccessibleTo(profile) &&
+          TvProgrammingService.eligibleForProfile(media, profile));
+      final uniqueFallback = <String, MediaItem>{
+        for (final media in fallback) media.id: media,
+      }.values.take(6).toList(growable: false);
       return SliverToBoxAdapter(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            22,
-            55,
-            22,
-            40,
-          ),
-          child: _EmptySearchState(
-            icon: Icons.movie_filter_outlined,
-            title: tr('Nothing found'),
-            message: tr(
-              'Try a title, artist, actor, genre, or soundtrack.',
-            ),
+          padding: const EdgeInsets.fromLTRB(22, 42, 22, 40),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _EmptySearchState(
+                icon: Icons.movie_filter_outlined,
+                title: tr('Nothing found'),
+                message:
+                    tr('Try a title, artist, actor, genre, or soundtrack.'),
+              ),
+              if (uniqueFallback.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                const Text('You might enjoy',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16)),
+                const SizedBox(height: 9),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  for (final media in uniqueFallback)
+                    ActionChip(
+                      avatar: const Icon(Icons.auto_awesome_rounded, size: 15),
+                      label: Text(media.title),
+                      onPressed: () => useSuggestion(media.title),
+                    ),
+                ]),
+              ],
+              const SizedBox(height: 18),
+              const Text(
+                  'Try searching by a mood, for example “cozy”, “mind-bending”, or “feel good”.',
+                  style: TextStyle(color: Colors.white54, fontSize: 12)),
+            ],
           ),
         ),
       );
